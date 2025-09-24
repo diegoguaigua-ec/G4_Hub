@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, jsonb, boolean, index, decimal, unique } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -24,6 +24,10 @@ export const tenants = pgTable("tenants", {
   status: varchar("status", { length: 20 }).default("active"),
   settings: jsonb("settings").default({}),
   apiKey: varchar("api_key", { length: 255 }).notNull().unique(),
+  // Contífico environment configuration
+  contificoTestApiKey: varchar("contifico_test_api_key", { length: 500 }),
+  contificoProdApiKey: varchar("contifico_prod_api_key", { length: 500 }),
+  contificoEnvironment: varchar("contifico_environment", { length: 20 }).default("test"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -36,7 +40,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   role: varchar("role", { length: 50 }).default("admin"),
-  emailVerified: boolean("email_verified").default(false),
+  emailVerified: boolean("email_verified").notNull().default(false),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -52,10 +56,34 @@ export const stores = pgTable("stores", {
   apiCredentials: jsonb("api_credentials").notNull(),
   syncConfig: jsonb("sync_config").default({}),
   status: varchar("status", { length: 20 }).default("active"),
+  // Connection tracking fields
+  connectionStatus: varchar("connection_status", { length: 20 }).notNull().default("untested"),
+  lastConnectionTest: timestamp("last_connection_test"),
+  storeInfo: jsonb("store_info").notNull().default({}),
+  productsCount: integer("products_count").notNull().default(0),
   lastSyncAt: timestamp("last_sync_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Store products cache table
+export const storeProducts = pgTable("store_products", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  storeId: integer("store_id").references(() => stores.id, { onDelete: "cascade" }).notNull(),
+  platformProductId: varchar("platform_product_id", { length: 100 }).notNull(),
+  sku: varchar("sku", { length: 100 }),
+  name: varchar("name", { length: 255 }),
+  price: integer("price"), // Store as cents to avoid decimal issues
+  stockQuantity: integer("stock_quantity"),
+  manageStock: boolean("manage_stock").notNull().default(false),
+  data: jsonb("data"), // Full product data from platform
+  lastUpdated: timestamp("last_updated").defaultNow(),
+}, (table) => [
+  index("idx_store_products_store_platform").on(table.storeId, table.platformProductId),
+  // Unique constraint to prevent cache duplicates and ensure updateProduct idempotency
+  unique("uq_store_products_store_platform").on(table.storeId, table.platformProductId)
+]);
 
 // Sync logs table
 export const syncLogs = pgTable("sync_logs", {
@@ -92,6 +120,18 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
     references: [tenants.id],
   }),
   syncLogs: many(syncLogs),
+  products: many(storeProducts),
+}));
+
+export const storeProductsRelations = relations(storeProducts, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [storeProducts.tenantId],
+    references: [tenants.id],
+  }),
+  store: one(stores, {
+    fields: [storeProducts.storeId],
+    references: [stores.id],
+  }),
 }));
 
 export const syncLogsRelations = relations(syncLogs, ({ one }) => ({
@@ -127,14 +167,22 @@ export const insertStoreSchema = createInsertSchema(stores).omit({
   createdAt: true,
   updatedAt: true,
   lastSyncAt: true,
+  lastConnectionTest: true,
+});
+
+export const insertStoreProductSchema = createInsertSchema(storeProducts).omit({
+  id: true,
+  lastUpdated: true,
 });
 
 // Types
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertStore = z.infer<typeof insertStoreSchema>;
+export type InsertStoreProduct = z.infer<typeof insertStoreProductSchema>;
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Store = typeof stores.$inferSelect;
+export type StoreProduct = typeof storeProducts.$inferSelect;
 export type SyncLog = typeof syncLogs.$inferSelect;
