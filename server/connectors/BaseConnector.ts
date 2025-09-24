@@ -19,6 +19,9 @@ export interface ProductsResult {
     total_pages?: number;
     total_items?: number;
     has_next?: boolean;
+    // Cursor-based pagination support (for Shopify, etc.)
+    next_cursor?: string;
+    prev_cursor?: string;
   };
 }
 
@@ -30,6 +33,9 @@ export interface UpdateResult {
   success: boolean;
   product?: StandardProduct;
   error?: string;
+  // Inventory update status (for platforms that support granular inventory control)
+  inventory_status?: 'success' | 'partial_failure' | 'failed';
+  inventory_message?: string;
 }
 
 export interface StoreInfoResult {
@@ -106,7 +112,7 @@ export abstract class BaseConnector {
 
   // Abstract methods that each platform must implement
   abstract testConnection(): Promise<ConnectionResult>;
-  abstract getProducts(page?: number, limit?: number): Promise<ProductsResult>;
+  abstract getProducts(page?: number, limit?: number, pageInfo?: string): Promise<ProductsResult>;
   abstract getProduct(productId: string): Promise<ProductResult>;
   abstract updateProduct(productId: string, data: Partial<StandardProduct>): Promise<UpdateResult>;
   abstract getStoreInfo(): Promise<StoreInfoResult>;

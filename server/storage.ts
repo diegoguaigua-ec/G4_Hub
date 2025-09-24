@@ -18,6 +18,7 @@ export interface IStorage {
   createTenant(tenant: InsertTenant): Promise<Tenant>;
   
   getStoresByTenant(tenantId: number): Promise<Store[]>;
+  getStore(id: number): Promise<Store | undefined>;
   createStore(store: InsertStore): Promise<Store>;
   
   sessionStore: session.Store;
@@ -52,7 +53,7 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: Omit<InsertUser, 'password'> & { passwordHash: string }): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values(insertUser)
+      .values(insertUser as any)
       .returning();
     return user;
   }
@@ -77,7 +78,7 @@ export class DatabaseStorage implements IStorage {
   async createTenant(insertTenant: InsertTenant): Promise<Tenant> {
     const [tenant] = await db
       .insert(tenants)
-      .values(insertTenant)
+      .values(insertTenant as any)
       .returning();
     return tenant;
   }
@@ -86,10 +87,15 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(stores).where(eq(stores.tenantId, tenantId));
   }
 
+  async getStore(id: number): Promise<Store | undefined> {
+    const [store] = await db.select().from(stores).where(eq(stores.id, id));
+    return store || undefined;
+  }
+
   async createStore(insertStore: InsertStore): Promise<Store> {
     const [store] = await db
       .insert(stores)
-      .values(insertStore)
+      .values(insertStore as any)
       .returning();
     return store;
   }

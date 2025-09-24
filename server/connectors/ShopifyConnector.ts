@@ -135,6 +135,13 @@ interface ShopifyShop {
 /**
  * Shopify connector implementing the BaseConnector interface
  * Handles authentication, product management, and data transformation for Shopify stores
+ * 
+ * NOTE: This implementation uses Shopify's REST API which is deprecated as of October 2024.
+ * New apps must use GraphQL starting April 2025. Consider migrating to GraphQL Admin API
+ * for production use: https://shopify.dev/docs/api/admin-graphql
+ * 
+ * Current REST implementation follows cursor-based pagination via Link headers:
+ * https://shopify.dev/docs/api/usage/pagination-rest
  */
 export class ShopifyConnector extends BaseConnector {
   private shopifyCredentials: ShopifyCredentials;
@@ -235,25 +242,40 @@ export class ShopifyConnector extends BaseConnector {
 
       const products: ShopifyProduct[] = response.data.products;
       
-      // Parse Link header for pagination info
+      // Parse Link header for pagination info following Shopify's pagination documentation
+      // https://shopify.dev/docs/api/usage/pagination-rest
       const linkHeader = response.headers.link || '';
       let hasNext = false;
       let nextPageInfo: string | undefined;
+      let prevPageInfo: string | undefined;
       
       if (linkHeader) {
-        // Split by commas and find the next link
-        const links = linkHeader.split(',');
-        const nextLink = links.find((link: string) => link.includes('rel="next"'));
+        // Split by commas and process each link
+        const links = linkHeader.split(',').map((link: string) => link.trim());
         
+        // Find next link
+        const nextLink = links.find((link: string) => link.includes('rel="next"'));
         if (nextLink) {
           hasNext = true;
-          // Extract page_info from the URL in angle brackets
           const urlMatch = nextLink.match(/<([^>]+)>/);
           if (urlMatch) {
             const url = urlMatch[1];
             const pageInfoMatch = url.match(/page_info=([^&]+)/);
             if (pageInfoMatch) {
               nextPageInfo = decodeURIComponent(pageInfoMatch[1]);
+            }
+          }
+        }
+        
+        // Find previous link for bidirectional navigation
+        const prevLink = links.find((link: string) => link.includes('rel="previous"'));
+        if (prevLink) {
+          const urlMatch = prevLink.match(/<([^>]+)>/);
+          if (urlMatch) {
+            const url = urlMatch[1];
+            const pageInfoMatch = url.match(/page_info=([^&]+)/);
+            if (pageInfoMatch) {
+              prevPageInfo = decodeURIComponent(pageInfoMatch[1]);
             }
           }
         }
@@ -269,9 +291,11 @@ export class ShopifyConnector extends BaseConnector {
       return {
         products: products.map(product => this.transformProduct(product)),
         pagination: {
-          current_page: page,
+          current_page: pageInfo ? 1 : page, // Cursor pagination doesn't use numeric pages
           total_items: totalItems,
-          has_next: hasNext
+          has_next: hasNext,
+          next_cursor: nextPageInfo,
+          prev_cursor: prevPageInfo
         }
       };
     } catch (error: any) {
@@ -311,39 +335,52 @@ export class ShopifyConnector extends BaseConnector {
 
       // Update product-level fields
       const productUpdates: any = { id: parseInt(productId) };
+      let hasProductChanges = false;
+      
       if (data.name !== undefined) {
         productUpdates.title = data.name;
+        hasProductChanges = true;
       }
 
       // Update variant-level fields (price, SKU)
       const variantUpdates: any = { id: mainVariant.id };
-      if (data.sku !== undefined) variantUpdates.sku = data.sku;
+      let hasVariantChanges = false;
+      
+      if (data.sku !== undefined) {
+        variantUpdates.sku = data.sku;
+        hasVariantChanges = true;
+      }
       if (data.price !== undefined) {
         variantUpdates.price = (data.price / 100).toFixed(2);
+        hasVariantChanges = true;
       }
       
       // Handle inventory management setting
       if (data.manage_stock !== undefined) {
         variantUpdates.inventory_management = data.manage_stock ? 'shopify' : null;
+        hasVariantChanges = true;
       }
 
       let productUpdateResponse;
       
-      // Update product if there are product-level changes
-      if (Object.keys(productUpdates).length > 0) {
+      // Only update product if there are actual product-level changes beyond ID
+      if (hasProductChanges) {
         productUpdateResponse = await this.makeRequest('PUT', `/admin/api/${this.apiVersion}/products/${productId}.json`, {
           product: productUpdates
         });
       }
 
-      // Update variant if there are variant-level changes
-      if (Object.keys(variantUpdates).length > 1) { // More than just id
+      // Only update variant if there are actual variant-level changes beyond ID
+      if (hasVariantChanges) {
         await this.makeRequest('PUT', `/admin/api/${this.apiVersion}/variants/${mainVariant.id}.json`, {
           variant: variantUpdates
         });
       }
 
       // Handle inventory quantity updates using modern Shopify approach
+      let inventoryUpdateSuccess = true;
+      let inventoryUpdateMessage: string | null = null;
+      
       if (data.stock_quantity !== undefined && data.manage_stock !== false) {
         try {
           let locationId: number | null = null;
@@ -371,16 +408,46 @@ export class ShopifyConnector extends BaseConnector {
           }
           
           if (locationId) {
-            // Set inventory quantity at location
-            await this.makeRequest('POST', `/admin/api/${this.apiVersion}/inventory_levels/set.json`, {
-              location_id: locationId,
-              inventory_item_id: mainVariant.inventory_item_id,
-              available: data.stock_quantity
-            });
+            try {
+              // Set inventory quantity at location
+              await this.makeRequest('POST', `/admin/api/${this.apiVersion}/inventory_levels/set.json`, {
+                location_id: locationId,
+                inventory_item_id: mainVariant.inventory_item_id,
+                available: data.stock_quantity
+              });
+            } catch (setError: any) {
+              // If set fails due to tracking not enabled, enable tracking and retry
+              if (setError.message?.includes('422') || setError.message?.includes('inventory')) {
+                console.log(`[Shopify] Enabling inventory tracking for variant ${mainVariant.id} and retrying stock update`);
+                
+                // Enable inventory tracking
+                await this.makeRequest('PUT', `/admin/api/${this.apiVersion}/variants/${mainVariant.id}.json`, {
+                  variant: {
+                    id: mainVariant.id,
+                    inventory_management: 'shopify'
+                  }
+                });
+                
+                // Retry inventory set
+                await this.makeRequest('POST', `/admin/api/${this.apiVersion}/inventory_levels/set.json`, {
+                  location_id: locationId,
+                  inventory_item_id: mainVariant.inventory_item_id,
+                  available: data.stock_quantity
+                });
+                
+                inventoryUpdateMessage = `Enabled inventory tracking and set quantity to ${data.stock_quantity}`;
+              } else {
+                throw setError;
+              }
+            }
           } else {
+            inventoryUpdateSuccess = false;
+            inventoryUpdateMessage = 'No location available for inventory update';
             console.warn(`[Shopify] No location available for inventory update on product ${productId}`);
           }
         } catch (inventoryError: any) {
+          inventoryUpdateSuccess = false;
+          inventoryUpdateMessage = `Failed to update inventory: ${inventoryError.message}`;
           console.warn(`[Shopify] Failed to update inventory for product ${productId}:`, inventoryError.message);
           // Don't fail the entire update if inventory update fails
         }
@@ -392,7 +459,9 @@ export class ShopifyConnector extends BaseConnector {
 
       return {
         success: true,
-        product: this.transformProduct(updatedProduct)
+        product: this.transformProduct(updatedProduct),
+        inventory_status: inventoryUpdateSuccess ? 'success' : 'partial_failure',
+        inventory_message: inventoryUpdateMessage
       };
     } catch (error: any) {
       console.error(`[Shopify] Failed to update product ${productId}:`, error.message);

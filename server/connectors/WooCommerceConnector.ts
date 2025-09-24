@@ -144,7 +144,8 @@ export class WooCommerceConnector extends BaseConnector {
     }
   }
 
-  async getProducts(page: number = 1, limit: number = 10): Promise<ProductsResult> {
+  async getProducts(page: number = 1, limit: number = 10, pageInfo?: string): Promise<ProductsResult> {
+    // WooCommerce uses traditional pagination, pageInfo is ignored
     try {
       console.log(`[WooCommerce] Fetching products page ${page}, limit ${limit}`);
       
