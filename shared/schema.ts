@@ -194,20 +194,52 @@ export const createStoreSchema = z.object({
         if (parsed.protocol !== 'https:') {
           return false;
         }
-        // Block private IP ranges and localhost
+        // Block private IP ranges, localhost, and cloud metadata services
         const hostname = parsed.hostname.toLowerCase();
-        if (hostname === 'localhost' || 
-            hostname.startsWith('127.') ||
-            hostname.startsWith('10.') ||
+        
+        // Block localhost and loopback
+        if (hostname === 'localhost' || hostname.startsWith('127.')) {
+          return false;
+        }
+        
+        // Block private IPv4 ranges (RFC 1918)
+        if (hostname.startsWith('10.') ||
             hostname.startsWith('192.168.') ||
             hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) {
+          return false;
+        }
+        
+        // Block link-local addresses (RFC 3927)
+        if (hostname.startsWith('169.254.')) {
+          return false;
+        }
+        
+        // Block cloud metadata services
+        if (hostname === '169.254.169.254' || // AWS, GCP, Azure
+            hostname === 'metadata.google.internal' ||
+            hostname === 'metadata.gce.internal') {
+          return false;
+        }
+        
+        // Block IPv6 localhost and private ranges
+        if (hostname === '::1' ||
+            hostname.startsWith('fc00:') ||
+            hostname.startsWith('fd00:') ||
+            hostname.startsWith('fe80:')) {
+          return false;
+        }
+        
+        // Block common internal service names
+        if (hostname.includes('.internal') ||
+            hostname.includes('.local') ||
+            hostname.endsWith('.consul')) {
           return false;
         }
         return true;
       } catch {
         return false;
       }
-    }, "URL must use HTTPS and cannot be a private/local address"),
+    }, "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services"),
   platform: z.enum(["woocommerce", "shopify", "contifico"], {
     errorMap: () => ({ message: "Platform must be woocommerce, shopify, or contifico" })
   }),
@@ -264,20 +296,58 @@ export const updateStoreSchema = z.object({
     .refine((url) => {
       try {
         const parsed = new URL(url);
-        if (parsed.protocol !== 'https:') return false;
+        // Only allow HTTPS
+        if (parsed.protocol !== 'https:') {
+          return false;
+        }
+        
+        // Block private IP ranges, localhost, and cloud metadata services (same as createStoreSchema)
         const hostname = parsed.hostname.toLowerCase();
-        if (hostname === 'localhost' || 
-            hostname.startsWith('127.') ||
-            hostname.startsWith('10.') ||
+        
+        // Block localhost and loopback
+        if (hostname === 'localhost' || hostname.startsWith('127.')) {
+          return false;
+        }
+        
+        // Block private IPv4 ranges (RFC 1918)
+        if (hostname.startsWith('10.') ||
             hostname.startsWith('192.168.') ||
             hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) {
           return false;
         }
+        
+        // Block link-local addresses (RFC 3927)
+        if (hostname.startsWith('169.254.')) {
+          return false;
+        }
+        
+        // Block cloud metadata services
+        if (hostname === '169.254.169.254' || // AWS, GCP, Azure
+            hostname === 'metadata.google.internal' ||
+            hostname === 'metadata.gce.internal') {
+          return false;
+        }
+        
+        // Block IPv6 localhost and private ranges
+        if (hostname === '::1' ||
+            hostname.startsWith('fc00:') ||
+            hostname.startsWith('fd00:') ||
+            hostname.startsWith('fe80:')) {
+          return false;
+        }
+        
+        // Block common internal service names
+        if (hostname.includes('.internal') ||
+            hostname.includes('.local') ||
+            hostname.endsWith('.consul')) {
+          return false;
+        }
+        
         return true;
       } catch {
         return false;
       }
-    }, "URL must use HTTPS and cannot be a private/local address").optional(),
+    }, "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services").optional(),
   apiCredentials: z.record(z.any()).optional(),
   syncConfig: z.record(z.any()).optional()
 });

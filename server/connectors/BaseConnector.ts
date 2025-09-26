@@ -1,6 +1,42 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { Store } from '@shared/schema';
 
+// SSRF Protection: Runtime URL validation
+function validateUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    
+    // Only allow HTTPS
+    if (parsed.protocol !== 'https:') {
+      console.warn(`[SECURITY] Blocked non-HTTPS request: ${url}`);
+      return false;
+    }
+    
+    const hostname = parsed.hostname.toLowerCase();
+    
+    // Block private/localhost ranges
+    if (hostname === 'localhost' || hostname.startsWith('127.') ||
+        hostname.startsWith('10.') || hostname.startsWith('192.168.') ||
+        hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
+        hostname.startsWith('169.254.') || // Link-local
+        hostname === '169.254.169.254' || // Cloud metadata
+        hostname === 'metadata.google.internal' ||
+        hostname === 'metadata.gce.internal' ||
+        hostname === '::1' || hostname.startsWith('fc00:') ||
+        hostname.startsWith('fd00:') || hostname.startsWith('fe80:') ||
+        hostname.includes('.internal') || hostname.includes('.local') ||
+        hostname.endsWith('.consul')) {
+      console.warn(`[SECURITY] Blocked private/internal address: ${url}`);
+      return false;
+    }
+    
+    return true;
+  } catch {
+    console.warn(`[SECURITY] Invalid URL format: ${url}`);
+    return false;
+  }
+}
+
 // Standard interfaces for all connectors
 export interface ConnectionResult {
   success: boolean;
@@ -94,6 +130,11 @@ export abstract class BaseConnector {
     this.credentials = store.apiCredentials;
     this.baseUrl = store.storeUrl;
     this.platform = store.platform;
+    
+    // Validate base URL for SSRF protection
+    if (!validateUrl(this.baseUrl)) {
+      throw new Error(`[SECURITY] Invalid or unsafe base URL: ${this.baseUrl}`);
+    }
 
     // Create configured HTTP client with common settings
     this.httpClient = axios.create({
@@ -129,6 +170,12 @@ export abstract class BaseConnector {
     retryCount: number = 0
   ): Promise<AxiosResponse> {
     try {
+      // SSRF Protection: Validate final URL before request
+      const fullUrl = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+      if (!validateUrl(fullUrl)) {
+        throw new Error(`[SECURITY] Request blocked by SSRF protection: ${fullUrl}`);
+      }
+      
       const requestConfig: AxiosRequestConfig = {
         method,
         url: endpoint,
@@ -139,6 +186,9 @@ export abstract class BaseConnector {
 
       // Apply platform-specific authentication
       const authenticatedConfig = this.authenticateRequest(requestConfig);
+      
+      // Enhanced security logging for outbound requests
+      console.log(`[${this.platform}][SECURITY] Making ${method} request to: ${fullUrl}`);
 
       const response = await this.httpClient.request(authenticatedConfig);
       
