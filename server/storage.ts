@@ -55,7 +55,14 @@ export class DatabaseStorage implements IStorage {
   async createUser(insertUser: Omit<InsertUser, 'password'> & { passwordHash: string }): Promise<User> {
     const [user] = await db
       .insert(users)
-      .values(insertUser as any)
+      .values({
+        tenantId: insertUser.tenantId,
+        email: insertUser.email,
+        passwordHash: insertUser.passwordHash,
+        name: insertUser.name,
+        role: insertUser.role,
+        emailVerified: insertUser.emailVerified
+      })
       .returning();
     return user;
   }
@@ -80,7 +87,7 @@ export class DatabaseStorage implements IStorage {
   async createTenant(insertTenant: InsertTenant): Promise<Tenant> {
     const [tenant] = await db
       .insert(tenants)
-      .values(insertTenant as any)
+      .values(insertTenant)
       .returning();
     return tenant;
   }
@@ -97,7 +104,7 @@ export class DatabaseStorage implements IStorage {
   async createStore(insertStore: InsertStore): Promise<Store> {
     const [store] = await db
       .insert(stores)
-      .values(insertStore as any)
+      .values(insertStore)
       .returning();
     return store;
   }
@@ -105,7 +112,7 @@ export class DatabaseStorage implements IStorage {
   async updateStore(id: number, updates: Partial<InsertStore>): Promise<Store> {
     const [store] = await db
       .update(stores)
-      .set({ ...updates as any, updatedAt: new Date() })
+      .set({ ...updates, updatedAt: new Date() })
       .where(eq(stores.id, id))
       .returning();
     return store;

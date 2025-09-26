@@ -146,13 +146,20 @@ export const syncLogsRelations = relations(syncLogs, ({ one }) => ({
 }));
 
 // Insert schemas
-export const insertTenantSchema = createInsertSchema(tenants).omit({
+export const insertTenantSchema = createInsertSchema(tenants, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({
+export const insertUserSchema = createInsertSchema(users, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+  lastLoginAt: () => z.date().optional(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
@@ -162,7 +169,12 @@ export const insertUserSchema = createInsertSchema(users).omit({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
-export const insertStoreSchema = createInsertSchema(stores).omit({
+export const insertStoreSchema = createInsertSchema(stores, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+  lastSyncAt: () => z.date().optional(),
+  lastConnectionTest: () => z.date().optional(),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
