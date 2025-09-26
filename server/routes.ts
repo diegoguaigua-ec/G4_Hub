@@ -297,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   };
 
-  // Test store connection
+  // Test store connection with status persistence
   app.post("/api/stores/:storeId/test-connection", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -315,9 +315,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const connector = getConnector(store);
       const result = await connector.testConnection();
       
+      // Persist connection test result and status
+      const connectionStatus = result.success ? 'connected' : 'error';
+      const storeInfoToCache = result.success ? {
+        storeName: result.store_name || store.storeName,
+        storeVersion: result.version,
+        productsCount: result.products_count,
+        lastConnectionTest: new Date()
+      } : {
+        lastConnectionTest: new Date()
+      };
+
+      await storage.updateStore(parseInt(storeId), {
+        connectionStatus,
+        ...storeInfoToCache
+      });
+      
       res.json(result);
     } catch (error: any) {
       console.error("Error testing store connection:", error);
+      
+      // Persist error status even on failure
+      try {
+        await storage.updateStore(parseInt(storeId), {
+          connectionStatus: 'error',
+          lastConnectionTest: new Date()
+        });
+      } catch (updateError) {
+        console.error("Failed to persist connection error status:", updateError);
+      }
+      
       res.status(500).json({ message: "Failed to test connection", error: error.message });
     }
   });
@@ -403,7 +430,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get store information
+  // Get store information with caching
   app.get("/api/stores/:storeId/info", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -412,14 +439,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = req.user as any;
       const { storeId } = req.params;
+      const { force_refresh } = req.query;
       
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
         return res.status(404).json({ message: "Store not found" });
       }
 
-      const connector = getConnector(store);
-      const result = await connector.getStoreInfo();
+      // Check if we have cached info and it's recent (within 10 minutes)
+      const cacheExpiry = 10 * 60 * 1000; // 10 minutes in milliseconds
+      const hasRecentCache = store.lastConnectionTest && 
+        (new Date().getTime() - new Date(store.lastConnectionTest).getTime()) < cacheExpiry;
+
+      let result;
+      
+      if (!force_refresh && hasRecentCache && store.connectionStatus === 'connected' && store.storeVersion) {
+        // Return cached store info
+        result = {
+          name: store.storeName,
+          domain: store.storeUrl,
+          version: store.storeVersion,
+          products_count: store.productsCount,
+          cached: true,
+          last_updated: store.lastConnectionTest
+        };
+      } else {
+        // Fetch fresh store info from API
+        const connector = getConnector(store);
+        result = await connector.getStoreInfo();
+        
+        // Cache the fresh info
+        await storage.updateStore(parseInt(storeId), {
+          storeName: result.name,
+          storeVersion: result.version,
+          productsCount: result.products_count,
+          lastConnectionTest: new Date(),
+          connectionStatus: 'connected'
+        });
+        
+        result.cached = false;
+      }
       
       res.json(result);
     } catch (error: any) {
