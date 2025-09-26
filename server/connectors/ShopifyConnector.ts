@@ -379,7 +379,7 @@ export class ShopifyConnector extends BaseConnector {
 
       // Handle inventory quantity updates using modern Shopify approach
       let inventoryUpdateSuccess = true;
-      let inventoryUpdateMessage: string | null = null;
+      let inventoryUpdateMessage: string | undefined = undefined;
       
       if (data.stock_quantity !== undefined && data.manage_stock !== false) {
         try {
