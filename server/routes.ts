@@ -453,12 +453,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let result;
       
-      if (!force_refresh && hasRecentCache && store.connectionStatus === 'connected' && store.storeVersion) {
+      if (!force_refresh && hasRecentCache && store.connectionStatus === 'connected' && (store as any).storeVersion) {
         // Return cached store info
         result = {
           name: store.storeName,
           domain: store.storeUrl,
-          version: store.storeVersion,
+          version: (store as any).storeVersion,
           products_count: store.productsCount,
           cached: true,
           last_updated: store.lastConnectionTest
@@ -466,24 +466,208 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // Fetch fresh store info from API
         const connector = getConnector(store);
-        result = await connector.getStoreInfo();
+        const storeInfo = await connector.getStoreInfo();
         
         // Cache the fresh info
         await storage.updateStore(parseInt(storeId), {
-          storeName: result.name,
-          storeVersion: result.version,
-          productsCount: result.products_count,
+          storeName: storeInfo.name,
+          productsCount: storeInfo.products_count,
           lastConnectionTest: new Date(),
           connectionStatus: 'connected'
         });
         
-        result.cached = false;
+        result = {
+          ...storeInfo,
+          cached: false
+        };
       }
       
       res.json(result);
     } catch (error: any) {
       console.error("Error fetching store info:", error);
       res.status(500).json({ message: "Failed to fetch store info", error: error.message });
+    }
+  });
+
+  // Inventory sync routes
+  
+  // Get sync status for a store
+  app.get("/api/sync/inventory/:storeId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = req.user as any;
+      const { storeId } = req.params;
+      
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Get latest sync logs
+      const recentLogs = await storage.getSyncLogsByStore(parseInt(storeId), 5);
+      
+      res.json({
+        storeId: parseInt(storeId),
+        storeName: store.storeName,
+        platform: store.platform,
+        productsCount: store.productsCount,
+        lastSyncAt: store.lastSyncAt,
+        connectionStatus: store.connectionStatus,
+        recentLogs
+      });
+    } catch (error: any) {
+      console.error("Error fetching sync status:", error);
+      res.status(500).json({ message: "Failed to fetch sync status", error: error.message });
+    }
+  });
+
+  // Trigger manual inventory sync
+  app.post("/api/sync/inventory/:storeId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = req.user as any;
+      const { storeId } = req.params;
+      
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.connectionStatus !== 'connected') {
+        return res.status(400).json({ message: "Store connection is not active" });
+      }
+
+      const syncStartTime = Date.now();
+      let syncLog: any;
+      
+      try {
+        // Create initial sync log
+        syncLog = await storage.createSyncLog({
+          tenantId: user.tenantId,
+          storeId: parseInt(storeId),
+          syncType: 'inventory',
+          status: 'running',
+          syncedCount: 0,
+          errorCount: 0,
+          durationMs: null,
+          errorMessage: null,
+          details: { manual: true, startedAt: new Date() }
+        });
+
+        // Perform the sync
+        const connector = getConnector(store);
+        const productsResult = await connector.getProducts();
+        
+        // Update products in database
+        let syncedCount = 0;
+        let errorCount = 0;
+        
+        for (const product of productsResult.products) {
+          try {
+            await storage.upsertProduct({
+              tenantId: user.tenantId,
+              storeId: parseInt(storeId),
+              platformProductId: product.id.toString(),
+              sku: product.sku || null,
+              name: product.name,
+              price: Math.round((product.price || 0) * 100), // Store as cents
+              stockQuantity: product.stock_quantity || 0,
+              manageStock: product.manage_stock || false,
+              data: product
+            });
+            syncedCount++;
+          } catch (error) {
+            console.error(`Error syncing product ${product.id}:`, error);
+            errorCount++;
+          }
+        }
+        
+        const durationMs = Date.now() - syncStartTime;
+        
+        // Update sync log with results
+        await storage.createSyncLog({
+          tenantId: user.tenantId,
+          storeId: parseInt(storeId),
+          syncType: 'inventory',
+          status: errorCount > 0 ? 'completed_with_errors' : 'completed',
+          syncedCount,
+          errorCount,
+          durationMs,
+          errorMessage: null,
+          details: { 
+            manual: true, 
+            totalProducts: productsResult.products.length,
+            completedAt: new Date()
+          }
+        });
+        
+        // Update store sync status
+        await storage.updateStoreSyncStatus(parseInt(storeId), syncedCount, new Date());
+        
+        res.json({
+          success: true,
+          syncedCount,
+          errorCount,
+          durationMs,
+          totalProducts: productsResult.products.length
+        });
+        
+      } catch (syncError: any) {
+        const durationMs = Date.now() - syncStartTime;
+        
+        // Log sync failure
+        await storage.createSyncLog({
+          tenantId: user.tenantId,
+          storeId: parseInt(storeId),
+          syncType: 'inventory',
+          status: 'failed',
+          syncedCount: 0,
+          errorCount: 1,
+          durationMs,
+          errorMessage: syncError.message,
+          details: { manual: true, error: syncError.message }
+        });
+        
+        throw syncError;
+      }
+      
+    } catch (error: any) {
+      console.error("Error during inventory sync:", error);
+      res.status(500).json({ message: "Failed to sync inventory", error: error.message });
+    }
+  });
+
+  // Get sync history for a store  
+  app.get("/api/sync/inventory/:storeId/logs", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = req.user as any;
+      const { storeId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const logs = await storage.getSyncLogsByStore(parseInt(storeId), limit);
+      
+      res.json({
+        storeId: parseInt(storeId),
+        logs
+      });
+    } catch (error: any) {
+      console.error("Error fetching sync logs:", error);
+      res.status(500).json({ message: "Failed to fetch sync logs", error: error.message });
     }
   });
 

@@ -1,4 +1,4 @@
-import { tenants, users, stores, syncLogs, type User, type InsertUser, type Tenant, type InsertTenant, type Store, type InsertStore } from "@shared/schema";
+import { tenants, users, stores, storeProducts, syncLogs, type User, type InsertUser, type Tenant, type InsertTenant, type Store, type InsertStore, type StoreProduct, type InsertStoreProduct, type SyncLog } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 import session from "express-session";
@@ -22,6 +22,16 @@ export interface IStorage {
   createStore(store: InsertStore): Promise<Store>;
   updateStore(id: number, updates: Partial<InsertStore>): Promise<Store>;
   deleteStore(id: number): Promise<void>;
+  
+  // Product operations
+  getProductsByStore(storeId: number): Promise<StoreProduct[]>;
+  upsertProduct(product: InsertStoreProduct): Promise<StoreProduct>;
+  deleteProductsByStore(storeId: number): Promise<void>;
+  
+  // Sync operations
+  createSyncLog(log: Omit<SyncLog, 'id' | 'createdAt'>): Promise<SyncLog>;
+  getSyncLogsByStore(storeId: number, limit?: number): Promise<SyncLog[]>;
+  updateStoreSyncStatus(storeId: number, productsCount: number, lastSyncAt: Date): Promise<void>;
   
   sessionStore: session.Store;
 }
@@ -56,12 +66,12 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .insert(users)
       .values({
-        tenantId: insertUser.tenantId,
+        tenantId: insertUser.tenantId!,
         email: insertUser.email,
         passwordHash: insertUser.passwordHash,
         name: insertUser.name,
-        role: insertUser.role,
-        emailVerified: insertUser.emailVerified
+        role: insertUser.role || 'admin',
+        emailVerified: insertUser.emailVerified || false
       })
       .returning();
     return user;
@@ -87,7 +97,7 @@ export class DatabaseStorage implements IStorage {
   async createTenant(insertTenant: InsertTenant): Promise<Tenant> {
     const [tenant] = await db
       .insert(tenants)
-      .values(insertTenant)
+      .values(insertTenant as any)
       .returning();
     return tenant;
   }
@@ -104,7 +114,7 @@ export class DatabaseStorage implements IStorage {
   async createStore(insertStore: InsertStore): Promise<Store> {
     const [store] = await db
       .insert(stores)
-      .values(insertStore)
+      .values(insertStore as any)
       .returning();
     return store;
   }
@@ -120,6 +130,60 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStore(id: number): Promise<void> {
     await db.delete(stores).where(eq(stores.id, id));
+  }
+
+  // Product operations
+  async getProductsByStore(storeId: number): Promise<StoreProduct[]> {
+    return await db.select().from(storeProducts).where(eq(storeProducts.storeId, storeId));
+  }
+
+  async upsertProduct(product: InsertStoreProduct): Promise<StoreProduct> {
+    const [upsertedProduct] = await db
+      .insert(storeProducts)
+      .values({
+        ...product
+      })
+      .onConflictDoUpdate({
+        target: [storeProducts.storeId, storeProducts.platformProductId],
+        set: {
+          ...product
+        }
+      })
+      .returning();
+    return upsertedProduct;
+  }
+
+  async deleteProductsByStore(storeId: number): Promise<void> {
+    await db.delete(storeProducts).where(eq(storeProducts.storeId, storeId));
+  }
+
+  // Sync operations
+  async createSyncLog(logData: Omit<SyncLog, 'id' | 'createdAt'>): Promise<SyncLog> {
+    const [syncLog] = await db
+      .insert(syncLogs)
+      .values(logData)
+      .returning();
+    return syncLog;
+  }
+
+  async getSyncLogsByStore(storeId: number, limit: number = 50): Promise<SyncLog[]> {
+    return await db
+      .select()
+      .from(syncLogs)
+      .where(eq(syncLogs.storeId, storeId))
+      .orderBy(syncLogs.createdAt)
+      .limit(limit);
+  }
+
+  async updateStoreSyncStatus(storeId: number, productsCount: number, lastSyncAt: Date): Promise<void> {
+    await db
+      .update(stores)
+      .set({ 
+        productsCount, 
+        lastSyncAt,
+        updatedAt: new Date()
+      })
+      .where(eq(stores.id, storeId));
   }
 }
 
