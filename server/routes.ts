@@ -1,5 +1,11 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
+import { User } from "@shared/schema";
+
+// Proper TypeScript interface for authenticated requests
+interface AuthenticatedRequest extends Request {
+  user: User;
+}
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
 import { insertTenantSchema, insertUserSchema, createStoreSchema, updateStoreSchema } from "@shared/schema";
@@ -54,7 +60,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
+      if (!user.tenantId) {
+        return res.status(400).json({ message: "User has no tenant" });
+      }
       const tenant = await storage.getTenant(user.tenantId);
       if (!tenant) {
         return res.status(404).json({ message: "Tenant not found" });
@@ -74,7 +83,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
+      if (!user.tenantId) {
+        return res.status(400).json({ message: "User has no tenant" });
+      }
       const stores = await storage.getStoresByTenant(user.tenantId);
       res.json(stores);
     } catch (error) {
@@ -90,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       
       // Validate input with Zod
       const validatedData = createStoreSchema.parse(req.body);
@@ -184,7 +196,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       
       // Validate input with Zod
@@ -268,7 +280,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       
       const store = await storage.getStore(parseInt(storeId));
@@ -303,9 +315,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    const { storeId } = req.params; // Move storeId outside try block for error handler access
     try {
-      const user = req.user as any;
-      const { storeId } = req.params;
+      const user = (req as AuthenticatedRequest).user;
       
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
@@ -356,7 +368,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       const { page = "1", limit = "10", page_info } = req.query;
       
@@ -386,7 +398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId, productId } = req.params;
       
       const store = await storage.getStore(parseInt(storeId));
@@ -411,7 +423,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId, productId } = req.params;
       const productData = req.body;
       
@@ -437,7 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       const { force_refresh } = req.query;
       
@@ -498,7 +510,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       
       const store = await storage.getStore(parseInt(storeId));
@@ -531,7 +543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       
       const store = await storage.getStore(parseInt(storeId));
@@ -650,7 +662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     try {
-      const user = req.user as any;
+      const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       const limit = parseInt(req.query.limit as string) || 50;
       

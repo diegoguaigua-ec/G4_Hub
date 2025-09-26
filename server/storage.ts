@@ -4,13 +4,23 @@ import { eq, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
+// Proper typing for user creation
+interface CreateUserData {
+  tenantId?: number;
+  email: string;
+  name: string;
+  role?: string;
+  emailVerified?: boolean;
+  passwordHash: string;
+}
+
 const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: Omit<InsertUser, 'password'> & { passwordHash: string }): Promise<User>;
+  createUser(user: CreateUserData): Promise<User>;
   updateUserLastLogin(id: number): Promise<void>;
   
   getTenant(id: number): Promise<Tenant | undefined>;
@@ -62,7 +72,7 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
-  async createUser(insertUser: Omit<InsertUser, 'password'> & { passwordHash: string }): Promise<User> {
+  async createUser(insertUser: CreateUserData): Promise<User> {
     const [user] = await db
       .insert(users)
       .values({
@@ -140,14 +150,10 @@ export class DatabaseStorage implements IStorage {
   async upsertProduct(product: InsertStoreProduct): Promise<StoreProduct> {
     const [upsertedProduct] = await db
       .insert(storeProducts)
-      .values({
-        ...product
-      })
+      .values(product as any)
       .onConflictDoUpdate({
         target: [storeProducts.storeId, storeProducts.platformProductId],
-        set: {
-          ...product
-        }
+        set: product as any
       })
       .returning();
     return upsertedProduct;
