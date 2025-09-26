@@ -20,6 +20,8 @@ export interface IStorage {
   getStoresByTenant(tenantId: number): Promise<Store[]>;
   getStore(id: number): Promise<Store | undefined>;
   createStore(store: InsertStore): Promise<Store>;
+  updateStore(id: number, updates: Partial<InsertStore>): Promise<Store>;
+  deleteStore(id: number): Promise<void>;
   
   sessionStore: session.Store;
 }
@@ -98,6 +100,19 @@ export class DatabaseStorage implements IStorage {
       .values(insertStore as any)
       .returning();
     return store;
+  }
+
+  async updateStore(id: number, updates: Partial<InsertStore>): Promise<Store> {
+    const [store] = await db
+      .update(stores)
+      .set({ ...updates as any, updatedAt: new Date() })
+      .where(eq(stores.id, id))
+      .returning();
+    return store;
+  }
+
+  async deleteStore(id: number): Promise<void> {
+    await db.delete(stores).where(eq(stores.id, id));
   }
 }
 

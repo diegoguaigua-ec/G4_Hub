@@ -2,10 +2,11 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth } from "./auth";
-import { insertTenantSchema, insertUserSchema } from "@shared/schema";
+import { insertTenantSchema, insertUserSchema, createStoreSchema, updateStoreSchema } from "@shared/schema";
 import { randomBytes } from "crypto";
 import { WooCommerceConnector } from "./connectors/WooCommerceConnector";
 import { ShopifyConnector } from "./connectors/ShopifyConnector";
+import { ZodError } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Sets up /api/register, /api/login, /api/logout, /api/user
@@ -79,6 +80,208 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching stores:", error);
       res.status(500).json({ message: "Failed to fetch stores" });
+    }
+  });
+
+  // Create a new store connection
+  app.post("/api/stores", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = req.user as any;
+      
+      // Validate input with Zod
+      const validatedData = createStoreSchema.parse(req.body);
+      
+      // Create store with tenant ID and initial status
+      const storeData = {
+        ...validatedData,
+        tenantId: user.tenantId,
+        connectionStatus: "untested" as const,
+        storeInfo: {},
+        productsCount: 0
+      };
+
+      const store = await storage.createStore(storeData);
+      
+      // Test connection immediately after creation
+      try {
+        const connector = getConnector(store);
+        const connectionResult = await connector.testConnection();
+        
+        if (connectionResult.success) {
+          // Update store with connection info
+          const updatedStore = await storage.updateStore(store.id, {
+            connectionStatus: "connected",
+            lastConnectionTest: new Date(),
+            storeInfo: {
+              store_name: connectionResult.store_name,
+              domain: connectionResult.domain,
+              version: connectionResult.version,
+              products_count: connectionResult.products_count,
+              ...connectionResult.details
+            },
+            productsCount: connectionResult.products_count || 0
+          });
+          
+          res.status(201).json({
+            store: updatedStore,
+            connection: connectionResult,
+            message: "Store connected successfully"
+          });
+        } else {
+          // Update store with failed status
+          await storage.updateStore(store.id, {
+            connectionStatus: "failed",
+            lastConnectionTest: new Date(),
+            storeInfo: { error: connectionResult.error }
+          });
+          
+          res.status(201).json({
+            store,
+            connection: connectionResult,
+            message: "Store created but connection failed"
+          });
+        }
+      } catch (connectionError: any) {
+        // Update store with error status
+        await storage.updateStore(store.id, {
+          connectionStatus: "error",
+          lastConnectionTest: new Date(),
+          storeInfo: { error: connectionError.message }
+        });
+        
+        res.status(201).json({
+          store,
+          connection: { success: false, error: connectionError.message },
+          message: "Store created but connection test failed"
+        });
+      }
+      
+    } catch (error: any) {
+      console.error("Error creating store:", error);
+      
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          message: "Invalid input data",
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to create store", error: error.message });
+    }
+  });
+
+  // Update an existing store
+  app.put("/api/stores/:storeId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = req.user as any;
+      const { storeId } = req.params;
+      
+      // Validate input with Zod
+      const validatedData = updateStoreSchema.parse(req.body);
+      
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Update store
+      const updatedStore = await storage.updateStore(parseInt(storeId), validatedData);
+      
+      // If API credentials were updated, test connection
+      if (validatedData.apiCredentials || validatedData.storeUrl) {
+        try {
+          const connector = getConnector(updatedStore);
+          const connectionResult = await connector.testConnection();
+          
+          await storage.updateStore(parseInt(storeId), {
+            connectionStatus: connectionResult.success ? "connected" : "failed",
+            lastConnectionTest: new Date(),
+            storeInfo: connectionResult.success ? {
+              store_name: connectionResult.store_name,
+              domain: connectionResult.domain,
+              version: connectionResult.version,
+              products_count: connectionResult.products_count,
+              ...connectionResult.details
+            } : { error: connectionResult.error },
+            productsCount: connectionResult.products_count || 0
+          });
+          
+          const finalStore = await storage.getStore(parseInt(storeId));
+          res.json({
+            store: finalStore,
+            connection: connectionResult,
+            message: connectionResult.success ? "Store updated and connection verified" : "Store updated but connection failed"
+          });
+        } catch (connectionError: any) {
+          await storage.updateStore(parseInt(storeId), {
+            connectionStatus: "error",
+            lastConnectionTest: new Date(),
+            storeInfo: { error: connectionError.message }
+          });
+          
+          const finalStore = await storage.getStore(parseInt(storeId));
+          res.json({
+            store: finalStore,
+            connection: { success: false, error: connectionError.message },
+            message: "Store updated but connection test failed"
+          });
+        }
+      } else {
+        res.json({
+          store: updatedStore,
+          message: "Store updated successfully"
+        });
+      }
+      
+    } catch (error: any) {
+      console.error("Error updating store:", error);
+      
+      if (error instanceof ZodError) {
+        return res.status(400).json({
+          message: "Invalid input data",
+          errors: error.errors.map(err => ({
+            field: err.path.join('.'),
+            message: err.message
+          }))
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to update store", error: error.message });
+    }
+  });
+
+  // Delete a store
+  app.delete("/api/stores/:storeId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = req.user as any;
+      const { storeId } = req.params;
+      
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      await storage.deleteStore(parseInt(storeId));
+      
+      res.json({ message: "Store deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting store:", error);
+      res.status(500).json({ message: "Failed to delete store", error: error.message });
     }
   });
 
