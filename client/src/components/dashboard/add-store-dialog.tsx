@@ -15,8 +15,8 @@ import { z } from "zod";
 
 // Form schema with individual credential fields
 const addStoreFormSchema = z.object({
-  storeName: z.string().min(1, "Store name is required").max(255, "Store name too long"),
-  storeUrl: z.string().url("Must be a valid URL"),
+  storeName: z.string().min(1, "El nombre de tienda es requerido").max(255, "Nombre de tienda muy largo"),
+  storeUrl: z.string().url("Debe ser una URL válida"),
   platform: z.enum(["woocommerce", "shopify", "contifico"]),
   // WooCommerce credentials
   consumerKey: z.string().optional(),
@@ -42,7 +42,7 @@ const addStoreFormSchema = z.object({
   }
   return true;
 }, {
-  message: "Please fill in all required credential fields for the selected platform",
+  message: "Por favor completa todos los campos de credenciales requeridos para la plataforma seleccionada",
   path: ["credentials"]
 });
 
@@ -121,13 +121,13 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
       
       if (connection?.success) {
         toast({
-          title: "Store connected successfully",
-          description: `${store.storeName} is now connected and ready to sync.`,
+          title: "Tienda conectada exitosamente",
+          description: `${store.storeName} está ahora conectada y lista para sincronizar.`,
         });
       } else {
         toast({
-          title: "Store created with connection issues",
-          description: `${store.storeName} was added but connection failed: ${connection?.error || 'Unknown error'}`,
+          title: "Tienda creada con problemas de conexión",
+          description: `${store.storeName} fue agregada pero la conexión falló. Verifica tus credenciales.`,
           variant: "destructive",
         });
       }
@@ -138,8 +138,8 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
     },
     onError: (error: Error) => {
       toast({
-        title: "Failed to add store",
-        description: error.message,
+        title: "Error al agregar tienda",
+        description: "No se pudo agregar la tienda. Verifica tus credenciales e intenta nuevamente.",
         variant: "destructive",
       });
     },
@@ -165,7 +165,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="consumerKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Consumer Key</FormLabel>
+                  <FormLabel>Clave de Consumidor</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="ck_..." 
@@ -182,7 +182,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="consumerSecret"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Consumer Secret</FormLabel>
+                  <FormLabel>Secreto de Consumidor</FormLabel>
                   <FormControl>
                     <Input 
                       type="password"
@@ -206,7 +206,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="apiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API Key</FormLabel>
+                  <FormLabel>Clave API</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="your_api_key" 
@@ -223,7 +223,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="accessToken"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Access Token</FormLabel>
+                  <FormLabel>Token de Acceso</FormLabel>
                   <FormControl>
                     <Input 
                       type="password"
@@ -241,7 +241,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="shopDomain"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Shop Domain</FormLabel>
+                  <FormLabel>Dominio de Tienda</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="yourstore.myshopify.com" 
@@ -264,10 +264,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="username"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Username</FormLabel>
+                  <FormLabel>Usuario</FormLabel>
                   <FormControl>
                     <Input 
-                      placeholder="your_username" 
+                      placeholder="tu_usuario" 
                       data-testid="input-username"
                       {...field} 
                     />
@@ -281,11 +281,11 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel>Contraseña</FormLabel>
                   <FormControl>
                     <Input 
                       type="password"
-                      placeholder="your_password" 
+                      placeholder="tu_contraseña" 
                       data-testid="input-api-password"
                       {...field} 
                     />
@@ -299,7 +299,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="apiUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API URL</FormLabel>
+                  <FormLabel>URL API</FormLabel>
                   <FormControl>
                     <Input 
                       placeholder="https://api.contifico.com" 
@@ -323,9 +323,9 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Add New Store</DialogTitle>
+          <DialogTitle>Agregar Nueva Tienda</DialogTitle>
           <DialogDescription>
-            Connect your e-commerce store to start automating your operations.
+            Conecta tu tienda online para comenzar a automatizar tus operaciones.
           </DialogDescription>
         </DialogHeader>
         
@@ -336,11 +336,11 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="platform"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Platform</FormLabel>
+                  <FormLabel>Plataforma</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-platform">
-                        <SelectValue placeholder="Select your e-commerce platform" />
+                        <SelectValue placeholder="Selecciona tu plataforma de comercio electrónico" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -358,10 +358,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="storeUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Store URL</FormLabel>
+                  <FormLabel>URL de Tienda</FormLabel>
                   <FormControl>
                     <Input 
-                      placeholder="https://yourstore.myshopify.com" 
+                      placeholder="https://tutienda.myshopify.com" 
                       data-testid="input-store-url"
                       {...field} 
                     />
@@ -376,10 +376,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               name="storeName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Store Name</FormLabel>
+                  <FormLabel>Nombre de Tienda</FormLabel>
                   <FormControl>
                     <Input 
-                      placeholder="My Awesome Store" 
+                      placeholder="Mi Tienda Increíble" 
                       data-testid="input-store-name"
                       {...field} 
                     />
@@ -392,15 +392,11 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
             {/* Platform-specific credential fields */}
             <div className="space-y-4">
               <div className="text-sm font-medium text-muted-foreground">
-                API Credentials
+Credenciales API
               </div>
               {renderCredentialFields()}
             </div>
 
-            {/* Connection testing is automatic - no manual testing needed */}
-            <div className="bg-muted/50 p-3 rounded-lg text-sm text-muted-foreground">
-              💡 Your store connection will be tested automatically when you add it.
-            </div>
 
             <DialogFooter className="gap-2">
               <Button 
@@ -410,7 +406,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 disabled={createStoreMutation.isPending}
                 data-testid="button-cancel"
               >
-                Cancel
+                Cancelar
               </Button>
               <Button 
                 type="submit" 
@@ -420,10 +416,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 {createStoreMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Adding & Testing Store...
+                    Agregando y Probando Tienda...
                   </>
                 ) : (
-                  "Add Store"
+                  "Agregar Tienda"
                 )}
               </Button>
             </DialogFooter>

@@ -27,8 +27,8 @@ export default function StoresSection() {
     },
     onSuccess: (result, storeId) => {
       toast({
-        title: result.success ? "Connection successful" : "Connection failed",
-        description: result.success ? `Connected to ${result.store_name}` : result.error,
+        title: result.success ? "Conexión exitosa" : "Conexión fallida",
+        description: result.success ? `Conectado a ${result.store_name}` : "Error de conexión. Verifica tus credenciales.",
         variant: result.success ? "default" : "destructive",
       });
       // Refresh stores list to update connection status
@@ -36,8 +36,8 @@ export default function StoresSection() {
     },
     onError: (error: Error) => {
       toast({
-        title: "Connection test failed",
-        description: error.message,
+        title: "Prueba de conexión falló",
+        description: "No se pudo probar la conexión. Verifica tus credenciales.",
         variant: "destructive",
       });
     },
@@ -47,11 +47,11 @@ export default function StoresSection() {
     const status = store.connectionStatus || "unknown";
     switch (status) {
       case "connected":
-        return { text: "Connected", color: "text-green-600", bg: "bg-green-100" };
+        return { text: "Conectada", color: "text-green-600", bg: "bg-green-100" };
       case "error":
         return { text: "Error", color: "text-red-600", bg: "bg-red-100" };
       default:
-        return { text: "Unknown", color: "text-gray-600", bg: "bg-gray-100" };
+        return { text: "Desconocido", color: "text-gray-600", bg: "bg-gray-100" };
     }
   };
 
@@ -67,18 +67,18 @@ export default function StoresSection() {
   };
 
   const formatLastSync = (lastSyncAt?: string | Date | null) => {
-    if (!lastSyncAt) return "Never";
+    if (!lastSyncAt) return "Nunca";
     const date = new Date(lastSyncAt);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     
-    if (diffMinutes < 1) return "Just now";
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffMinutes < 1) return "Ahora mismo";
+    if (diffMinutes < 60) return `hace ${diffMinutes}m`;
     const diffHours = Math.floor(diffMinutes / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffHours < 24) return `hace ${diffHours}h`;
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
+    return `hace ${diffDays}d`;
   };
 
   if (isLoading) {
@@ -94,8 +94,8 @@ export default function StoresSection() {
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
           <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
-          <p className="text-red-600">Failed to load stores</p>
-          <p className="text-sm text-muted-foreground mt-2">{error.message}</p>
+          <p className="text-red-600">Error al cargar tiendas</p>
+          <p className="text-sm text-muted-foreground mt-2">No se pudieron cargar las tiendas. Intenta nuevamente.</p>
         </div>
       </div>
     );
@@ -105,8 +105,8 @@ export default function StoresSection() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-foreground">Connected Stores</h2>
-          <p className="text-muted-foreground">Manage your connected e-commerce platforms</p>
+          <h2 className="text-xl font-semibold text-foreground">Tiendas Conectadas</h2>
+          <p className="text-muted-foreground">Gestiona tus plataformas de comercio electrónico conectadas</p>
         </div>
         <Button 
           className="bg-primary hover:bg-primary/90 text-primary-foreground" 
@@ -114,7 +114,7 @@ export default function StoresSection() {
           onClick={() => setAddStoreOpen(true)}
         >
           <Plus className="h-4 w-4 mr-2" />
-          Add Store
+          Agregar Tienda
         </Button>
       </div>
 
@@ -124,17 +124,13 @@ export default function StoresSection() {
             <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center mx-auto mb-4">
               <Plus className="h-8 w-8 text-muted-foreground" />
             </div>
-            <h3 className="text-lg font-semibold text-foreground mb-2">No stores connected</h3>
+            <h3 className="text-lg font-semibold text-foreground mb-2">No hay tiendas conectadas</h3>
             <p className="text-muted-foreground mb-6">
-              Connect your first e-commerce store to start automating your operations
+              Conecta tu primera tienda online para comenzar a automatizar tus operaciones
             </p>
-            <Button 
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => setAddStoreOpen(true)}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Connect Store
-            </Button>
+            <p className="text-muted-foreground text-sm">
+              Utiliza el botón "Agregar Tienda" de arriba para conectar tu primera tienda.
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -171,15 +167,15 @@ export default function StoresSection() {
                   </div>
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div>
-                      <p className="text-sm text-muted-foreground">Products</p>
+                      <p className="text-sm text-muted-foreground">Productos</p>
                       <p className="font-semibold text-foreground">{store.productsCount || '–'}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Last Sync</p>
+                      <p className="text-sm text-muted-foreground">Última Sinc.</p>
                       <p className="font-semibold text-foreground">{formatLastSync(store.lastSyncAt)}</p>
                     </div>
                     <div>
-                      <p className="text-sm text-muted-foreground">Status</p>
+                      <p className="text-sm text-muted-foreground">Estado</p>
                       <p className={`font-semibold ${statusDisplay.color}`}>{statusDisplay.text}</p>
                     </div>
                   </div>
@@ -192,7 +188,7 @@ export default function StoresSection() {
                       onClick={() => testConnectionMutation.mutate(store.id)}
                     >
                       <RefreshCw className={`h-4 w-4 mr-2 ${testConnectionMutation.isPending ? 'animate-spin' : ''}`} />
-                      Test Connection
+                      Probar Conexión
                     </Button>
                     <Button 
                       variant="outline" 
@@ -202,7 +198,7 @@ export default function StoresSection() {
                         setSelectedStore(store);
                         setEditStoreOpen(true);
                       }}
-                      title="Edit store settings"
+                      title="Editar configuración de tienda"
                     >
                       <Settings className="h-4 w-4" />
                     </Button>
