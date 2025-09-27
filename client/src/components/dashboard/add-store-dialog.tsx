@@ -55,7 +55,6 @@ interface AddStoreDialogProps {
 
 export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
   const { toast } = useToast();
-  const [testingConnection, setTestingConnection] = useState(false);
 
   const form = useForm<AddStoreFormData>({
     resolver: zodResolver(addStoreFormSchema),
@@ -116,11 +115,23 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
       const res = await apiRequest("POST", "/api/stores", storeData);
       return res.json();
     },
-    onSuccess: (newStore) => {
-      toast({
-        title: "Store added successfully",
-        description: `${newStore.storeName} has been connected to your account.`,
-      });
+    onSuccess: (response) => {
+      // Handle different response types based on automatic connection test
+      const { store, connection, message } = response;
+      
+      if (connection?.success) {
+        toast({
+          title: "Store connected successfully",
+          description: `${store.storeName} is now connected and ready to sync.`,
+        });
+      } else {
+        toast({
+          title: "Store created with connection issues",
+          description: `${store.storeName} was added but connection failed: ${connection?.error || 'Unknown error'}`,
+          variant: "destructive",
+        });
+      }
+      
       queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
       onOpenChange(false);
       form.reset();
@@ -134,46 +145,8 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
     },
   });
 
-  const testConnection = async () => {
-    // Validate required fields based on platform
-    let fieldsToValidate = ["storeUrl", "platform"];
-    const platform = form.getValues("platform");
-    
-    if (platform === "woocommerce") {
-      fieldsToValidate.push("consumerKey", "consumerSecret");
-    } else if (platform === "shopify") {
-      fieldsToValidate.push("apiKey", "accessToken");
-    } else if (platform === "contifico") {
-      fieldsToValidate.push("username", "password", "apiUrl");
-    }
-    
-    const isValid = await form.trigger(fieldsToValidate as any);
-    if (!isValid) {
-      toast({
-        title: "Please fix form errors",
-        description: "Complete the required fields before testing connection.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setTestingConnection(true);
-    try {
-      toast({
-        title: "Ready to connect",
-        description: "Credentials look valid. Click 'Add Store' to create the connection.",
-      });
-      
-    } catch (error: any) {
-      toast({
-        title: "Connection test failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setTestingConnection(false);
-    }
-  };
+  // Note: Connection testing is now automatic when creating stores
+  // No need for manual testing - the backend tests immediately upon creation
 
   const onSubmit = (data: AddStoreFormData) => {
     createStoreMutation.mutate(data);
@@ -424,24 +397,9 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               {renderCredentialFields()}
             </div>
 
-            <div className="flex gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={testConnection}
-                disabled={testingConnection || createStoreMutation.isPending}
-                data-testid="button-test-connection"
-                className="flex-1"
-              >
-                {testingConnection ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Testing...
-                  </>
-                ) : (
-                  "Test Connection"
-                )}
-              </Button>
+            {/* Connection testing is automatic - no manual testing needed */}
+            <div className="bg-muted/50 p-3 rounded-lg text-sm text-muted-foreground">
+              💡 Your store connection will be tested automatically when you add it.
             </div>
 
             <DialogFooter className="gap-2">
@@ -462,7 +420,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 {createStoreMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Adding Store...
+                    Adding & Testing Store...
                   </>
                 ) : (
                   "Add Store"
