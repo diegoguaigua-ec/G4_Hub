@@ -7,9 +7,12 @@ import { Store } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { AddStoreDialog } from "./add-store-dialog";
+import { EditStoreDialog } from "./edit-store-dialog";
 
 export default function StoresSection() {
   const [addStoreOpen, setAddStoreOpen] = useState(false);
+  const [editStoreOpen, setEditStoreOpen] = useState(false);
+  const [selectedStore, setSelectedStore] = useState<Store | null>(null);
   const { toast } = useToast();
   
   const { data: stores = [], isLoading, error } = useQuery<Store[]>({
@@ -195,8 +198,11 @@ export default function StoresSection() {
                       variant="outline" 
                       size="icon"
                       data-testid={`button-settings-${store.id}`}
-                      disabled
-                      title="Coming soon"
+                      onClick={() => {
+                        setSelectedStore(store);
+                        setEditStoreOpen(true);
+                      }}
+                      title="Edit store settings"
                     >
                       <Settings className="h-4 w-4" />
                     </Button>
@@ -211,6 +217,17 @@ export default function StoresSection() {
       <AddStoreDialog 
         open={addStoreOpen} 
         onOpenChange={setAddStoreOpen}
+      />
+      
+      <EditStoreDialog 
+        store={selectedStore}
+        open={editStoreOpen} 
+        onOpenChange={(open) => {
+          setEditStoreOpen(open);
+          if (!open) {
+            setSelectedStore(null);
+          }
+        }}
       />
     </div>
   );
