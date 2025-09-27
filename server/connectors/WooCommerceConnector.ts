@@ -32,34 +32,32 @@ interface WooCommerceProduct {
 }
 
 interface WooCommerceSystemStatus {
-  version: string;
-  version_number: string;
-  wp_version: string;
-  wp_multisite: boolean;
-  permalink_structure: string;
-  is_ssl: boolean;
+  environment: {
+    home_url: string;
+    site_url: string;
+    version: string;
+    wp_version: string;
+    wp_multisite: boolean;
+  };
   settings: {
-    api_enabled: {
-      value: string;
-    };
-    force_ssl: {
-      value: string;
-    };
-    currency: {
-      value: string;
-    };
-    currency_symbol: {
-      value: string;
-    };
-    title: {
-      value: string;
-    };
+    api_enabled: boolean;
+    force_ssl: boolean;
+    currency: string;
+    currency_symbol: string;
+    currency_position: string;
+    thousand_separator: string;
+    decimal_separator: string;
+    number_of_decimals: number;
   };
   security: {
     secure_connection: boolean;
     hide_errors: boolean;
   };
   pages: any;
+  post_type_counts?: {
+    product?: number;
+    [key: string]: number | undefined;
+  };
 }
 
 /**
@@ -105,17 +103,20 @@ export class WooCommerceConnector extends BaseConnector {
       
       const totalProducts = parseInt(productsCountResponse.headers['x-wp-total'] || '0');
 
+      // Extract store name from URL (fallback method)
+      const storeName = new URL(this.baseUrl).hostname.replace('www.', '').split('.')[0] || 'WooCommerce Store';
+      
       return {
         success: true,
-        store_name: systemStatus.settings.title.value,
-        version: systemStatus.version,
+        store_name: storeName,
+        version: systemStatus.environment.version,
         products_count: totalProducts,
         details: {
-          wc_version: systemStatus.version,
-          wp_version: systemStatus.wp_version,
-          currency: systemStatus.settings.currency.value,
-          api_enabled: systemStatus.settings.api_enabled.value === 'yes',
-          ssl_enabled: systemStatus.is_ssl,
+          wc_version: systemStatus.environment.version,
+          wp_version: systemStatus.environment.wp_version,
+          currency: systemStatus.settings.currency,
+          api_enabled: systemStatus.settings.api_enabled,
+          force_ssl: systemStatus.settings.force_ssl,
           secure_connection: systemStatus.security.secure_connection
         }
       };
@@ -231,11 +232,14 @@ export class WooCommerceConnector extends BaseConnector {
       
       const totalProducts = parseInt(productsCountResponse.headers['x-wp-total'] || '0');
 
+      // Extract store name from URL (fallback method)
+      const storeName = new URL(this.baseUrl).hostname.replace('www.', '').split('.')[0] || 'WooCommerce Store';
+      
       return {
-        name: systemStatus.settings.title.value,
+        name: storeName,
         domain: this.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''),
-        currency: systemStatus.settings.currency.value,
-        version: systemStatus.version,
+        currency: systemStatus.settings.currency,
+        version: systemStatus.environment.version,
         products_count: totalProducts,
         raw_data: systemStatus
       };
