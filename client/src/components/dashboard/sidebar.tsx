@@ -1,7 +1,6 @@
-import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
-import { Box, BarChart3, Store, Bot, Plug, BarChart, Settings, User, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { BarChart, Store, Zap, Plug, TrendingUp, Settings, LogOut } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 
 type SectionType = "overview" | "stores" | "automation" | "integrations" | "analytics" | "settings";
 
@@ -11,90 +10,84 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ activeSection, onSectionChange }: SidebarProps) {
-  const { user, logoutMutation } = useAuth();
+  const { logoutMutation, user } = useAuth();
 
-  const navItems = [
-    { id: "overview", label: "Overview", icon: BarChart3 },
-    { id: "stores", label: "Stores", icon: Store },
-    { id: "automation", label: "Automation", icon: Bot, badge: "Beta" },
-    { id: "integrations", label: "Integrations", icon: Plug },
-    { id: "analytics", label: "Analytics", icon: BarChart },
-    { id: "settings", label: "Settings", icon: Settings },
+  const menuItems = [
+    { id: "overview" as SectionType, label: "Resumen", icon: BarChart },
+    { id: "stores" as SectionType, label: "Tiendas", icon: Store },
+    { id: "automation" as SectionType, label: "Automatización", icon: Zap, badge: "Beta" },
+    { id: "integrations" as SectionType, label: "Integraciones", icon: Plug },
+    { id: "analytics" as SectionType, label: "Analítica", icon: TrendingUp },
+    { id: "settings" as SectionType, label: "Configuración", icon: Settings },
   ];
 
-  const handleLogout = () => {
-    logoutMutation.mutate();
-  };
-
   return (
-    <div className="fixed inset-y-0 left-0 w-64 bg-card border-r border-border">
-      {/* Logo */}
-      <div className="flex items-center gap-3 p-6 border-b border-border">
-        <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-          <Box className="h-4 w-4 text-secondary" />
+    <aside className="fixed left-0 top-0 h-screen w-64 bg-card border-r border-border flex flex-col">
+      <div className="p-6 border-b border-border">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+            <Store className="h-6 w-6 text-primary-foreground" />
+          </div>
+          <h1 className="text-xl font-bold text-foreground">G4 Hub</h1>
         </div>
-        <span className="text-xl font-bold text-foreground">G4 Hub</span>
       </div>
 
-      {/* Navigation */}
-      <nav className="p-4">
-        <ul className="space-y-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeSection === item.id;
-            
-            return (
-              <li key={item.id}>
-                <Button
-                  variant="ghost"
-                  className={cn(
-                    "w-full justify-start gap-3 h-12 font-medium transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary hover:bg-primary/20"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  )}
-                  onClick={() => onSectionChange(item.id as SectionType)}
-                  data-testid={`nav-${item.id}`}
-                >
-                  <Icon className="h-5 w-5" />
-                  {item.label}
-                  {(item as any).badge && (
-                    <span className="ml-auto bg-primary text-primary-foreground text-xs px-2 py-1 rounded-full">
-                      {(item as any).badge}
-                    </span>
-                  )}
-                </Button>
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="flex-1 p-4 space-y-2">
+        {menuItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeSection === item.id;
+
+          return (
+            <Button
+              key={item.id}
+              variant={isActive ? "default" : "ghost"}
+              className={`w-full justify-start ${
+                isActive
+                  ? "bg-primary text-primary-foreground"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted"
+              }`}
+              onClick={() => onSectionChange(item.id)}
+              data-testid={`nav-${item.id}`}
+            >
+              <Icon className="h-4 w-4 mr-3" />
+              {item.label}
+              {item.badge && (
+                <span className="ml-auto bg-primary/20 text-primary text-xs px-2 py-0.5 rounded-full font-medium">
+                  {item.badge}
+                </span>
+              )}
+            </Button>
+          );
+        })}
       </nav>
 
-      {/* User Profile */}
-      <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
-            <User className="h-5 w-5 text-primary" />
+      <div className="p-4 border-t border-border">
+        <div className="flex items-center gap-3 mb-4 px-2">
+          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+            <span className="text-primary font-medium text-sm">
+              {user?.name?.charAt(0).toUpperCase() || "U"}
+            </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="font-medium text-foreground text-sm truncate">
-              {user?.name || "User"}
+            <p className="text-sm font-medium text-foreground truncate">
+              {user?.name || "Usuario"}
             </p>
-            <p className="text-muted-foreground text-xs truncate">
-              {user?.email || "user@company.com"}
+            <p className="text-xs text-muted-foreground truncate">
+              Cuenta activa
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={handleLogout}
-            data-testid="button-logout"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground hover:text-foreground hover:bg-muted"
+          onClick={() => logoutMutation.mutate()}
+          disabled={logoutMutation.isPending}
+          data-testid="button-logout"
+        >
+          <LogOut className="h-4 w-4 mr-3" />
+          Cerrar Sesión
+        </Button>
       </div>
-    </div>
+    </aside>
   );
 }

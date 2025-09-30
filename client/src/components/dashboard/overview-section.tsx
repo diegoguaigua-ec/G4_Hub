@@ -1,6 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Store, RefreshCw, FileText, Clock, Check, FilePlus, Plus, BarChart, Settings } from "lucide-react";
+import { Store, RefreshCw, FileText, Clock, Check, FilePlus, Plus, BarChart, Settings, Bell } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Store as StoreType } from "@shared/schema";
 
@@ -13,41 +13,26 @@ export default function OverviewSection() {
   // Calculate real stats from stores data
   const connectedStores = stores.filter(store => store.connectionStatus === 'connected').length;
   const totalProducts = stores.reduce((total, store) => total + (store.productsCount || 0), 0);
-  
+
   const stats = [
     {
       title: "Tiendas Conectadas",
       value: connectedStores.toString(),
-      change: undefined, // Removed until real metrics available
+      change: undefined,
       icon: Store,
       color: "bg-primary/10 text-primary"
     },
     {
       title: "Productos Sincronizados",
       value: totalProducts.toLocaleString(),
-      change: undefined, // Removed until real metrics available
+      change: undefined,
       icon: RefreshCw,
       color: "bg-primary/10 text-primary"
     },
-    // Temporarily hiding unsupported metrics until backend implements them
-    // {
-    //   title: "Facturas Automatizadas",
-    //   value: "Próximamente",
-    //   change: "+24%",
-    //   icon: FileText,
-    //   color: "bg-primary/10 text-primary"
-    // },
-    // {
-    //   title: "Tiempo Prom. Sinc.",
-    //   value: "Próximamente",
-    //   change: "-",
-    //   icon: Clock,
-    //   color: "bg-primary/10 text-primary"
-    // },
   ];
 
   // Real activity feed will be implemented when /api/sync-events endpoint is available
-  const recentActivity: any[] = []; // Empty until real sync events are available
+  const recentActivity: any[] = [];
 
   const quickActions = [
     { title: "Agregar Tienda", icon: Store },
@@ -77,28 +62,35 @@ export default function OverviewSection() {
   }
 
   return (
-    <div className="space-y-8">
-      {/* Stats Cards */}
+    <div className="space-y-6">
+      {/* Header con notificaciones */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Resumen</h2>
+          <p className="text-muted-foreground">Monitorea el rendimiento de tu automatización de e-commerce</p>
+        </div>
+        <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+          <Bell className="h-5 w-5" />
+          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
+        </Button>
+      </div>
+
+      {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <Card key={index} className="border border-border">
+            <Card key={index} className="border border-border" data-testid={`stat-card-${index}`}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.color}`}>
                     <Icon className="h-6 w-6" />
                   </div>
-                  {/* Change badges removed until real metrics available */}
                   {stat.change && (
-                    <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                      {stat.change}
-                    </span>
+                    <span className="text-sm font-medium text-green-600">{stat.change}</span>
                   )}
                 </div>
-                <h3 className="text-2xl font-bold text-foreground" data-testid={`stat-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-                  {stat.value}
-                </h3>
+                <h3 className="text-2xl font-bold text-foreground mb-1">{stat.value}</h3>
                 <p className="text-muted-foreground text-sm">{stat.title}</p>
               </CardContent>
             </Card>
@@ -106,20 +98,11 @@ export default function OverviewSection() {
         })}
       </div>
 
-      {/* Recent Activity & Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Activity */}
         <Card className="border border-border">
           <CardContent className="p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-foreground">Actividad Reciente</h2>
-              {/* "Ver todo" button hidden until real sync events are available */}
-              {recentActivity.length > 0 && (
-                <Button variant="ghost" className="text-primary hover:text-primary/80 text-sm font-medium p-0">
-                  Ver todo
-                </Button>
-              )}
-            </div>
+            <h2 className="text-lg font-semibold text-foreground mb-6">Actividad Reciente</h2>
             <div className="space-y-4">
               {recentActivity.length > 0 ? (
                 recentActivity.map((activity, index) => {

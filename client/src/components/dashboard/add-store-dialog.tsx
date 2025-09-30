@@ -1,9 +1,29 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,37 +34,46 @@ import { Loader2 } from "lucide-react";
 import { z } from "zod";
 
 // Form schema with individual credential fields
-const addStoreFormSchema = z.object({
-  storeName: z.string().min(1, "El nombre de tienda es requerido").max(255, "Nombre de tienda muy largo"),
-  storeUrl: z.string().url("Debe ser una URL válida"),
-  platform: z.enum(["woocommerce", "shopify", "contifico"]),
-  // WooCommerce credentials
-  consumerKey: z.string().optional(),
-  consumerSecret: z.string().optional(),
-  // Shopify credentials
-  apiKey: z.string().optional(),
-  accessToken: z.string().optional(),
-  shopDomain: z.string().optional(),
-  // Contífico credentials
-  username: z.string().optional(),
-  password: z.string().optional(),
-  apiUrl: z.string().optional(),
-}).refine((data) => {
-  // Validate that required fields for each platform are provided
-  if (data.platform === "woocommerce") {
-    return data.consumerKey && data.consumerSecret;
-  }
-  if (data.platform === "shopify") {
-    return data.apiKey && data.accessToken;
-  }
-  if (data.platform === "contifico") {
-    return data.username && data.password && data.apiUrl;
-  }
-  return true;
-}, {
-  message: "Por favor completa todos los campos de credenciales requeridos para la plataforma seleccionada",
-  path: ["credentials"]
-});
+const addStoreFormSchema = z
+  .object({
+    storeName: z
+      .string()
+      .min(1, "El nombre de tienda es requerido")
+      .max(255, "Nombre de tienda muy largo"),
+    storeUrl: z.string().url("Debe ser una URL válida"),
+    platform: z.enum(["woocommerce", "shopify", "contifico"]),
+    // WooCommerce credentials
+    consumerKey: z.string().optional(),
+    consumerSecret: z.string().optional(),
+    // Shopify credentials
+    apiKey: z.string().optional(),
+    accessToken: z.string().optional(),
+    shopDomain: z.string().optional(),
+    // Contífico credentials
+    username: z.string().optional(),
+    password: z.string().optional(),
+    apiUrl: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // Validate that required fields for each platform are provided
+      if (data.platform === "woocommerce") {
+        return data.consumerKey && data.consumerSecret;
+      }
+      if (data.platform === "shopify") {
+        return data.apiKey && data.accessToken;
+      }
+      if (data.platform === "contifico") {
+        return data.username && data.password && data.apiUrl;
+      }
+      return true;
+    },
+    {
+      message:
+        "Por favor completa todos los campos de credenciales requeridos para la plataforma seleccionada",
+      path: ["credentials"],
+    },
+  );
 
 type AddStoreFormData = z.infer<typeof addStoreFormSchema>;
 
@@ -80,7 +109,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
     mutationFn: async (data: AddStoreFormData) => {
       // Format credentials based on platform
       let apiCredentials: any = {};
-      
+
       switch (data.platform) {
         case "woocommerce":
           apiCredentials = {
@@ -103,22 +132,22 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
           };
           break;
       }
-      
+
       const storeData = {
         storeName: data.storeName,
         storeUrl: data.storeUrl,
         platform: data.platform,
         apiCredentials,
-        syncConfig: {}
+        syncConfig: {},
       };
-      
+
       const res = await apiRequest("POST", "/api/stores", storeData);
       return res.json();
     },
     onSuccess: (response) => {
       // Handle different response types based on automatic connection test
       const { store, connection, message } = response;
-      
+
       if (connection?.success) {
         toast({
           title: "Tienda conectada exitosamente",
@@ -131,7 +160,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
           variant: "destructive",
         });
       }
-      
+
       queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
       onOpenChange(false);
       form.reset();
@@ -139,7 +168,8 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
     onError: (error: Error) => {
       toast({
         title: "Error al agregar tienda",
-        description: "No se pudo agregar la tienda. Verifica tus credenciales e intenta nuevamente.",
+        description:
+          "No se pudo agregar la tienda. Verifica tus credenciales e intenta nuevamente.",
         variant: "destructive",
       });
     },
@@ -155,7 +185,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
   // Helper function to render platform-specific credential fields
   const renderCredentialFields = () => {
     const platform = form.watch("platform");
-    
+
     switch (platform) {
       case "woocommerce":
         return (
@@ -167,10 +197,14 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Clave de Consumidor</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="ck_..." 
+                    <Input
+                      placeholder="ck_..."
                       data-testid="input-consumer-key"
-                      {...field} 
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
                     />
                   </FormControl>
                   <FormMessage />
@@ -184,11 +218,15 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Secreto de Consumidor</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="password"
-                      placeholder="cs_..." 
+                      placeholder="cs_..."
                       data-testid="input-consumer-secret"
-                      {...field} 
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
                     />
                   </FormControl>
                   <FormMessage />
@@ -197,7 +235,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
             />
           </>
         );
-      
+
       case "shopify":
         return (
           <>
@@ -208,10 +246,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Clave API</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="your_api_key" 
+                    <Input
+                      placeholder="your_api_key"
                       data-testid="input-api-key"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -225,11 +263,11 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Token de Acceso</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="password"
-                      placeholder="shpat_..." 
+                      placeholder="shpat_..."
                       data-testid="input-access-token"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -243,10 +281,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Dominio de Tienda</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="yourstore.myshopify.com" 
+                    <Input
+                      placeholder="yourstore.myshopify.com"
                       data-testid="input-shop-domain"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -255,7 +293,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
             />
           </>
         );
-      
+
       case "contifico":
         return (
           <>
@@ -266,10 +304,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Usuario</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="tu_usuario" 
+                    <Input
+                      placeholder="tu_usuario"
                       data-testid="input-username"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -283,11 +321,11 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Contraseña</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="password"
-                      placeholder="tu_contraseña" 
+                      placeholder="tu_contraseña"
                       data-testid="input-api-password"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -301,10 +339,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>URL API</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="https://api.contifico.com" 
+                    <Input
+                      placeholder="https://api.contifico.com"
                       data-testid="input-api-url"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -313,7 +351,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
             />
           </>
         );
-      
+
       default:
         return null;
     }
@@ -325,10 +363,11 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
         <DialogHeader>
           <DialogTitle>Agregar Nueva Tienda</DialogTitle>
           <DialogDescription>
-            Conecta tu tienda online para comenzar a automatizar tus operaciones.
+            Conecta tu tienda online para comenzar a automatizar tus
+            operaciones.
           </DialogDescription>
         </DialogHeader>
-        
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
@@ -337,7 +376,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Plataforma</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger data-testid="select-platform">
                         <SelectValue placeholder="Selecciona tu plataforma de comercio electrónico" />
@@ -360,10 +402,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>URL de Tienda</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="https://tutienda.myshopify.com" 
+                    <Input
+                      placeholder="https://tutienda.myshopify.com"
                       data-testid="input-store-url"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -378,10 +420,10 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 <FormItem>
                   <FormLabel>Nombre de Tienda</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="Mi Tienda Increíble" 
+                    <Input
+                      placeholder="Mi Tienda Increíble"
                       data-testid="input-store-name"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -392,24 +434,23 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
             {/* Platform-specific credential fields */}
             <div className="space-y-4">
               <div className="text-sm font-medium text-muted-foreground">
-Credenciales API
+                Credenciales API
               </div>
               {renderCredentialFields()}
             </div>
 
-
             <DialogFooter className="gap-2">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => onOpenChange(false)}
                 disabled={createStoreMutation.isPending}
                 data-testid="button-cancel"
               >
                 Cancelar
               </Button>
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={createStoreMutation.isPending}
                 data-testid="button-save-store"
               >

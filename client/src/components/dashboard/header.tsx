@@ -15,13 +15,14 @@ export default function Header({ title, subtitle }: HeaderProps) {
           <p className="text-muted-foreground">{subtitle}</p>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            data-testid="button-notifications"
+          >
             <Bell className="h-5 w-5" />
             <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full"></span>
-          </Button>
-          <Button className="bg-primary hover:bg-primary/90 text-primary-foreground" data-testid="button-add-store">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Store
           </Button>
         </div>
       </div>

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import Sidebar from "@/components/dashboard/sidebar";
-import Header from "@/components/dashboard/header";
 import OverviewSection from "@/components/dashboard/overview-section";
 import AutomationSection from "@/components/dashboard/automation-section";
 import StoresSection from "@/components/dashboard/stores-section";
@@ -20,23 +19,44 @@ export default function HomePage() {
         return <StoresSection />;
       case "integrations":
         return (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Integrations</h2>
-            <p className="text-muted-foreground">Connect with your favorite tools and services</p>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Integraciones</h2>
+                <p className="text-muted-foreground">Conecta con tus herramientas y servicios favoritos</p>
+              </div>
+            </div>
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Las integraciones estarán disponibles próximamente</p>
+            </div>
           </div>
         );
       case "analytics":
         return (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Analytics</h2>
-            <p className="text-muted-foreground">Detailed insights about your e-commerce performance</p>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Analítica</h2>
+                <p className="text-muted-foreground">Información detallada sobre el rendimiento de tu e-commerce</p>
+              </div>
+            </div>
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">La analítica estará disponible próximamente</p>
+            </div>
           </div>
         );
       case "settings":
         return (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-foreground mb-4">Settings</h2>
-            <p className="text-muted-foreground">Configure your G4 Hub preferences</p>
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-foreground">Configuración</h2>
+                <p className="text-muted-foreground">Configura tus preferencias de G4 Hub</p>
+              </div>
+            </div>
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">La configuración estará disponible próximamente</p>
+            </div>
           </div>
         );
       default:
@@ -44,26 +64,11 @@ export default function HomePage() {
     }
   };
 
-  const getSectionInfo = (section: SectionType) => {
-    const sectionInfo = {
-      overview: { title: 'Overview', subtitle: 'Monitor your e-commerce automation performance' },
-      stores: { title: 'Stores', subtitle: 'Manage your connected e-commerce platforms' },
-      automation: { title: 'Automation', subtitle: 'Advanced AI-powered automation features' },
-      integrations: { title: 'Integrations', subtitle: 'Connect with your favorite tools and services' },
-      analytics: { title: 'Analytics', subtitle: 'Detailed insights about your e-commerce performance' },
-      settings: { title: 'Settings', subtitle: 'Configure your G4 Hub preferences' }
-    };
-    return sectionInfo[section];
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
       <div className="ml-64">
-        <Header 
-          title={getSectionInfo(activeSection).title}
-          subtitle={getSectionInfo(activeSection).subtitle}
-        />
+        {/* Header removido - cada sección maneja su propio encabezado */}
         <main className="p-8">
           {renderSection()}
         </main>

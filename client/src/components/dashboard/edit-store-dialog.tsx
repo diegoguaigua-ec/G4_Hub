@@ -1,9 +1,29 @@
 import { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
@@ -12,40 +32,58 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2 } from "lucide-react";
 import { z } from "zod";
 import { Store } from "@shared/schema";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 // Form schema with individual credential fields (same as add store)
-const editStoreFormSchema = z.object({
-  storeName: z.string().min(1, "Store name is required").max(255, "Store name too long"),
-  storeUrl: z.string().url("Must be a valid URL"),
-  platform: z.enum(["woocommerce", "shopify", "contifico"]),
-  // WooCommerce credentials
-  consumerKey: z.string().optional(),
-  consumerSecret: z.string().optional(),
-  // Shopify credentials
-  apiKey: z.string().optional(),
-  accessToken: z.string().optional(),
-  shopDomain: z.string().optional(),
-  // Contífico credentials
-  username: z.string().optional(),
-  password: z.string().optional(),
-  apiUrl: z.string().optional(),
-}).refine((data) => {
-  // Validate that required fields for each platform are provided
-  if (data.platform === "woocommerce") {
-    return data.consumerKey && data.consumerSecret;
-  }
-  if (data.platform === "shopify") {
-    return data.apiKey && data.accessToken;
-  }
-  if (data.platform === "contifico") {
-    return data.username && data.password && data.apiUrl;
-  }
-  return true;
-}, {
-  message: "Please fill in all required credential fields for the selected platform",
-  path: ["credentials"]
-});
+const editStoreFormSchema = z
+  .object({
+    storeName: z
+      .string()
+      .min(1, "El nombre de tienda es requerido")
+      .max(255, "Nombre de tienda muy largo"),
+    storeUrl: z.string().url("Debe ser una URL válida"),
+    platform: z.enum(["woocommerce", "shopify", "contifico"]),
+    // WooCommerce credentials
+    consumerKey: z.string().optional(),
+    consumerSecret: z.string().optional(),
+    // Shopify credentials
+    apiKey: z.string().optional(),
+    accessToken: z.string().optional(),
+    shopDomain: z.string().optional(),
+    // Contífico credentials
+    username: z.string().optional(),
+    password: z.string().optional(),
+    apiUrl: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      // Validate that required fields for each platform are provided
+      if (data.platform === "woocommerce") {
+        return data.consumerKey && data.consumerSecret;
+      }
+      if (data.platform === "shopify") {
+        return data.apiKey && data.accessToken;
+      }
+      if (data.platform === "contifico") {
+        return data.username && data.password && data.apiUrl;
+      }
+      return true;
+    },
+    {
+      message:
+        "Por favor completa todos los campos de credenciales requeridos para la plataforma seleccionada",
+      path: ["credentials"],
+    },
+  );
 
 type EditStoreFormData = z.infer<typeof editStoreFormSchema>;
 
@@ -55,7 +93,11 @@ interface EditStoreDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogProps) {
+export function EditStoreDialog({
+  store,
+  open,
+  onOpenChange,
+}: EditStoreDialogProps) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
@@ -82,8 +124,8 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
   // Update form values when store changes
   useEffect(() => {
     if (store && open) {
-      const credentials = store.apiCredentials as any || {};
-      
+      const credentials = (store.apiCredentials as any) || {};
+
       form.reset({
         storeName: store.storeName,
         storeUrl: store.storeUrl,
@@ -106,10 +148,10 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
   const updateStoreMutation = useMutation({
     mutationFn: async (data: EditStoreFormData) => {
       if (!store) throw new Error("No store selected");
-      
+
       // Format credentials based on platform
       let apiCredentials: any = {};
-      
+
       switch (data.platform) {
         case "woocommerce":
           apiCredentials = {
@@ -132,29 +174,29 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
           };
           break;
       }
-      
+
       const storeData = {
         storeName: data.storeName,
         storeUrl: data.storeUrl,
         platform: data.platform,
         apiCredentials,
-        syncConfig: {}
+        syncConfig: {},
       };
-      
+
       const res = await apiRequest("PUT", `/api/stores/${store.id}`, storeData);
       return res.json();
     },
     onSuccess: (updatedStore) => {
       toast({
-        title: "Store updated successfully",
-        description: `${updatedStore.store.storeName} has been updated.`,
+        title: "Tienda actualizada exitosamente",
+        description: `${updatedStore.store.storeName} ha sido actualizada.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
       onOpenChange(false);
     },
     onError: (error: Error) => {
       toast({
-        title: "Failed to update store",
+        title: "Error al actualizar tienda",
         description: error.message,
         variant: "destructive",
       });
@@ -169,8 +211,8 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
     },
     onSuccess: () => {
       toast({
-        title: "Store deleted successfully",
-        description: `${store?.storeName} has been removed from your account.`,
+        title: "Tienda eliminada exitosamente",
+        description: `${store?.storeName} ha sido removida de tu cuenta.`,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
       setDeleteDialogOpen(false);
@@ -178,7 +220,7 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
     },
     onError: (error: Error) => {
       toast({
-        title: "Failed to delete store",
+        title: "Error al eliminar tienda",
         description: error.message,
         variant: "destructive",
       });
@@ -196,7 +238,7 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
   // Helper function to render platform-specific credential fields
   const renderCredentialFields = () => {
     const platform = form.watch("platform");
-    
+
     switch (platform) {
       case "woocommerce":
         return (
@@ -206,12 +248,16 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="consumerKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Consumer Key</FormLabel>
+                  <FormLabel>Clave de Consumidor</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="ck_..." 
+                    <Input
+                      placeholder="ck_..."
                       data-testid="input-consumer-key"
-                      {...field} 
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
                     />
                   </FormControl>
                   <FormMessage />
@@ -223,13 +269,17 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="consumerSecret"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Consumer Secret</FormLabel>
+                  <FormLabel>Secreto de Consumidor</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="password"
-                      placeholder="cs_..." 
+                      placeholder="cs_..."
                       data-testid="input-consumer-secret"
-                      {...field} 
+                      value={field.value || ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
                     />
                   </FormControl>
                   <FormMessage />
@@ -238,7 +288,7 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
             />
           </>
         );
-      
+
       case "shopify":
         return (
           <>
@@ -247,12 +297,12 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="apiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API Key</FormLabel>
+                  <FormLabel>Clave API</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="your_api_key" 
+                    <Input
+                      placeholder="your_api_key"
                       data-testid="input-api-key"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -264,13 +314,13 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="accessToken"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Access Token</FormLabel>
+                  <FormLabel>Token de Acceso</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="password"
-                      placeholder="shpat_..." 
+                      placeholder="shpat_..."
                       data-testid="input-access-token"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -282,12 +332,12 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="shopDomain"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Shop Domain</FormLabel>
+                  <FormLabel>Dominio de Tienda</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="yourstore.myshopify.com" 
+                    <Input
+                      placeholder="yourstore.myshopify.com"
                       data-testid="input-shop-domain"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -296,7 +346,7 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
             />
           </>
         );
-      
+
       case "contifico":
         return (
           <>
@@ -305,12 +355,12 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="username"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Username</FormLabel>
+                  <FormLabel>Usuario</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="your_username" 
+                    <Input
+                      placeholder="tu_usuario"
                       data-testid="input-username"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -322,13 +372,13 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel>Contraseña</FormLabel>
                   <FormControl>
-                    <Input 
+                    <Input
                       type="password"
-                      placeholder="your_password" 
+                      placeholder="tu_contraseña"
                       data-testid="input-api-password"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -340,12 +390,12 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               name="apiUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API URL</FormLabel>
+                  <FormLabel>URL API</FormLabel>
                   <FormControl>
-                    <Input 
-                      placeholder="https://api.contifico.com" 
+                    <Input
+                      placeholder="https://api.contifico.com"
                       data-testid="input-api-url"
-                      {...field} 
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -354,7 +404,7 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
             />
           </>
         );
-      
+
       default:
         return null;
     }
@@ -365,12 +415,12 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Edit Store</DialogTitle>
+            <DialogTitle>Editar Tienda</DialogTitle>
             <DialogDescription>
-              Update your store connection details and credentials.
+              Actualiza la configuración de tu tienda conectada
             </DialogDescription>
           </DialogHeader>
-          
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
@@ -378,11 +428,11 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
                 name="platform"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Platform</FormLabel>
+                    <FormLabel>Plataforma</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-platform">
-                          <SelectValue placeholder="Select your e-commerce platform" />
+                          <SelectValue placeholder="Selecciona tu plataforma de comercio electrónico" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
@@ -400,12 +450,12 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
                 name="storeUrl"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Store URL</FormLabel>
+                    <FormLabel>URL de Tienda</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="https://yourstore.myshopify.com" 
+                      <Input
+                        placeholder="https://tutienda.myshopify.com"
                         data-testid="input-store-url"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -418,12 +468,12 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
                 name="storeName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Store Name</FormLabel>
+                    <FormLabel>Nombre de Tienda</FormLabel>
                     <FormControl>
-                      <Input 
-                        placeholder="My Awesome Store" 
+                      <Input
+                        placeholder="Mi Tienda Increíble"
                         data-testid="input-store-name"
-                        {...field} 
+                        {...field}
                       />
                     </FormControl>
                     <FormMessage />
@@ -434,45 +484,54 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               {/* Platform-specific credential fields */}
               <div className="space-y-4">
                 <div className="text-sm font-medium text-muted-foreground">
-                  API Credentials
+                  Credenciales API
                 </div>
                 {renderCredentialFields()}
               </div>
 
               <DialogFooter className="gap-2">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setDeleteDialogOpen(true)}
-                  disabled={updateStoreMutation.isPending || deleteStoreMutation.isPending}
+                  disabled={
+                    updateStoreMutation.isPending ||
+                    deleteStoreMutation.isPending
+                  }
                   data-testid="button-delete-store"
                   className="text-destructive hover:text-destructive border-destructive/20 hover:border-destructive/30"
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Store
+                  Eliminar Tienda
                 </Button>
                 <div className="flex-1" />
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => onOpenChange(false)}
-                  disabled={updateStoreMutation.isPending || deleteStoreMutation.isPending}
+                  disabled={
+                    updateStoreMutation.isPending ||
+                    deleteStoreMutation.isPending
+                  }
                   data-testid="button-cancel"
                 >
-                  Cancel
+                  Cancelar
                 </Button>
-                <Button 
-                  type="submit" 
-                  disabled={updateStoreMutation.isPending || deleteStoreMutation.isPending}
+                <Button
+                  type="submit"
+                  disabled={
+                    updateStoreMutation.isPending ||
+                    deleteStoreMutation.isPending
+                  }
                   data-testid="button-save-store"
                 >
                   {updateStoreMutation.isPending ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Updating...
+                      Actualizando...
                     </>
                   ) : (
-                    "Update Store"
+                    "Actualizar Tienda"
                   )}
                 </Button>
               </DialogFooter>
@@ -485,14 +544,16 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Store</AlertDialogTitle>
+            <AlertDialogTitle>Eliminar Tienda</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{store?.storeName}"? This action cannot be undone and will remove all associated data.
+              ¿Estás seguro de que deseas eliminar "{store?.storeName}"? Esta acción no se puede deshacer y eliminará todos los datos asociados.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogCancel data-testid="button-cancel-delete">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={handleDelete}
               disabled={deleteStoreMutation.isPending}
               data-testid="button-confirm-delete"
@@ -501,10 +562,10 @@ export function EditStoreDialog({ store, open, onOpenChange }: EditStoreDialogPr
               {deleteStoreMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
+                  Eliminando...
                 </>
               ) : (
-                "Delete Store"
+                "Eliminar Tienda"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
