@@ -12,6 +12,7 @@ import { insertTenantSchema, insertUserSchema, createStoreSchema, updateStoreSch
 import { randomBytes } from "crypto";
 import { WooCommerceConnector } from "./connectors/WooCommerceConnector";
 import { ShopifyConnector } from "./connectors/ShopifyConnector";
+import { ContificoConnector } from './connectors/ContificoConnector';
 import { ZodError } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -297,6 +298,343 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // INTEGRATION ENDPOINTS
+  // ============================================
+
+  // Get all integrations for current tenant
+  app.get("/api/integrations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      if (!user.tenantId) {
+        return res.status(400).json({ message: "Usuario sin tenant" });
+      }
+
+      const integrations = await storage.getIntegrationsByTenant(user.tenantId);
+      res.json(integrations);
+    } catch (error: any) {
+      console.error("Error obteniendo integraciones:", error);
+      res.status(500).json({ message: "Error al obtener integraciones", error: error.message });
+    }
+  });
+
+  // Get a specific integration
+  app.get("/api/integrations/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { integrationId } = req.params;
+
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      res.json(integration);
+    } catch (error: any) {
+      console.error("Error obteniendo integración:", error);
+      res.status(500).json({ message: "Error al obtener integración", error: error.message });
+    }
+  });
+
+  // Create a new integration
+  app.post("/api/integrations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { integrationType, name, settings } = req.body;
+
+      // Validación básica
+      if (!integrationType || !name || !settings) {
+        return res.status(400).json({ 
+          message: "Tipo de integración, nombre y configuración son requeridos" 
+        });
+      }
+
+      // Validar tipos soportados
+      const supportedTypes = ['contifico'];
+      if (!supportedTypes.includes(integrationType)) {
+        return res.status(400).json({ 
+          message: `Tipo de integración no soportado. Tipos válidos: ${supportedTypes.join(', ')}` 
+        });
+      }
+
+      // Crear integración
+      const integration = await storage.createIntegration({
+        tenantId: user.tenantId,
+        integrationType,
+        name,
+        settings,
+        isActive: true
+      });
+
+      res.status(201).json({ 
+        integration,
+        message: "Integración creada exitosamente" 
+      });
+    } catch (error: any) {
+      console.error("Error creando integración:", error);
+      res.status(500).json({ message: "Error al crear integración", error: error.message });
+    }
+  });
+
+  // Update an integration
+  app.put("/api/integrations/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { integrationId } = req.params;
+      const { name, settings, isActive } = req.body;
+
+      // Verificar que la integración existe y pertenece al tenant
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      // Actualizar integración
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (settings !== undefined) updates.settings = settings;
+      if (isActive !== undefined) updates.isActive = isActive;
+
+      const updatedIntegration = await storage.updateIntegration(
+        parseInt(integrationId),
+        updates
+      );
+
+      res.json({ 
+        integration: updatedIntegration,
+        message: "Integración actualizada exitosamente" 
+      });
+    } catch (error: any) {
+      console.error("Error actualizando integración:", error);
+      res.status(500).json({ message: "Error al actualizar integración", error: error.message });
+    }
+  });
+
+  // Delete an integration
+  app.delete("/api/integrations/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { integrationId } = req.params;
+
+      // Verificar que la integración existe y pertenece al tenant
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      // Eliminar integración (las relaciones se eliminan en cascada)
+      await storage.deleteIntegration(parseInt(integrationId));
+
+      res.json({ message: "Integración eliminada exitosamente" });
+    } catch (error: any) {
+      console.error("Error eliminando integración:", error);
+      res.status(500).json({ message: "Error al eliminar integración", error: error.message });
+    }
+  });
+
+  // Test integration connection (for Contífico)
+  app.post("/api/integrations/:integrationId/test-connection", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { integrationId } = req.params;
+
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      // Solo soportamos Contífico por ahora
+      if (integration.integrationType !== 'contifico') {
+        return res.status(400).json({ 
+          message: "Prueba de conexión solo disponible para integraciones Contífico" 
+        });
+      }
+
+      // Crear un store temporal para probar la conexión
+      const settings = integration.settings as any;
+      const tempStore = {
+        id: 0,
+        tenantId: user.tenantId,
+        platform: 'contifico',
+        storeName: integration.name,
+        storeUrl: 'https://api.contifico.com',
+        apiCredentials: settings,
+        syncConfig: {},
+        status: 'active',
+        connectionStatus: 'untested',
+        lastConnectionTest: null,
+        storeInfo: {},
+        productsCount: 0,
+        lastSyncAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const { ContificoConnector } = await import('./connectors/ContificoConnector');
+      const connector = new ContificoConnector(tempStore);
+      const result = await connector.testConnection();
+
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error probando conexión de integración:", error);
+      res.status(500).json({ 
+        message: "Error al probar conexión", 
+        error: error.message 
+      });
+    }
+  });
+
+  // ============================================
+  // STORE-INTEGRATION RELATIONSHIPS
+  // ============================================
+
+  // Get integrations linked to a store
+  app.get("/api/stores/:storeId/integrations", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      // Verificar que la tienda existe y pertenece al tenant
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Tienda no encontrada" });
+      }
+
+      const storeIntegrations = await storage.getStoreIntegrations(parseInt(storeId));
+
+      // Obtener detalles completos de cada integración
+      const integrationsWithDetails = await Promise.all(
+        storeIntegrations.map(async (si) => {
+          const integration = await storage.getIntegration(si.integrationId);
+          return {
+            ...si,
+            integration
+          };
+        })
+      );
+
+      res.json(integrationsWithDetails);
+    } catch (error: any) {
+      console.error("Error obteniendo integraciones de tienda:", error);
+      res.status(500).json({ 
+        message: "Error al obtener integraciones", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Link an integration to a store
+  app.post("/api/stores/:storeId/integrations/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, integrationId } = req.params;
+      const { syncConfig } = req.body;
+
+      // Verificar tienda
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Tienda no encontrada" });
+      }
+
+      // Verificar integración
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      // Crear relación
+      const link = await storage.linkStoreIntegration({
+        storeId: parseInt(storeId),
+        integrationId: parseInt(integrationId),
+        syncConfig: syncConfig || {},
+        isActive: true
+      });
+
+      res.status(201).json({ 
+        link,
+        message: "Integración vinculada exitosamente a la tienda" 
+      });
+    } catch (error: any) {
+      console.error("Error vinculando integración:", error);
+
+      // Manejar duplicados
+      if (error.code === '23505') {
+        return res.status(400).json({ 
+          message: "Esta integración ya está vinculada a la tienda" 
+        });
+      }
+
+      res.status(500).json({ 
+        message: "Error al vincular integración", 
+        error: error.message 
+      });
+    }
+  });
+
+  // Unlink an integration from a store
+  app.delete("/api/stores/:storeId/integrations/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, integrationId } = req.params;
+
+      // Verificar tienda
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Tienda no encontrada" });
+      }
+
+      // Desvincular
+      await storage.unlinkStoreIntegration(
+        parseInt(storeId),
+        parseInt(integrationId)
+      );
+
+      res.json({ message: "Integración desvinculada exitosamente" });
+    } catch (error: any) {
+      console.error("Error desvinculando integración:", error);
+      res.status(500).json({ 
+        message: "Error al desvincular integración", 
+        error: error.message 
+      });
+    }
+  });
+
   // Helper function to get connector for a store
   const getConnector = (store: any) => {
     switch (store.platform) {
@@ -304,6 +642,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return new WooCommerceConnector(store);
       case 'shopify':
         return new ShopifyConnector(store);
+      case 'contifico':
+        return new ContificoConnector(store);
       default:
         throw new Error(`Unsupported platform: ${store.platform}`);
     }

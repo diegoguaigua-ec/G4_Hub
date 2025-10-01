@@ -1,5 +1,17 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, jsonb, boolean, index, decimal, unique } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  varchar,
+  integer,
+  timestamp,
+  jsonb,
+  boolean,
+  index,
+  decimal,
+  unique,
+  serial,
+} from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -27,7 +39,9 @@ export const tenants = pgTable("tenants", {
   // Contífico environment configuration
   contificoTestApiKey: varchar("contifico_test_api_key", { length: 500 }),
   contificoProdApiKey: varchar("contifico_prod_api_key", { length: 500 }),
-  contificoEnvironment: varchar("contifico_environment", { length: 20 }).default("test"),
+  contificoEnvironment: varchar("contifico_environment", {
+    length: 20,
+  }).default("test"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -35,7 +49,9 @@ export const tenants = pgTable("tenants", {
 // Users table
 export const users = pgTable("users", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id").references(() => tenants.id, {
+    onDelete: "cascade",
+  }),
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -49,7 +65,9 @@ export const users = pgTable("users", {
 // Stores table
 export const stores = pgTable("stores", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
   platform: varchar("platform", { length: 20 }).notNull(),
   storeName: varchar("store_name", { length: 255 }).notNull(),
   storeUrl: varchar("store_url", { length: 500 }).notNull(),
@@ -57,7 +75,9 @@ export const stores = pgTable("stores", {
   syncConfig: jsonb("sync_config").default({}),
   status: varchar("status", { length: 20 }).default("active"),
   // Connection tracking fields
-  connectionStatus: varchar("connection_status", { length: 20 }).notNull().default("untested"),
+  connectionStatus: varchar("connection_status", { length: 20 })
+    .notNull()
+    .default("untested"),
   lastConnectionTest: timestamp("last_connection_test"),
   storeInfo: jsonb("store_info").notNull().default({}),
   productsCount: integer("products_count").notNull().default(0),
@@ -67,29 +87,48 @@ export const stores = pgTable("stores", {
 });
 
 // Store products cache table
-export const storeProducts = pgTable("store_products", {
-  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
-  storeId: integer("store_id").references(() => stores.id, { onDelete: "cascade" }).notNull(),
-  platformProductId: varchar("platform_product_id", { length: 100 }).notNull(),
-  sku: varchar("sku", { length: 100 }),
-  name: varchar("name", { length: 255 }),
-  price: integer("price"), // Store as cents to avoid decimal issues
-  stockQuantity: integer("stock_quantity"),
-  manageStock: boolean("manage_stock").notNull().default(false),
-  data: jsonb("data"), // Full product data from platform
-  lastUpdated: timestamp("last_updated").defaultNow(),
-}, (table) => [
-  index("idx_store_products_store_platform").on(table.storeId, table.platformProductId),
-  // Unique constraint to prevent cache duplicates and ensure updateProduct idempotency
-  unique("uq_store_products_store_platform").on(table.storeId, table.platformProductId)
-]);
+export const storeProducts = pgTable(
+  "store_products",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: integer("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    storeId: integer("store_id")
+      .references(() => stores.id, { onDelete: "cascade" })
+      .notNull(),
+    platformProductId: varchar("platform_product_id", {
+      length: 100,
+    }).notNull(),
+    sku: varchar("sku", { length: 100 }),
+    name: varchar("name", { length: 255 }),
+    price: integer("price"),
+    stockQuantity: integer("stock_quantity"),
+    manageStock: boolean("manage_stock").notNull().default(false),
+    data: jsonb("data"),
+    lastUpdated: timestamp("last_updated").defaultNow(),
+  },
+  (table) => [
+    index("idx_store_products_store_platform").on(
+      table.storeId,
+      table.platformProductId,
+    ),
+    unique("uq_store_products_store_platform").on(
+      table.storeId,
+      table.platformProductId,
+    ),
+  ],
+);
 
 // Sync logs table
 export const syncLogs = pgTable("sync_logs", {
   id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
-  tenantId: integer("tenant_id").references(() => tenants.id, { onDelete: "cascade" }).notNull(),
-  storeId: integer("store_id").references(() => stores.id, { onDelete: "cascade" }),
+  tenantId: integer("tenant_id")
+    .references(() => tenants.id, { onDelete: "cascade" })
+    .notNull(),
+  storeId: integer("store_id").references(() => stores.id, {
+    onDelete: "cascade",
+  }),
   syncType: varchar("sync_type", { length: 20 }).notNull(),
   status: varchar("status", { length: 20 }).notNull(),
   syncedCount: integer("synced_count").default(0),
@@ -100,11 +139,55 @@ export const syncLogs = pgTable("sync_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// NUEVAS TABLAS: Integraciones
+export const integrations = pgTable(
+  "integrations",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: integer("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    integrationType: varchar("integration_type", { length: 50 }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    settings: jsonb("settings").notNull(),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_integrations_tenant").on(table.tenantId),
+    index("idx_integrations_type").on(table.integrationType),
+  ],
+);
+
+// Relación tiendas <-> integraciones
+export const storeIntegrations = pgTable(
+  "store_integrations",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    storeId: integer("store_id")
+      .notNull()
+      .references(() => stores.id, { onDelete: "cascade" }),
+    integrationId: integer("integration_id")
+      .notNull()
+      .references(() => integrations.id, { onDelete: "cascade" }),
+    syncConfig: jsonb("sync_config").default({}),
+    isActive: boolean("is_active").default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_store_integrations_store").on(table.storeId),
+    index("idx_store_integrations_integration").on(table.integrationId),
+    unique("uq_store_integration").on(table.storeId, table.integrationId),
+  ],
+);
+
 // Relations
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
   stores: many(stores),
   syncLogs: many(syncLogs),
+  integrations: many(integrations),
 }));
 
 export const usersRelations = relations(users, ({ one }) => ({
@@ -121,6 +204,7 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
   }),
   syncLogs: many(syncLogs),
   products: many(storeProducts),
+  storeIntegrations: many(storeIntegrations),
 }));
 
 export const storeProductsRelations = relations(storeProducts, ({ one }) => ({
@@ -145,6 +229,31 @@ export const syncLogsRelations = relations(syncLogs, ({ one }) => ({
   }),
 }));
 
+export const integrationsRelations = relations(
+  integrations,
+  ({ one, many }) => ({
+    tenant: one(tenants, {
+      fields: [integrations.tenantId],
+      references: [tenants.id],
+    }),
+    storeIntegrations: many(storeIntegrations),
+  }),
+);
+
+export const storeIntegrationsRelations = relations(
+  storeIntegrations,
+  ({ one }) => ({
+    store: one(stores, {
+      fields: [storeIntegrations.storeId],
+      references: [stores.id],
+    }),
+    integration: one(integrations, {
+      fields: [storeIntegrations.integrationId],
+      references: [integrations.id],
+    }),
+  }),
+);
+
 // Insert schemas
 export const insertTenantSchema = createInsertSchema(tenants, {
   createdAt: () => z.date().optional(),
@@ -159,15 +268,17 @@ export const insertUserSchema = createInsertSchema(users, {
   createdAt: () => z.date().optional(),
   updatedAt: () => z.date().optional(),
   lastLoginAt: () => z.date().optional(),
-}).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-  lastLoginAt: true,
-  passwordHash: true,
-}).extend({
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
+})
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+    lastLoginAt: true,
+    passwordHash: true,
+  })
+  .extend({
+    password: z.string().min(8, "Password must be at least 8 characters"),
+  });
 
 export const insertStoreSchema = createInsertSchema(stores, {
   createdAt: () => z.date().optional(),
@@ -182,174 +293,176 @@ export const insertStoreSchema = createInsertSchema(stores, {
   lastConnectionTest: true,
 });
 
-// Enhanced store validation schemas with security and platform-specific validation
-export const createStoreSchema = z.object({
-  storeName: z.string().min(1, "Store name is required").max(255, "Store name too long"),
-  storeUrl: z.string()
-    .url("Must be a valid URL")
-    .refine((url) => {
-      try {
-        const parsed = new URL(url);
-        // SSRF protection: only allow https
-        if (parsed.protocol !== 'https:') {
-          return false;
-        }
-        // Block private IP ranges, localhost, and cloud metadata services
-        const hostname = parsed.hostname.toLowerCase();
-        
-        // Block localhost and loopback
-        if (hostname === 'localhost' || hostname.startsWith('127.')) {
-          return false;
-        }
-        
-        // Block private IPv4 ranges (RFC 1918)
-        if (hostname.startsWith('10.') ||
-            hostname.startsWith('192.168.') ||
-            hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) {
-          return false;
-        }
-        
-        // Block link-local addresses (RFC 3927)
-        if (hostname.startsWith('169.254.')) {
-          return false;
-        }
-        
-        // Block cloud metadata services
-        if (hostname === '169.254.169.254' || // AWS, GCP, Azure
-            hostname === 'metadata.google.internal' ||
-            hostname === 'metadata.gce.internal') {
-          return false;
-        }
-        
-        // Block IPv6 localhost and private ranges
-        if (hostname === '::1' ||
-            hostname.startsWith('fc00:') ||
-            hostname.startsWith('fd00:') ||
-            hostname.startsWith('fe80:')) {
-          return false;
-        }
-        
-        // Block common internal service names
-        if (hostname.includes('.internal') ||
-            hostname.includes('.local') ||
-            hostname.endsWith('.consul')) {
-          return false;
-        }
-        return true;
-      } catch {
-        return false;
-      }
-    }, "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services"),
-  platform: z.enum(["woocommerce", "shopify", "contifico"], {
-    errorMap: () => ({ message: "Platform must be woocommerce, shopify, or contifico" })
-  }),
-  apiCredentials: z.record(z.any()).refine((creds) => {
-    // Basic structure validation - platform-specific validation happens in superRefine
-    return typeof creds === 'object' && creds !== null;
-  }, "API credentials must be provided"),
-  syncConfig: z.record(z.any()).optional().default({})
-}).superRefine((data, ctx) => {
-  const creds = data.apiCredentials;
-  
-  // Platform-specific credential validation
-  if (data.platform === "woocommerce") {
-    if (!creds.consumer_key || typeof creds.consumer_key !== 'string' || creds.consumer_key.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Consumer Key is required for WooCommerce",
-        path: ["apiCredentials", "consumer_key"]
-      });
-    }
-    if (!creds.consumer_secret || typeof creds.consumer_secret !== 'string' || creds.consumer_secret.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Consumer Secret is required for WooCommerce", 
-        path: ["apiCredentials", "consumer_secret"]
-      });
-    }
-  } else if (data.platform === "shopify") {
-    if (!creds.access_token || typeof creds.access_token !== 'string' || creds.access_token.trim() === '') {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Access Token is required for Shopify",
-        path: ["apiCredentials", "access_token"]
-      });
-    }
-  } else if (data.platform === "contifico") {
-    const hasTestKey = creds.test_api_key && typeof creds.test_api_key === 'string' && creds.test_api_key.trim() !== '';
-    const hasProdKey = creds.prod_api_key && typeof creds.prod_api_key === 'string' && creds.prod_api_key.trim() !== '';
-    
-    if (!hasTestKey && !hasProdKey) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "At least one API key (test or production) is required for Contífico",
-        path: ["apiCredentials"]
-      });
-    }
-  }
+export const insertIntegrationSchema = createInsertSchema(integrations, {
+  createdAt: () => z.date().optional(),
+  updatedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
+export const insertStoreIntegrationSchema = createInsertSchema(
+  storeIntegrations,
+  {
+    createdAt: () => z.date().optional(),
+  },
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Enhanced store validation schemas
+export const createStoreSchema = z
+  .object({
+    storeName: z
+      .string()
+      .min(1, "Store name is required")
+      .max(255, "Store name too long"),
+    storeUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .refine((url) => {
+        try {
+          const parsed = new URL(url);
+          if (parsed.protocol !== "https:") return false;
+
+          const hostname = parsed.hostname.toLowerCase();
+          if (hostname === "localhost" || hostname.startsWith("127."))
+            return false;
+          if (
+            hostname.startsWith("10.") ||
+            hostname.startsWith("192.168.") ||
+            hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)
+          )
+            return false;
+          if (hostname.startsWith("169.254.")) return false;
+          if (
+            hostname === "169.254.169.254" ||
+            hostname === "metadata.google.internal" ||
+            hostname === "metadata.gce.internal"
+          )
+            return false;
+          if (
+            hostname === "::1" ||
+            hostname.startsWith("fc00:") ||
+            hostname.startsWith("fd00:") ||
+            hostname.startsWith("fe80:")
+          )
+            return false;
+          if (
+            hostname.includes(".internal") ||
+            hostname.includes(".local") ||
+            hostname.endsWith(".consul")
+          )
+            return false;
+
+          return true;
+        } catch {
+          return false;
+        }
+      }, "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services"),
+    platform: z.enum(["woocommerce", "shopify"], {
+      errorMap: () => ({ message: "Platform must be woocommerce or shopify" }),
+    }),
+    apiCredentials: z.record(z.any()).refine((creds) => {
+      return typeof creds === "object" && creds !== null;
+    }, "API credentials must be provided"),
+    syncConfig: z.record(z.any()).optional().default({}),
+  })
+  .superRefine((data, ctx) => {
+    const creds = data.apiCredentials;
+
+    if (data.platform === "woocommerce") {
+      if (
+        !creds.consumer_key ||
+        typeof creds.consumer_key !== "string" ||
+        creds.consumer_key.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Consumer Key is required for WooCommerce",
+          path: ["apiCredentials", "consumer_key"],
+        });
+      }
+      if (
+        !creds.consumer_secret ||
+        typeof creds.consumer_secret !== "string" ||
+        creds.consumer_secret.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Consumer Secret is required for WooCommerce",
+          path: ["apiCredentials", "consumer_secret"],
+        });
+      }
+    } else if (data.platform === "shopify") {
+      if (
+        !creds.access_token ||
+        typeof creds.access_token !== "string" ||
+        creds.access_token.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Access Token is required for Shopify",
+          path: ["apiCredentials", "access_token"],
+        });
+      }
+    }
+  });
+
 export const updateStoreSchema = z.object({
-  storeName: z.string().min(1, "Store name is required").max(255, "Store name too long").optional(),
-  storeUrl: z.string()
+  storeName: z
+    .string()
+    .min(1, "Store name is required")
+    .max(255, "Store name too long")
+    .optional(),
+  storeUrl: z
+    .string()
     .url("Must be a valid URL")
     .refine((url) => {
       try {
         const parsed = new URL(url);
-        // Only allow HTTPS
-        if (parsed.protocol !== 'https:') {
-          return false;
-        }
-        
-        // Block private IP ranges, localhost, and cloud metadata services (same as createStoreSchema)
+        if (parsed.protocol !== "https:") return false;
+
         const hostname = parsed.hostname.toLowerCase();
-        
-        // Block localhost and loopback
-        if (hostname === 'localhost' || hostname.startsWith('127.')) {
+        if (hostname === "localhost" || hostname.startsWith("127."))
           return false;
-        }
-        
-        // Block private IPv4 ranges (RFC 1918)
-        if (hostname.startsWith('10.') ||
-            hostname.startsWith('192.168.') ||
-            hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)) {
+        if (
+          hostname.startsWith("10.") ||
+          hostname.startsWith("192.168.") ||
+          hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)
+        )
           return false;
-        }
-        
-        // Block link-local addresses (RFC 3927)
-        if (hostname.startsWith('169.254.')) {
+        if (hostname.startsWith("169.254.")) return false;
+        if (
+          hostname === "169.254.169.254" ||
+          hostname === "metadata.google.internal" ||
+          hostname === "metadata.gce.internal"
+        )
           return false;
-        }
-        
-        // Block cloud metadata services
-        if (hostname === '169.254.169.254' || // AWS, GCP, Azure
-            hostname === 'metadata.google.internal' ||
-            hostname === 'metadata.gce.internal') {
+        if (
+          hostname === "::1" ||
+          hostname.startsWith("fc00:") ||
+          hostname.startsWith("fd00:") ||
+          hostname.startsWith("fe80:")
+        )
           return false;
-        }
-        
-        // Block IPv6 localhost and private ranges
-        if (hostname === '::1' ||
-            hostname.startsWith('fc00:') ||
-            hostname.startsWith('fd00:') ||
-            hostname.startsWith('fe80:')) {
+        if (
+          hostname.includes(".internal") ||
+          hostname.includes(".local") ||
+          hostname.endsWith(".consul")
+        )
           return false;
-        }
-        
-        // Block common internal service names
-        if (hostname.includes('.internal') ||
-            hostname.includes('.local') ||
-            hostname.endsWith('.consul')) {
-          return false;
-        }
-        
+
         return true;
       } catch {
         return false;
       }
-    }, "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services").optional(),
+    }, "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services")
+    .optional(),
   apiCredentials: z.record(z.any()).optional(),
-  syncConfig: z.record(z.any()).optional()
+  syncConfig: z.record(z.any()).optional(),
 });
 
 export const insertStoreProductSchema = createInsertSchema(storeProducts).omit({
@@ -362,9 +475,15 @@ export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertStore = z.infer<typeof insertStoreSchema>;
 export type InsertStoreProduct = z.infer<typeof insertStoreProductSchema>;
+export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
+export type InsertStoreIntegration = z.infer<
+  typeof insertStoreIntegrationSchema
+>;
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Store = typeof stores.$inferSelect;
 export type StoreProduct = typeof storeProducts.$inferSelect;
 export type SyncLog = typeof syncLogs.$inferSelect;
+export type Integration = typeof integrations.$inferSelect;
+export type StoreIntegration = typeof storeIntegrations.$inferSelect;

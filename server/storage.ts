@@ -1,4 +1,10 @@
-import { tenants, users, stores, storeProducts, syncLogs, type User, type InsertUser, type Tenant, type InsertTenant, type Store, type InsertStore, type StoreProduct, type InsertStoreProduct, type SyncLog } from "@shared/schema";
+import { 
+  tenants, users, stores, storeProducts, syncLogs, integrations, storeIntegrations,
+  type User, type InsertUser, type Tenant, type InsertTenant, 
+  type Store, type InsertStore, type StoreProduct, type InsertStoreProduct, 
+  type SyncLog, type Integration, type InsertIntegration,
+  type StoreIntegration, type InsertStoreIntegration
+} from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
 import session from "express-session";
@@ -22,27 +28,40 @@ export interface IStorage {
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: CreateUserData): Promise<User>;
   updateUserLastLogin(id: number): Promise<void>;
-  
+
   getTenant(id: number): Promise<Tenant | undefined>;
   getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
-  
+
   getStoresByTenant(tenantId: number): Promise<Store[]>;
   getStore(id: number): Promise<Store | undefined>;
   createStore(store: InsertStore): Promise<Store>;
   updateStore(id: number, updates: Partial<InsertStore>): Promise<Store>;
   deleteStore(id: number): Promise<void>;
-  
+
   // Product operations
   getProductsByStore(storeId: number): Promise<StoreProduct[]>;
   upsertProduct(product: InsertStoreProduct): Promise<StoreProduct>;
   deleteProductsByStore(storeId: number): Promise<void>;
-  
+
   // Sync operations
   createSyncLog(log: Omit<SyncLog, 'id' | 'createdAt'>): Promise<SyncLog>;
   getSyncLogsByStore(storeId: number, limit?: number): Promise<SyncLog[]>;
   updateStoreSyncStatus(storeId: number, productsCount: number, lastSyncAt: Date): Promise<void>;
-  
+
+  // Integration operations
+  getIntegrationsByTenant(tenantId: number): Promise<Integration[]>;
+  getIntegration(id: number): Promise<Integration | undefined>;
+  createIntegration(integration: InsertIntegration): Promise<Integration>;
+  updateIntegration(id: number, updates: Partial<InsertIntegration>): Promise<Integration>;
+  deleteIntegration(id: number): Promise<void>;
+
+  // Store-Integration relationships
+  getStoreIntegrations(storeId: number): Promise<StoreIntegration[]>;
+  getIntegrationStores(integrationId: number): Promise<StoreIntegration[]>;
+  linkStoreIntegration(data: InsertStoreIntegration): Promise<StoreIntegration>;
+  unlinkStoreIntegration(storeId: number, integrationId: number): Promise<void>;
+
   sessionStore: session.Store;
 }
 
@@ -53,7 +72,7 @@ export class DatabaseStorage implements IStorage {
     this.sessionStore = new PostgresSessionStore({
       conString: process.env.DATABASE_URL,
       createTableIfMissing: false,
-      tableName: 'sessions', // Use the correct table name
+      tableName: 'sessions',
     });
   }
 
@@ -190,6 +209,78 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date()
       })
       .where(eq(stores.id, storeId));
+  }
+
+  // Integration operations
+  async getIntegrationsByTenant(tenantId: number): Promise<Integration[]> {
+    return await db
+      .select()
+      .from(integrations)
+      .where(eq(integrations.tenantId, tenantId))
+      .orderBy(integrations.createdAt);
+  }
+
+  async getIntegration(id: number): Promise<Integration | undefined> {
+    const [integration] = await db
+      .select()
+      .from(integrations)
+      .where(eq(integrations.id, id));
+    return integration || undefined;
+  }
+
+  async createIntegration(integration: InsertIntegration): Promise<Integration> {
+    const [created] = await db
+      .insert(integrations)
+      .values(integration as any)
+      .returning();
+    return created;
+  }
+
+  async updateIntegration(id: number, updates: Partial<InsertIntegration>): Promise<Integration> {
+    const [updated] = await db
+      .update(integrations)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(integrations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteIntegration(id: number): Promise<void> {
+    await db.delete(integrations).where(eq(integrations.id, id));
+  }
+
+  // Store-Integration relationships
+  async getStoreIntegrations(storeId: number): Promise<StoreIntegration[]> {
+    return await db
+      .select()
+      .from(storeIntegrations)
+      .where(eq(storeIntegrations.storeId, storeId));
+  }
+
+  async getIntegrationStores(integrationId: number): Promise<StoreIntegration[]> {
+    return await db
+      .select()
+      .from(storeIntegrations)
+      .where(eq(storeIntegrations.integrationId, integrationId));
+  }
+
+  async linkStoreIntegration(data: InsertStoreIntegration): Promise<StoreIntegration> {
+    const [link] = await db
+      .insert(storeIntegrations)
+      .values(data as any)
+      .returning();
+    return link;
+  }
+
+  async unlinkStoreIntegration(storeId: number, integrationId: number): Promise<void> {
+    await db
+      .delete(storeIntegrations)
+      .where(
+        and(
+          eq(storeIntegrations.storeId, storeId),
+          eq(storeIntegrations.integrationId, integrationId)
+        )
+      );
   }
 }
 

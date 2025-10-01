@@ -3,6 +3,7 @@ import Sidebar from "@/components/dashboard/sidebar";
 import OverviewSection from "@/components/dashboard/overview-section";
 import AutomationSection from "@/components/dashboard/automation-section";
 import StoresSection from "@/components/dashboard/stores-section";
+import IntegrationsSection from "@/components/dashboard/integrations-section";
 
 type SectionType = "overview" | "stores" | "automation" | "integrations" | "analytics" | "settings";
 
@@ -18,19 +19,7 @@ export default function HomePage() {
       case "stores":
         return <StoresSection />;
       case "integrations":
-        return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">Integraciones</h2>
-                <p className="text-muted-foreground">Conecta con tus herramientas y servicios favoritos</p>
-              </div>
-            </div>
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Las integraciones estarán disponibles próximamente</p>
-            </div>
-          </div>
-        );
+        return <IntegrationsSection />;
       case "analytics":
         return (
           <div className="space-y-6">
