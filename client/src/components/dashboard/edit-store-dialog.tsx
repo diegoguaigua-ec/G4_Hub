@@ -24,12 +24,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, Database, Plug, RefreshCw } from "lucide-react";
 import { z } from "zod";
 import { Store } from "@shared/schema";
 import {
@@ -43,7 +46,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-// Form schema with individual credential fields (same as add store)
+// Form schema
 const editStoreFormSchema = z
   .object({
     storeName: z
@@ -66,7 +69,6 @@ const editStoreFormSchema = z
   })
   .refine(
     (data) => {
-      // Validate that required fields for each platform are provided
       if (data.platform === "woocommerce") {
         return data.consumerKey && data.consumerSecret;
       }
@@ -86,6 +88,22 @@ const editStoreFormSchema = z
   );
 
 type EditStoreFormData = z.infer<typeof editStoreFormSchema>;
+
+interface Integration {
+  id: number;
+  name: string;
+  integrationType: string;
+  isActive: boolean;
+  settings: any;
+}
+
+interface StoreIntegration {
+  id: number;
+  storeId: number;
+  integrationId: number;
+  isActive: boolean;
+  syncConfig: any;
+}
 
 interface EditStoreDialogProps {
   store: Store | null;
@@ -107,18 +125,27 @@ export function EditStoreDialog({
       storeName: "",
       storeUrl: "",
       platform: "shopify",
-      // WooCommerce
       consumerKey: "",
       consumerSecret: "",
-      // Shopify
       apiKey: "",
       accessToken: "",
       shopDomain: "",
-      // Contífico
       username: "",
       password: "",
       apiUrl: "",
     },
+  });
+
+  // Cargar integraciones disponibles
+  const { data: integrations = [] } = useQuery<Integration[]>({
+    queryKey: ["/api/integrations"],
+    enabled: open,
+  });
+
+  // Cargar integraciones vinculadas a esta tienda
+  const { data: storeIntegrations = [] } = useQuery<StoreIntegration[]>({
+    queryKey: [`/api/stores/${store?.id}/integrations`],
+    enabled: !!store?.id && open,
   });
 
   // Update form values when store changes
@@ -130,14 +157,11 @@ export function EditStoreDialog({
         storeName: store.storeName,
         storeUrl: store.storeUrl,
         platform: store.platform as any,
-        // WooCommerce
         consumerKey: credentials.consumer_key || "",
         consumerSecret: credentials.consumer_secret || "",
-        // Shopify
         apiKey: credentials.api_key || "",
         accessToken: credentials.access_token || "",
         shopDomain: credentials.shop_domain || "",
-        // Contífico
         username: credentials.username || "",
         password: credentials.password || "",
         apiUrl: credentials.api_url || "",
@@ -149,7 +173,6 @@ export function EditStoreDialog({
     mutationFn: async (data: EditStoreFormData) => {
       if (!store) throw new Error("No store selected");
 
-      // Format credentials based on platform
       let apiCredentials: any = {};
 
       switch (data.platform) {
@@ -175,23 +198,20 @@ export function EditStoreDialog({
           break;
       }
 
-      const storeData = {
+      const res = await apiRequest("PUT", `/api/stores/${store.id}`, {
         storeName: data.storeName,
         storeUrl: data.storeUrl,
         platform: data.platform,
         apiCredentials,
-        syncConfig: {},
-      };
-
-      const res = await apiRequest("PUT", `/api/stores/${store.id}`, storeData);
+      });
       return res.json();
     },
-    onSuccess: (updatedStore) => {
-      toast({
-        title: "Tienda actualizada exitosamente",
-        description: `${updatedStore.store.storeName} ha sido actualizada.`,
-      });
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
+      toast({
+        title: "Tienda actualizada",
+        description: "Los cambios se guardaron correctamente",
+      });
       onOpenChange(false);
     },
     onError: (error: Error) => {
@@ -210,11 +230,11 @@ export function EditStoreDialog({
       return res.json();
     },
     onSuccess: () => {
-      toast({
-        title: "Tienda eliminada exitosamente",
-        description: `${store?.storeName} ha sido removida de tu cuenta.`,
-      });
       queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
+      toast({
+        title: "Tienda eliminada",
+        description: "La tienda ha sido eliminada correctamente",
+      });
       setDeleteDialogOpen(false);
       onOpenChange(false);
     },
@@ -227,15 +247,134 @@ export function EditStoreDialog({
     },
   });
 
+  // Vincular integración
+  const linkMutation = useMutation({
+    mutationFn: async (integrationId: number) => {
+      if (!store?.id) throw new Error("No store selected");
+      const res = await apiRequest(
+        "POST",
+        `/api/stores/${store.id}/integrations/${integrationId}`,
+        { syncConfig: { pull: { enabled: false } } },
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/stores/${store?.id}/integrations`],
+      });
+      toast({
+        title: "Integración vinculada",
+        description: "La integración se vinculó correctamente a la tienda",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al vincular",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Desvincular integración
+  const unlinkMutation = useMutation({
+    mutationFn: async (integrationId: number) => {
+      if (!store?.id) throw new Error("No store selected");
+      const res = await apiRequest(
+        "DELETE",
+        `/api/stores/${store.id}/integrations/${integrationId}`,
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/stores/${store?.id}/integrations`],
+      });
+      toast({
+        title: "Integración desvinculada",
+        description: "La sincronización ha sido deshabilitada",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al desvincular",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Toggle estado de sincronización
+  const toggleSyncMutation = useMutation({
+    mutationFn: async ({
+      linkId,
+      isActive,
+    }: {
+      linkId: number;
+      isActive: boolean;
+    }) => {
+      if (!store?.id) throw new Error("No store selected");
+
+      // Encontrar la integración correspondiente
+      const link = storeIntegrations.find((si) => si.id === linkId);
+      if (!link) throw new Error("Link not found");
+
+      const res = await apiRequest(
+        "PUT",
+        `/api/stores/${store.id}/integrations/${link.integrationId}`,
+        {
+          isActive,
+          syncConfig: link.syncConfig,
+        },
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/stores/${store?.id}/integrations`],
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al actualizar estado",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Sincronizar ahora (Pull manual)
+  const syncNowMutation = useMutation({
+    mutationFn: async (integrationId: number) => {
+      if (!store?.id) throw new Error("No store selected");
+
+      const res = await apiRequest(
+        "POST",
+        `/api/sync/pull/${store.id}/${integrationId}`,
+        { dryRun: false, limit: 1000 },
+      );
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Sincronización completada",
+        description: `${data.result.success} productos actualizados, ${data.result.failed} fallidos, ${data.result.skipped} omitidos`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al sincronizar",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: EditStoreFormData) => {
     updateStoreMutation.mutate(data);
   };
 
-  const handleDelete = () => {
-    deleteStoreMutation.mutate();
-  };
-
-  // Helper function to render platform-specific credential fields
   const renderCredentialFields = () => {
     const platform = form.watch("platform");
 
@@ -248,16 +387,12 @@ export function EditStoreDialog({
               name="consumerKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Clave de Consumidor</FormLabel>
+                  <FormLabel>Consumer Key</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="ck_..."
                       data-testid="input-consumer-key"
-                      value={field.value || ""}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -269,17 +404,13 @@ export function EditStoreDialog({
               name="consumerSecret"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Secreto de Consumidor</FormLabel>
+                  <FormLabel>Consumer Secret</FormLabel>
                   <FormControl>
                     <Input
                       type="password"
                       placeholder="cs_..."
                       data-testid="input-consumer-secret"
-                      value={field.value || ""}
-                      onChange={field.onChange}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -297,10 +428,10 @@ export function EditStoreDialog({
               name="apiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Clave API</FormLabel>
+                  <FormLabel>API Key</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="your_api_key"
+                      placeholder="API Key de Shopify"
                       data-testid="input-api-key"
                       {...field}
                     />
@@ -314,7 +445,7 @@ export function EditStoreDialog({
               name="accessToken"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Token de Acceso</FormLabel>
+                  <FormLabel>Access Token</FormLabel>
                   <FormControl>
                     <Input
                       type="password"
@@ -332,10 +463,10 @@ export function EditStoreDialog({
               name="shopDomain"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Dominio de Tienda</FormLabel>
+                  <FormLabel>Shop Domain</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="yourstore.myshopify.com"
+                      placeholder="tutienda.myshopify.com"
                       data-testid="input-shop-domain"
                       {...field}
                     />
@@ -358,7 +489,7 @@ export function EditStoreDialog({
                   <FormLabel>Usuario</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="tu_usuario"
+                      placeholder="usuario"
                       data-testid="input-username"
                       {...field}
                     />
@@ -376,8 +507,8 @@ export function EditStoreDialog({
                   <FormControl>
                     <Input
                       type="password"
-                      placeholder="tu_contraseña"
-                      data-testid="input-api-password"
+                      placeholder="********"
+                      data-testid="input-password"
                       {...field}
                     />
                   </FormControl>
@@ -390,7 +521,7 @@ export function EditStoreDialog({
               name="apiUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>URL API</FormLabel>
+                  <FormLabel>API URL</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="https://api.contifico.com"
@@ -410,10 +541,12 @@ export function EditStoreDialog({
     }
   };
 
+  if (!store) return null;
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Editar Tienda</DialogTitle>
             <DialogDescription>
@@ -481,12 +614,140 @@ export function EditStoreDialog({
                 )}
               />
 
-              {/* Platform-specific credential fields */}
               <div className="space-y-4">
                 <div className="text-sm font-medium text-muted-foreground">
                   Credenciales API
                 </div>
                 {renderCredentialFields()}
+              </div>
+
+              {/* SECCIÓN DE INTEGRACIONES */}
+              <Separator className="my-6" />
+
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-medium flex items-center gap-2">
+                    <Database className="h-5 w-5" />
+                    Integraciones de Gestión
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Vincula Contífico u otros sistemas para sincronizar
+                    inventario
+                  </p>
+                </div>
+
+                {integrations.length === 0 ? (
+                  <Alert>
+                    <AlertDescription>
+                      No tienes integraciones configuradas.{" "}
+                      <span className="text-primary underline cursor-pointer">
+                        Ve a la sección Integraciones para configurar una
+                      </span>
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="space-y-3">
+                    {integrations.map((integration) => {
+                      const isLinked = storeIntegrations.some(
+                        (si) => si.integrationId === integration.id,
+                      );
+                      const link = storeIntegrations.find(
+                        (si) => si.integrationId === integration.id,
+                      );
+
+                      return (
+                        <div
+                          key={integration.id}
+                          className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                              <Plug className="h-5 w-5 text-primary" />
+                            </div>
+                            <div>
+                              <p className="font-medium">{integration.name}</p>
+                              <p className="text-sm text-muted-foreground capitalize">
+                                {integration.integrationType}
+                                {!integration.isActive && " (Inactiva)"}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            {isLinked && link ? (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-muted-foreground">
+                                    Sincronización
+                                  </span>
+                                  <Switch
+                                    checked={link.isActive}
+                                    onCheckedChange={(checked) =>
+                                      toggleSyncMutation.mutate({
+                                        linkId: link.id,
+                                        isActive: checked,
+                                      })
+                                    }
+                                    disabled={toggleSyncMutation.isPending}
+                                  />
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    syncNowMutation.mutate(integration.id)
+                                  }
+                                  disabled={
+                                    syncNowMutation.isPending || !link.isActive
+                                  }
+                                  title="Sincronizar inventario ahora"
+                                >
+                                  {syncNowMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    <RefreshCw className="h-4 w-4" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    unlinkMutation.mutate(integration.id)
+                                  }
+                                  disabled={unlinkMutation.isPending}
+                                >
+                                  {unlinkMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    "Desvincular"
+                                  )}
+                                </Button>
+                              </>
+                            ) : (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() =>
+                                  linkMutation.mutate(integration.id)
+                                }
+                                disabled={
+                                  linkMutation.isPending ||
+                                  !integration.isActive
+                                }
+                              >
+                                {linkMutation.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  "Vincular"
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <DialogFooter className="gap-2">
@@ -525,14 +786,10 @@ export function EditStoreDialog({
                   }
                   data-testid="button-save-store"
                 >
-                  {updateStoreMutation.isPending ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Actualizando...
-                    </>
-                  ) : (
-                    "Actualizar Tienda"
+                  {updateStoreMutation.isPending && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
+                  Guardar Cambios
                 </Button>
               </DialogFooter>
             </form>
@@ -540,33 +797,29 @@ export function EditStoreDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Delete confirmation dialog */}
+      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar Tienda</AlertDialogTitle>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar "{store?.storeName}"? Esta acción no se puede deshacer y eliminará todos los datos asociados.
+              Esta acción eliminará permanentemente la tienda "{store.storeName}
+              " y todos sus datos asociados. Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-delete">
+            <AlertDialogCancel disabled={deleteStoreMutation.isPending}>
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction
-              onClick={handleDelete}
+              onClick={() => deleteStoreMutation.mutate()}
               disabled={deleteStoreMutation.isPending}
-              data-testid="button-confirm-delete"
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90"
             >
-              {deleteStoreMutation.isPending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Eliminando...
-                </>
-              ) : (
-                "Eliminar Tienda"
+              {deleteStoreMutation.isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
+              Eliminar Tienda
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

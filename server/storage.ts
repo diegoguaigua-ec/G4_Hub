@@ -1,9 +1,24 @@
-import { 
-  tenants, users, stores, storeProducts, syncLogs, integrations, storeIntegrations,
-  type User, type InsertUser, type Tenant, type InsertTenant, 
-  type Store, type InsertStore, type StoreProduct, type InsertStoreProduct, 
-  type SyncLog, type Integration, type InsertIntegration,
-  type StoreIntegration, type InsertStoreIntegration
+import {
+  tenants,
+  users,
+  stores,
+  storeProducts,
+  syncLogs,
+  integrations,
+  storeIntegrations,
+  type User,
+  type InsertUser,
+  type Tenant,
+  type InsertTenant,
+  type Store,
+  type InsertStore,
+  type StoreProduct,
+  type InsertStoreProduct,
+  type SyncLog,
+  type Integration,
+  type InsertIntegration,
+  type StoreIntegration,
+  type InsertStoreIntegration,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
@@ -45,15 +60,22 @@ export interface IStorage {
   deleteProductsByStore(storeId: number): Promise<void>;
 
   // Sync operations
-  createSyncLog(log: Omit<SyncLog, 'id' | 'createdAt'>): Promise<SyncLog>;
+  createSyncLog(log: Omit<SyncLog, "id" | "createdAt">): Promise<SyncLog>;
   getSyncLogsByStore(storeId: number, limit?: number): Promise<SyncLog[]>;
-  updateStoreSyncStatus(storeId: number, productsCount: number, lastSyncAt: Date): Promise<void>;
+  updateStoreSyncStatus(
+    storeId: number,
+    productsCount: number,
+    lastSyncAt: Date,
+  ): Promise<void>;
 
   // Integration operations
   getIntegrationsByTenant(tenantId: number): Promise<Integration[]>;
   getIntegration(id: number): Promise<Integration | undefined>;
   createIntegration(integration: InsertIntegration): Promise<Integration>;
-  updateIntegration(id: number, updates: Partial<InsertIntegration>): Promise<Integration>;
+  updateIntegration(
+    id: number,
+    updates: Partial<InsertIntegration>,
+  ): Promise<Integration>;
   deleteIntegration(id: number): Promise<void>;
 
   // Store-Integration relationships
@@ -61,6 +83,10 @@ export interface IStorage {
   getIntegrationStores(integrationId: number): Promise<StoreIntegration[]>;
   linkStoreIntegration(data: InsertStoreIntegration): Promise<StoreIntegration>;
   unlinkStoreIntegration(storeId: number, integrationId: number): Promise<void>;
+  updateStoreIntegration(
+    linkId: number,
+    updates: Partial<InsertStoreIntegration>,
+  ): Promise<StoreIntegration>;
 
   sessionStore: session.Store;
 }
@@ -72,7 +98,7 @@ export class DatabaseStorage implements IStorage {
     this.sessionStore = new PostgresSessionStore({
       conString: process.env.DATABASE_URL,
       createTableIfMissing: false,
-      tableName: 'sessions',
+      tableName: "sessions",
     });
   }
 
@@ -87,7 +113,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, username));
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, username));
     return user || undefined;
   }
 
@@ -99,8 +128,8 @@ export class DatabaseStorage implements IStorage {
         email: insertUser.email,
         passwordHash: insertUser.passwordHash,
         name: insertUser.name,
-        role: insertUser.role || 'admin',
-        emailVerified: insertUser.emailVerified || false
+        role: insertUser.role || "admin",
+        emailVerified: insertUser.emailVerified || false,
       })
       .returning();
     return user;
@@ -119,7 +148,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined> {
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.subdomain, subdomain));
+    const [tenant] = await db
+      .select()
+      .from(tenants)
+      .where(eq(tenants.subdomain, subdomain));
     return tenant || undefined;
   }
 
@@ -163,7 +195,10 @@ export class DatabaseStorage implements IStorage {
 
   // Product operations
   async getProductsByStore(storeId: number): Promise<StoreProduct[]> {
-    return await db.select().from(storeProducts).where(eq(storeProducts.storeId, storeId));
+    return await db
+      .select()
+      .from(storeProducts)
+      .where(eq(storeProducts.storeId, storeId));
   }
 
   async upsertProduct(product: InsertStoreProduct): Promise<StoreProduct> {
@@ -172,7 +207,7 @@ export class DatabaseStorage implements IStorage {
       .values(product as any)
       .onConflictDoUpdate({
         target: [storeProducts.storeId, storeProducts.platformProductId],
-        set: product as any
+        set: product as any,
       })
       .returning();
     return upsertedProduct;
@@ -183,15 +218,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Sync operations
-  async createSyncLog(logData: Omit<SyncLog, 'id' | 'createdAt'>): Promise<SyncLog> {
-    const [syncLog] = await db
-      .insert(syncLogs)
-      .values(logData)
-      .returning();
+  async createSyncLog(
+    logData: Omit<SyncLog, "id" | "createdAt">,
+  ): Promise<SyncLog> {
+    const [syncLog] = await db.insert(syncLogs).values(logData).returning();
     return syncLog;
   }
 
-  async getSyncLogsByStore(storeId: number, limit: number = 50): Promise<SyncLog[]> {
+  async getSyncLogsByStore(
+    storeId: number,
+    limit: number = 50,
+  ): Promise<SyncLog[]> {
     return await db
       .select()
       .from(syncLogs)
@@ -200,13 +237,17 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
-  async updateStoreSyncStatus(storeId: number, productsCount: number, lastSyncAt: Date): Promise<void> {
+  async updateStoreSyncStatus(
+    storeId: number,
+    productsCount: number,
+    lastSyncAt: Date,
+  ): Promise<void> {
     await db
       .update(stores)
-      .set({ 
-        productsCount, 
+      .set({
+        productsCount,
         lastSyncAt,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(stores.id, storeId));
   }
@@ -228,7 +269,9 @@ export class DatabaseStorage implements IStorage {
     return integration || undefined;
   }
 
-  async createIntegration(integration: InsertIntegration): Promise<Integration> {
+  async createIntegration(
+    integration: InsertIntegration,
+  ): Promise<Integration> {
     const [created] = await db
       .insert(integrations)
       .values(integration as any)
@@ -236,7 +279,10 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateIntegration(id: number, updates: Partial<InsertIntegration>): Promise<Integration> {
+  async updateIntegration(
+    id: number,
+    updates: Partial<InsertIntegration>,
+  ): Promise<Integration> {
     const [updated] = await db
       .update(integrations)
       .set({ ...updates, updatedAt: new Date() })
@@ -257,14 +303,18 @@ export class DatabaseStorage implements IStorage {
       .where(eq(storeIntegrations.storeId, storeId));
   }
 
-  async getIntegrationStores(integrationId: number): Promise<StoreIntegration[]> {
+  async getIntegrationStores(
+    integrationId: number,
+  ): Promise<StoreIntegration[]> {
     return await db
       .select()
       .from(storeIntegrations)
       .where(eq(storeIntegrations.integrationId, integrationId));
   }
 
-  async linkStoreIntegration(data: InsertStoreIntegration): Promise<StoreIntegration> {
+  async linkStoreIntegration(
+    data: InsertStoreIntegration,
+  ): Promise<StoreIntegration> {
     const [link] = await db
       .insert(storeIntegrations)
       .values(data as any)
@@ -272,15 +322,30 @@ export class DatabaseStorage implements IStorage {
     return link;
   }
 
-  async unlinkStoreIntegration(storeId: number, integrationId: number): Promise<void> {
+  async unlinkStoreIntegration(
+    storeId: number,
+    integrationId: number,
+  ): Promise<void> {
     await db
       .delete(storeIntegrations)
       .where(
         and(
           eq(storeIntegrations.storeId, storeId),
-          eq(storeIntegrations.integrationId, integrationId)
-        )
+          eq(storeIntegrations.integrationId, integrationId),
+        ),
       );
+  }
+
+  async updateStoreIntegration(
+    linkId: number,
+    updates: Partial<InsertStoreIntegration>,
+  ): Promise<StoreIntegration> {
+    const [updated] = await db
+      .update(storeIntegrations)
+      .set(updates)
+      .where(eq(storeIntegrations.id, linkId))
+      .returning();
+    return updated;
   }
 }
 

@@ -13,6 +13,7 @@ import { randomBytes } from "crypto";
 import { WooCommerceConnector } from "./connectors/WooCommerceConnector";
 import { ShopifyConnector } from "./connectors/ShopifyConnector";
 import { ContificoConnector } from './connectors/ContificoConnector';
+import { SyncService } from './services/SyncService';
 import { ZodError } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -603,6 +604,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update a store-integration link (toggle sync, change config)
+  app.put("/api/stores/:storeId/integrations/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, integrationId } = req.params;
+      const { isActive, syncConfig } = req.body;
+
+      // Verificar tienda
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Tienda no encontrada" });
+      }
+
+      // Verificar integración
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      // Buscar el link existente
+      const storeIntegrations = await storage.getStoreIntegrations(parseInt(storeId));
+      const link = storeIntegrations.find(si => si.integrationId === parseInt(integrationId));
+
+      if (!link) {
+        return res.status(404).json({ 
+          message: "Esta integración no está vinculada a la tienda" 
+        });
+      }
+
+      // Actualizar el link
+      const updates: any = {};
+      if (isActive !== undefined) updates.isActive = isActive;
+      if (syncConfig !== undefined) updates.syncConfig = syncConfig;
+
+      const updatedLink = await storage.updateStoreIntegration(link.id, updates);
+
+      res.json({ 
+        link: updatedLink,
+        message: "Configuración de sincronización actualizada exitosamente" 
+      });
+    } catch (error: any) {
+      console.error("Error actualizando store integration:", error);
+      res.status(500).json({ 
+        message: "Error al actualizar configuración", 
+        error: error.message 
+      });
+    }
+  });
+
   // Unlink an integration from a store
   app.delete("/api/stores/:storeId/integrations/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
@@ -1023,6 +1077,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // SYNC ENDPOINTS
+  // ============================================
+
+  // Sincronización manual Pull (Contífico → Tienda)
+  app.post("/api/sync/pull/:storeId/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, integrationId } = req.params;
+      const { dryRun = false, limit = 1000 } = req.body;
+
+      // Verificar que la tienda pertenece al tenant del usuario
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Tienda no encontrada" });
+      }
+
+      // Verificar que la integración pertenece al tenant del usuario
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      console.log(`[API] Iniciando sincronización Pull para store ${storeId}`);
+
+      const result = await SyncService.pullFromIntegration(
+        parseInt(storeId),
+        parseInt(integrationId),
+        { dryRun, limit }
+      );
+
+      res.json({
+        success: true,
+        result,
+        message: `Sincronización completada: ${result.success} productos actualizados, ${result.failed} fallidos, ${result.skipped} omitidos`
+      });
+
+    } catch (error: any) {
+      console.error("[API] Error en sincronización Pull:", error);
+      res.status(500).json({
+        message: "Error al sincronizar",
+        error: error.message
+      });
+    }
+  });
+  
   const httpServer = createServer(app);
   return httpServer;
 }
