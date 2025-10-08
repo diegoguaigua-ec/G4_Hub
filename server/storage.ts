@@ -221,7 +221,18 @@ export class DatabaseStorage implements IStorage {
   async createSyncLog(
     logData: Omit<SyncLog, "id" | "createdAt">,
   ): Promise<SyncLog> {
-    const [syncLog] = await db.insert(syncLogs).values(logData).returning();
+    // Validar y truncar campos que tienen límite de caracteres
+    const sanitizedData = {
+      ...logData,
+      // Truncar sync_type a máximo 50 caracteres
+      syncType: logData.syncType?.substring(0, 50) || '',
+      // Truncar status a máximo 50 caracteres
+      status: logData.status?.substring(0, 50) || '',
+      // Truncar errorMessage si existe (aunque es TEXT, por seguridad)
+      errorMessage: logData.errorMessage?.substring(0, 500) || null,
+    };
+
+    const [syncLog] = await db.insert(syncLogs).values(sanitizedData).returning();
     return syncLog;
   }
 

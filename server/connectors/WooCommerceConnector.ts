@@ -250,6 +250,112 @@ export class WooCommerceConnector extends BaseConnector {
   }
 
   /**
+   * Obtiene todos los productos con SKU de WooCommerce
+   */
+  async getProductsWithSku(): Promise<Array<{
+    sku: string;
+    variant_id: number;
+    product_id: number;
+    inventory_quantity: number;
+    title: string;
+  }>> {
+    const productsWithSku: any[] = [];
+    let page = 1;
+    const perPage = 100;
+    let hasMore = true;
+
+    console.log('[WooCommerce] Obteniendo todos los productos con SKU...');
+
+    while (hasMore) {
+      try {
+        const response = await this.makeRequest('GET', '/wp-json/wc/v3/products', null, {
+          params: {
+            per_page: perPage,
+            page: page,
+            status: 'publish'
+          }
+        });
+
+        const products: WooCommerceProduct[] = response.data;
+
+        for (const product of products) {
+          // Productos simples
+          if (product.type === 'simple' && product.sku && product.sku.trim() !== '') {
+            productsWithSku.push({
+              sku: product.sku.trim(),
+              variant_id: product.id,
+              product_id: product.id,
+              inventory_quantity: product.stock_quantity || 0,
+              title: product.name
+            });
+          }
+
+          // Productos variables - obtener variaciones
+          if (product.type === 'variable') {
+            try {
+              const variationsResponse = await this.makeRequest('GET', 
+                `/wp-json/wc/v3/products/${product.id}/variations`, 
+                null, 
+                { params: { per_page: 100 } }
+              );
+
+              const variations = variationsResponse.data;
+
+              for (const variation of variations) {
+                if (variation.sku && variation.sku.trim() !== '') {
+                  productsWithSku.push({
+                    sku: variation.sku.trim(),
+                    variant_id: variation.id,
+                    product_id: product.id,
+                    inventory_quantity: variation.stock_quantity || 0,
+                    title: `${product.name} - ${variation.sku}`
+                  });
+                }
+              }
+            } catch (error) {
+              console.error(`[WooCommerce] Error obteniendo variaciones del producto ${product.id}`);
+            }
+          }
+        }
+
+        // Verificar si hay más páginas
+        hasMore = products.length === perPage;
+        page++;
+
+        console.log(`[WooCommerce] Página ${page - 1} procesada. Total con SKU: ${productsWithSku.length}`);
+
+      } catch (error: any) {
+        console.error('[WooCommerce] Error obteniendo productos con SKU:', error.message);
+        throw error;
+      }
+    }
+
+    console.log(`[WooCommerce] Total de productos con SKU: ${productsWithSku.length}`);
+    return productsWithSku;
+  }
+
+  /**
+   * Actualiza el stock de un producto específico
+   */
+  async updateProductStock(productId: number, quantity: number): Promise<boolean> {
+    try {
+      console.log(`[WooCommerce] Actualizando stock del producto ${productId} a ${quantity} unidades`);
+
+      await this.makeRequest('PUT', `/wp-json/wc/v3/products/${productId}`, {
+        manage_stock: true,
+        stock_quantity: quantity
+      });
+
+      console.log(`[WooCommerce] ✅ Stock actualizado exitosamente`);
+      return true;
+
+    } catch (error: any) {
+      console.error(`[WooCommerce] Error actualizando stock del producto ${productId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Transform WooCommerce product to StandardProduct format
    */
   private transformProduct(wooProduct: WooCommerceProduct): StandardProduct {

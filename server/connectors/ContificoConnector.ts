@@ -234,7 +234,7 @@ export class ContificoConnector extends BaseConnector {
     try {
       const response = await this.makeRequest(
         "GET",
-        `/sistema/api/v1/producto/${productId}/bodega/`,
+        `/sistema/api/v1/producto/${productId}/stock/`,
       );
 
       if (!Array.isArray(response.data)) {
@@ -329,5 +329,17 @@ export class ContificoConnector extends BaseConnector {
       console.error("[Contífico] Error al obtener conteo de productos:", error);
       return 0;
     }
+  }
+
+  async getProductsWithSku(): Promise<any[]> {
+    throw new Error('Método no soportado para Contífico');
+  }
+
+  async updateVariantStock(): Promise<boolean> {
+    throw new Error('Método no soportado para Contífico');
+  }
+
+  async updateProductStock(): Promise<boolean> {
+    throw new Error('Método no soportado para Contífico');
   }
 }

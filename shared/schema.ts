@@ -129,8 +129,8 @@ export const syncLogs = pgTable("sync_logs", {
   storeId: integer("store_id").references(() => stores.id, {
     onDelete: "cascade",
   }),
-  syncType: varchar("sync_type", { length: 20 }).notNull(),
-  status: varchar("status", { length: 20 }).notNull(),
+  syncType: varchar("sync_type", { length: 50 }).notNull(),
+  status: varchar("status", { length: 50 }).notNull(),
   syncedCount: integer("synced_count").default(0),
   errorCount: integer("error_count").default(0),
   durationMs: integer("duration_ms"),

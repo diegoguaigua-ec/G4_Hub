@@ -36,17 +36,18 @@ export class SyncService {
 
   /**
    * Sincroniza productos desde Contífico hacia una tienda (Pull)
+   * ESTRATEGIA: Partir desde los productos de la tienda, no desde Contífico
    */
   static async pullFromIntegration(
     storeId: number,
     integrationId: number,
     options: SyncOptions = {}
   ): Promise<SyncResult> {
-    const { dryRun = false, limit = 1000 } = options;
+    const { dryRun = false, limit } = options;
     const startTime = Date.now();
 
     console.log(`[Sync] Iniciando Pull: Store ${storeId}, Integration ${integrationId}`);
-    console.log(`[Sync] Opciones: dryRun=${dryRun}, limit=${limit}`);
+    console.log(`[Sync] Opciones: dryRun=${dryRun}, limit=${limit || 'sin límite'}`);
 
     const results: SyncResult = {
       success: 0,
@@ -76,7 +77,9 @@ export class SyncService {
       console.log(`[Sync] Store: ${store.storeName} (${store.platform})`);
       console.log(`[Sync] Integration: ${integration.name} (${integration.integrationType})`);
 
-      // 4. Crear store temporal para Contífico usando los settings de la integración
+      // 4. Crear conectores
+      const storeConnector = this.getStoreConnector(store);
+
       const settings = integration.settings as any;
       const contificoStore = {
         id: 0,
@@ -86,8 +89,8 @@ export class SyncService {
         storeUrl: 'https://api.contifico.com',
         apiCredentials: settings,
         syncConfig: {},
-        status: 'active',
-        connectionStatus: 'connected',
+        status: 'active' as const,
+        connectionStatus: 'connected' as const,
         lastConnectionTest: null,
         storeInfo: {},
         productsCount: 0,
@@ -96,77 +99,151 @@ export class SyncService {
         updatedAt: new Date()
       };
 
-      // 5. Crear conectores
       const contificoConnector = new ContificoConnector(contificoStore);
-      const storeConnector = this.getStoreConnector(store);
 
-      // 6. Obtener productos de Contífico
-      console.log(`[Sync] Obteniendo productos de Contífico...`);
-      const contificoProducts = await contificoConnector.getProducts(1, limit);
+      // 5. ESTRATEGIA CORRECTA: Obtener productos de la TIENDA que tienen SKU
+      console.log(`[Sync] Obteniendo productos de ${store.platform} que tienen SKU...`);
+      const storeProducts = await storeConnector.getProductsWithSku();
 
-      console.log(`[Sync] Productos obtenidos: ${contificoProducts.products.length}`);
+      // Aplicar límite si se especificó
+      const productsToSync = limit ? storeProducts.slice(0, limit) : storeProducts;
 
-      // 7. Sincronizar cada producto
-      for (const contificoProduct of contificoProducts.products) {
-        try {
-          const sku = contificoProduct.sku;
+      console.log(`[Sync] ${productsToSync.length} productos con SKU encontrados en la tienda`);
+      console.log(`[Sync] Sincronizando inventario desde Contífico...`);
 
-          // Validar SKU
-          if (!sku || sku.trim() === '') {
-            console.log(`[Sync] ⚠️ Producto sin SKU, omitiendo: ${contificoProduct.name}`);
-            results.skipped++;
-            continue;
-          }
+      // 6. Procesar por lotes (de 20 en 20 para no saturar las APIs)
+      const batchSize = 20;
+      let processedCount = 0;
 
-          console.log(`[Sync] Procesando: ${sku} - ${contificoProduct.name}`);
+      for (let i = 0; i < productsToSync.length; i += batchSize) {
+        const batch = productsToSync.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(productsToSync.length / batchSize);
 
-          // Buscar producto en la tienda por SKU
-          let storeProduct;
-          try {
-            storeProduct = await storeConnector.getProduct(sku);
-          } catch (error) {
-            console.log(`[Sync] Producto ${sku} no encontrado en tienda, omitiendo`);
-            results.skipped++;
-            continue;
-          }
+        console.log(`[Sync] Procesando lote ${batchNumber}/${totalBatches} (${batch.length} productos)`);
 
-          // Comparar stocks
-          const contificoStock = contificoProduct.stock_quantity || 0;
-          const storeStock = storeProduct.product?.stock_quantity || 0;
+        // Procesar cada producto del lote en paralelo
+        await Promise.all(
+          batch.map(async (storeProduct) => {
+            try {
+              const { 
+                sku, 
+                variant_id, 
+                inventory_quantity: currentStock, 
+                title, 
+                inventory_item_id 
+              } = storeProduct;
 
-          if (contificoStock === storeStock) {
-            console.log(`[Sync] ✓ Stock igual (${contificoStock}), omitiendo: ${sku}`);
-            results.skipped++;
-            continue;
-          }
+              console.log(`[Sync] Procesando: ${sku} - ${title}`);
 
-          console.log(`[Sync] Stock diferente: Contífico=${contificoStock}, Tienda=${storeStock}`);
+              // 1. Buscar producto en Contífico por SKU
+              let contificoProductResult;
+              try {
+                contificoProductResult = await contificoConnector.getProduct(sku);
+              } catch (error: any) {
+                console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico, omitiendo`);
+                results.skipped++;
+                return;
+              }
 
-          // Actualizar stock en la tienda (si no es dry run)
-          if (!dryRun) {
-            await storeConnector.updateProduct(storeProduct.product!.id, {
-              stock_quantity: contificoStock
-            });
-            console.log(`[Sync] ✅ Actualizado: ${sku} → ${contificoStock} unidades`);
-          } else {
-            console.log(`[Sync] [DRY-RUN] Se actualizaría: ${sku} → ${contificoStock} unidades`);
-          }
+              if (!contificoProductResult.product) {
+                console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico, omitiendo`);
+                results.skipped++;
+                return;
+              }
 
-          results.success++;
+              const contificoProduct = contificoProductResult.product;
 
-        } catch (error: any) {
-          console.error(`[Sync] ❌ Error procesando producto ${contificoProduct.sku}:`, error.message);
-          results.failed++;
-          results.errors.push({
-            sku: contificoProduct.sku || 'unknown',
-            error: error.message
-          });
+              // 2. Obtener stock (global o por bodega específica)
+              let contificoStock: number;
+
+              if (settings.warehouse_primary) {
+                // CON bodega configurada: consultar stock específico
+                console.log(`[Sync] Consultando stock de bodega ${settings.warehouse_primary} para ${sku}`);
+
+                try {
+                  contificoStock = await contificoConnector.getProductStock(
+                    contificoProduct.id,
+                    sku
+                  );
+                  console.log(`[Sync] Stock en bodega ${settings.warehouse_primary}: ${contificoStock}`);
+                } catch (error: any) {
+                  console.warn(`[Sync] Error obteniendo stock de bodega para ${sku}, usando stock global`);
+                  contificoStock = contificoProduct.stock_quantity || 0;
+                }
+              } else {
+                // SIN bodega: usar stock global
+                contificoStock = contificoProduct.stock_quantity || 0;
+                console.log(`[Sync] Stock global: ${contificoStock}`);
+              }
+
+              // 3. Comparar stocks
+              if (currentStock === contificoStock) {
+                console.log(`[Sync] ✓ Stock igual (${contificoStock}), omitiendo: ${sku}`);
+                results.skipped++;
+                return;
+              }
+
+              console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
+
+              // 4. Actualizar stock en la tienda
+              if (!dryRun) {
+                try {
+                  if (store.platform === 'shopify' && inventory_item_id) {
+                    // Shopify: Actualizar usando variant_id + inventory_item_id
+                    await (storeConnector as ShopifyConnector).updateVariantStock!(
+                      variant_id,
+                      inventory_item_id,
+                      Math.floor(contificoStock)
+                    );
+                  } else if (store.platform === 'woocommerce') {
+                    // WooCommerce: Actualizar usando product_id
+                    await (storeConnector as WooCommerceConnector).updateProductStock!(
+                      variant_id,
+                      Math.floor(contificoStock)
+                    );  
+                  } else {
+                    throw new Error(`Plataforma ${store.platform} no soportada para actualización de stock`);
+                  }
+
+                  console.log(`[Sync] ✅ Actualizado: ${sku} → ${contificoStock} unidades`);
+                  results.success++;
+                } catch (updateError: any) {
+                  console.error(`[Sync] ❌ Error actualizando stock para ${sku}:`, updateError.message);
+                  results.failed++;
+                  results.errors.push({
+                    sku,
+                    error: `Error al actualizar stock: ${updateError.message}`
+                  });
+                }
+              } else {
+                console.log(`[Sync] [DRY-RUN] Se actualizaría: ${sku} → ${contificoStock} unidades`);
+                results.success++;
+              }
+
+            } catch (error: any) {
+              console.error(`[Sync] ❌ Error procesando producto ${storeProduct.sku}:`, error.message);
+              results.failed++;
+              results.errors.push({
+                sku: storeProduct.sku || 'unknown',
+                error: error.message
+              });
+            }
+          })
+        );
+
+        processedCount += batch.length;
+        console.log(`[Sync] Progreso: ${processedCount}/${productsToSync.length} productos procesados`);
+
+        // Pequeña pausa entre lotes para no saturar las APIs
+        if (i + batchSize < productsToSync.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
       const durationMs = Date.now() - startTime;
 
-      // 8. Registrar el resultado de la sincronización
+      // 7. Registrar el resultado de la sincronización
       if (!dryRun) {
         await storage.createSyncLog({
           tenantId: store.tenantId,
@@ -176,12 +253,16 @@ export class SyncService {
           syncedCount: results.success,
           errorCount: results.failed,
           durationMs,
-          errorMessage: null, // Sin error general, solo errores individuales en details
+          errorMessage: null,
           details: {
             integration_id: integrationId,
-            total_processed: contificoProducts.products.length,
+            total_found_in_store: storeProducts.length,
+            total_processed: productsToSync.length,
+            success: results.success,
+            failed: results.failed,
             skipped: results.skipped,
-            errors: results.errors.slice(0, 10) // Solo primeros 10 errores
+            warehouse_used: settings.warehouse_primary || 'global',
+            errors: results.errors.slice(0, 20) // Primeros 20 errores
           }
         });
 
@@ -191,29 +272,44 @@ export class SyncService {
         });
       }
 
-      console.log(`[Sync] Completado en ${durationMs}ms: ${results.success} exitosos, ${results.failed} fallidos, ${results.skipped} omitidos`);
+      console.log(`[Sync] ========================================`);
+      console.log(`[Sync] Sincronización completada en ${(durationMs / 1000).toFixed(2)}s`);
+      console.log(`[Sync] ✅ Éxitos: ${results.success}`);
+      console.log(`[Sync] ❌ Fallidos: ${results.failed}`);
+      console.log(`[Sync] ⏭️  Omitidos: ${results.skipped}`);
+      console.log(`[Sync] ========================================`);
 
       return results;
 
     } catch (error: any) {
-      console.error('[Sync] Error fatal en sincronización:', error);
+      console.error('[Sync] ❌ Error fatal en sincronización:', error);
 
-      // Registrar fallo
       const durationMs = Date.now() - startTime;
 
+      // Registrar fallo
       try {
         const store = await storage.getStore(storeId);
-        await storage.createSyncLog({
-          tenantId: store?.tenantId || 0,
-          storeId,
-          syncType: 'pull',
-          status: 'failed',
-          syncedCount: 0,
-          errorCount: 1,
-          durationMs,
-          errorMessage: error.message,
-          details: { integration_id: integrationId }
-        });
+        if (store) {
+          await storage.createSyncLog({
+            tenantId: store.tenantId,
+            storeId,
+            syncType: 'pull',
+            status: 'failed',
+            syncedCount: results.success,
+            errorCount: results.failed + 1,
+            durationMs,
+            errorMessage: error.message,
+            details: { 
+              integration_id: integrationId,
+              fatal_error: true,
+              partial_results: {
+                success: results.success,
+                failed: results.failed,
+                skipped: results.skipped
+              }
+            }
+          });
+        }
       } catch (logError) {
         console.error('[Sync] Error al registrar log de fallo:', logError);
       }

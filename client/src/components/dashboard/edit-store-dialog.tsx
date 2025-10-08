@@ -45,6 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { SyncProgressDialog } from "./sync-progress-dialog";
 
 // Form schema
 const editStoreFormSchema = z
@@ -118,6 +119,8 @@ export function EditStoreDialog({
 }: EditStoreDialogProps) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
 
   const form = useForm<EditStoreFormData>({
     resolver: zodResolver(editStoreFormSchema),
@@ -355,14 +358,34 @@ export function EditStoreDialog({
       );
       return res.json();
     },
+    onMutate: () => {
+      // ✅ Abrir modal al iniciar
+      setSyncDialogOpen(true);
+      setSyncResult(null);
+    },
     onSuccess: (data) => {
+      // ✅ Guardar resultados
+      setSyncResult(data.result);
+
+      queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
+      queryClient.invalidateQueries({
+        queryKey: [`/api/stores/${store?.id}/integrations`],
+      });
+
       toast({
         title: "Sincronización completada",
-        description: `${data.result.success} productos actualizados, ${data.result.failed} fallidos, ${data.result.skipped} omitidos`,
+        description: `${data.result.success} productos actualizados exitosamente`,
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
     },
     onError: (error: Error) => {
+      // ✅ Guardar error en formato de resultado
+      setSyncResult({
+        success: 0,
+        failed: 1,
+        skipped: 0,
+        errors: [{ sku: "unknown", error: error.message }],
+      });
+
       toast({
         title: "Error al sincronizar",
         description: error.message,
@@ -824,6 +847,13 @@ export function EditStoreDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SyncProgressDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        syncResult={syncResult}
+        isLoading={syncNowMutation.isPending}
+      />
     </>
   );
 }

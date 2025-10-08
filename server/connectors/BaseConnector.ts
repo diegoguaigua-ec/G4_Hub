@@ -1,35 +1,47 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
-import { Store } from '@shared/schema';
+import axios, {
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from "axios";
+import { Store } from "@shared/schema";
 
 // SSRF Protection: Runtime URL validation
 function validateUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
-    
+
     // Only allow HTTPS
-    if (parsed.protocol !== 'https:') {
+    if (parsed.protocol !== "https:") {
       console.warn(`[SECURITY] Blocked non-HTTPS request: ${url}`);
       return false;
     }
-    
+
     const hostname = parsed.hostname.toLowerCase();
-    
+
     // Block private/localhost ranges
-    if (hostname === 'localhost' || hostname.startsWith('127.') ||
-        hostname.startsWith('10.') || hostname.startsWith('192.168.') ||
-        hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
-        hostname.startsWith('169.254.') || // Link-local
-        hostname === '169.254.169.254' || // Cloud metadata
-        hostname === 'metadata.google.internal' ||
-        hostname === 'metadata.gce.internal' ||
-        hostname === '::1' || hostname.startsWith('fc00:') ||
-        hostname.startsWith('fd00:') || hostname.startsWith('fe80:') ||
-        hostname.includes('.internal') || hostname.includes('.local') ||
-        hostname.endsWith('.consul')) {
+    if (
+      hostname === "localhost" ||
+      hostname.startsWith("127.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("192.168.") ||
+      hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./) ||
+      hostname.startsWith("169.254.") || // Link-local
+      hostname === "169.254.169.254" || // Cloud metadata
+      hostname === "metadata.google.internal" ||
+      hostname === "metadata.gce.internal" ||
+      hostname === "::1" ||
+      hostname.startsWith("fc00:") ||
+      hostname.startsWith("fd00:") ||
+      hostname.startsWith("fe80:") ||
+      hostname.includes(".internal") ||
+      hostname.includes(".local") ||
+      hostname.endsWith(".consul")
+    ) {
       console.warn(`[SECURITY] Blocked private/internal address: ${url}`);
       return false;
     }
-    
+
     return true;
   } catch {
     console.warn(`[SECURITY] Invalid URL format: ${url}`);
@@ -70,7 +82,7 @@ export interface UpdateResult {
   product?: StandardProduct;
   error?: string;
   // Inventory update status (for platforms that support granular inventory control)
-  inventory_status?: 'success' | 'partial_failure' | 'failed';
+  inventory_status?: "success" | "partial_failure" | "failed";
   inventory_message?: string;
 }
 
@@ -92,7 +104,7 @@ export interface StandardProduct {
   price: number; // In cents to avoid decimal issues
   stock_quantity?: number;
   manage_stock: boolean;
-  stock_status?: 'in_stock' | 'out_of_stock' | 'on_backorder';
+  stock_status?: "in_stock" | "out_of_stock" | "on_backorder";
   images?: string[];
   platform: string;
   raw_data?: any; // Full original product data
@@ -130,7 +142,7 @@ export abstract class BaseConnector {
     this.credentials = store.apiCredentials;
     this.baseUrl = store.storeUrl;
     this.platform = store.platform;
-    
+
     // Validate base URL for SSRF protection
     if (!validateUrl(this.baseUrl)) {
       throw new Error(`[SECURITY] Invalid or unsafe base URL: ${this.baseUrl}`);
@@ -141,9 +153,9 @@ export abstract class BaseConnector {
       baseURL: this.baseUrl,
       timeout: 30000, // 30 second timeout
       headers: {
-        'User-Agent': 'G4Hub/1.0 (E-commerce Intelligence Platform)',
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
+        "User-Agent": "G4Hub/1.0 (E-commerce Intelligence Platform)",
+        Accept: "application/json",
+        "Content-Type": "application/json",
       },
     });
 
@@ -153,29 +165,71 @@ export abstract class BaseConnector {
 
   // Abstract methods that each platform must implement
   abstract testConnection(): Promise<ConnectionResult>;
-  abstract getProducts(page?: number, limit?: number, pageInfo?: string): Promise<ProductsResult>;
+  abstract getProducts(
+    page?: number,
+    limit?: number,
+    pageInfo?: string,
+  ): Promise<ProductsResult>;
   abstract getProduct(productId: string): Promise<ProductResult>;
-  abstract updateProduct(productId: string, data: Partial<StandardProduct>): Promise<UpdateResult>;
+  abstract updateProduct(
+    productId: string,
+    data: Partial<StandardProduct>,
+  ): Promise<UpdateResult>;
   abstract getStoreInfo(): Promise<StoreInfoResult>;
 
+  /**
+   * Obtiene todos los productos con SKU de la tienda
+   * Necesario para sincronización Pull eficiente
+   */
+  abstract getProductsWithSku(): Promise<Array<{
+    sku: string;
+    variant_id: number;
+    product_id: number;
+    inventory_quantity: number;
+    title: string;
+    inventory_item_id?: number;
+  }>>;
+
+  /**
+   * Actualiza el stock de una variante/producto específico
+   * Para Shopify usa variant_id + inventory_item_id
+   * Para WooCommerce usa product_id
+   */
+  abstract updateVariantStock?(
+    variantId: number,
+    inventoryItemId: number,
+    quantity: number
+  ): Promise<boolean>;
+
+  abstract updateProductStock?(
+    productId: number,
+    quantity: number
+  ): Promise<boolean>;
+
   // Protected method for platform-specific request authentication
-  protected abstract authenticateRequest(config: AxiosRequestConfig): AxiosRequestConfig;
+  protected abstract authenticateRequest(
+    config: AxiosRequestConfig,
+  ): AxiosRequestConfig;
 
   // Common utility methods available to all connectors
   protected async makeRequest(
-    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+    method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
     endpoint: string,
     data?: any,
     config?: AxiosRequestConfig,
-    retryCount: number = 0
+    retryCount: number = 0,
   ): Promise<AxiosResponse> {
     try {
       // SSRF Protection: Validate final URL before request
-      const fullUrl = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+      const fullUrl = endpoint.startsWith("http")
+        ? endpoint
+        : `${this.baseUrl}${endpoint}`;
       if (!validateUrl(fullUrl)) {
-        throw new Error(`[SECURITY] Request blocked by SSRF protection: ${fullUrl}`);
+        throw new Error(
+          `[SECURITY] Request blocked by SSRF protection: ${fullUrl}`,
+        );
       }
-      
+
       const requestConfig: AxiosRequestConfig = {
         method,
         url: endpoint,
@@ -186,15 +240,17 @@ export abstract class BaseConnector {
 
       // Apply platform-specific authentication
       const authenticatedConfig = this.authenticateRequest(requestConfig);
-      
+
       // Enhanced security logging for outbound requests
-      console.log(`[${this.platform}][SECURITY] Making ${method} request to: ${fullUrl}`);
+      console.log(
+        `[${this.platform}][SECURITY] Making ${method} request to: ${fullUrl}`,
+      );
 
       const response = await this.httpClient.request(authenticatedConfig);
-      
+
       // Update rate limit info on successful response
       this.updateRateLimitInfo(response);
-      
+
       return response;
     } catch (error: any) {
       // Update rate limit info on error responses too
@@ -205,9 +261,11 @@ export abstract class BaseConnector {
       // Handle retryable errors with exponential backoff
       if (this.shouldRetry(error, retryCount)) {
         const delay = this.calculateRetryDelay(retryCount, error);
-        console.log(`[${this.platform}] Retrying request in ${delay}ms (attempt ${retryCount + 1}/3)`);
-        
-        await new Promise(resolve => setTimeout(resolve, delay));
+        console.log(
+          `[${this.platform}] Retrying request in ${delay}ms (attempt ${retryCount + 1}/3)`,
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, delay));
         return this.makeRequest(method, endpoint, data, config, retryCount + 1);
       }
 
@@ -217,41 +275,42 @@ export abstract class BaseConnector {
 
   protected shouldRetry(error: any, retryCount: number): boolean {
     const maxRetries = 3;
-    
+
     if (retryCount >= maxRetries) return false;
-    
+
     // Retry on rate limiting
     if (error.response?.status === 429) return true;
-    
+
     // Retry on transient server errors
-    if (error.response?.status >= 500 && error.response?.status < 600) return true;
-    
+    if (error.response?.status >= 500 && error.response?.status < 600)
+      return true;
+
     // Retry on network errors (no response)
-    if (!error.response && error.code !== 'ENOTFOUND') return true;
-    
+    if (!error.response && error.code !== "ENOTFOUND") return true;
+
     return false;
   }
 
   protected calculateRetryDelay(retryCount: number, error: any): number {
     // Use Retry-After header if available (rate limiting)
     if (error.response?.status === 429) {
-      const retryAfter = error.response.headers['retry-after'];
+      const retryAfter = error.response.headers["retry-after"];
       if (retryAfter) {
         return parseInt(retryAfter) * 1000; // Convert to milliseconds
       }
     }
-    
+
     // Exponential backoff: 1s, 2s, 4s
     return Math.min(1000 * Math.pow(2, retryCount), 8000);
   }
 
   protected async handleRateLimit(error: any): Promise<void> {
     if (error.response?.status === 429) {
-      const retryAfter = error.response.headers['retry-after'];
+      const retryAfter = error.response.headers["retry-after"];
       const delay = retryAfter ? parseInt(retryAfter) * 1000 : 1000;
-      
+
       console.log(`Rate limited. Waiting ${delay}ms before retry...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 
@@ -259,7 +318,8 @@ export abstract class BaseConnector {
     if (error.response) {
       // API error response
       return {
-        message: error.response.data?.message || error.message || 'API request failed',
+        message:
+          error.response.data?.message || error.message || "API request failed",
         code: error.response.data?.code || error.response.status.toString(),
         status: error.response.status,
         details: error.response.data,
@@ -267,15 +327,15 @@ export abstract class BaseConnector {
     } else if (error.request) {
       // Network error
       return {
-        message: 'Network error - unable to connect to store',
-        code: 'NETWORK_ERROR',
+        message: "Network error - unable to connect to store",
+        code: "NETWORK_ERROR",
         details: error.message,
       };
     } else {
       // Other error
       return {
-        message: error.message || 'Unknown error occurred',
-        code: 'UNKNOWN_ERROR',
+        message: error.message || "Unknown error occurred",
+        code: "UNKNOWN_ERROR",
         details: error,
       };
     }
@@ -283,39 +343,44 @@ export abstract class BaseConnector {
 
   protected updateRateLimitInfo(response: AxiosResponse): void {
     const headers = response.headers;
-    
+
     // Try platform-specific headers first, then fall back to common ones
     let remaining, limit, reset;
 
     // Shopify-specific headers
-    if (this.platform === 'shopify') {
-      const shopifyLimit = headers['x-shopify-shop-api-call-limit'];
+    if (this.platform === "shopify") {
+      const shopifyLimit = headers["x-shopify-shop-api-call-limit"];
       if (shopifyLimit) {
-        const [used, total] = shopifyLimit.split('/').map(Number);
+        const [used, total] = shopifyLimit.split("/").map(Number);
         remaining = total - used;
         limit = total;
       }
     }
 
     // WooCommerce/WordPress common headers
-    if (!remaining && (this.platform === 'woocommerce' || this.platform === 'wordpress')) {
-      remaining = headers['x-wp-ratelimit-remaining'];
-      limit = headers['x-wp-ratelimit-limit'];
-      reset = headers['x-wp-ratelimit-reset'];
+    if (
+      !remaining &&
+      (this.platform === "woocommerce" || this.platform === "wordpress")
+    ) {
+      remaining = headers["x-wp-ratelimit-remaining"];
+      limit = headers["x-wp-ratelimit-limit"];
+      reset = headers["x-wp-ratelimit-reset"];
     }
 
     // Contífico-specific headers (if they use standard format)
-    if (!remaining && this.platform === 'contifico') {
-      remaining = headers['x-api-calls-remaining'] || headers['x-ratelimit-remaining'];
-      limit = headers['x-api-calls-limit'] || headers['x-ratelimit-limit'];
-      reset = headers['x-api-calls-reset'] || headers['x-ratelimit-reset'];
+    if (!remaining && this.platform === "contifico") {
+      remaining =
+        headers["x-api-calls-remaining"] || headers["x-ratelimit-remaining"];
+      limit = headers["x-api-calls-limit"] || headers["x-ratelimit-limit"];
+      reset = headers["x-api-calls-reset"] || headers["x-ratelimit-reset"];
     }
 
     // Fall back to common rate limit headers
     if (!remaining) {
-      remaining = headers['x-rate-limit-remaining'] || headers['x-ratelimit-remaining'];
-      limit = headers['x-rate-limit-limit'] || headers['x-ratelimit-limit'];
-      reset = headers['x-rate-limit-reset'] || headers['x-ratelimit-reset'];
+      remaining =
+        headers["x-rate-limit-remaining"] || headers["x-ratelimit-remaining"];
+      limit = headers["x-rate-limit-limit"] || headers["x-ratelimit-limit"];
+      reset = headers["x-rate-limit-reset"] || headers["x-ratelimit-reset"];
     }
 
     // Update rate limit info if we found valid data
@@ -325,8 +390,10 @@ export abstract class BaseConnector {
         limit: parseInt(limit.toString()),
         reset_time: reset ? parseInt(reset.toString()) : Date.now() + 3600000, // Default 1 hour
       };
-      
-      console.log(`[${this.platform}] Rate limit: ${this.rateLimitInfo.remaining}/${this.rateLimitInfo.limit} remaining`);
+
+      console.log(
+        `[${this.platform}] Rate limit: ${this.rateLimitInfo.remaining}/${this.rateLimitInfo.limit} remaining`,
+      );
     }
   }
 
@@ -334,32 +401,40 @@ export abstract class BaseConnector {
     // Request interceptor for logging
     this.httpClient.interceptors.request.use(
       (config: InternalAxiosRequestConfig) => {
-        console.log(`[${this.platform}] ${config.method?.toUpperCase()} ${config.url}`);
+        console.log(
+          `[${this.platform}] ${config.method?.toUpperCase()} ${config.url}`,
+        );
         return config;
       },
       (error: any) => {
         console.error(`[${this.platform}] Request error:`, error.message);
         return Promise.reject(error);
-      }
+      },
     );
 
     // Response interceptor for error handling and retries
     this.httpClient.interceptors.response.use(
       (response: AxiosResponse) => {
-        console.log(`[${this.platform}] ${response.status} ${response.config.url}`);
+        console.log(
+          `[${this.platform}] ${response.status} ${response.config.url}`,
+        );
         return response;
       },
       async (error: any) => {
-        console.error(`[${this.platform}] Response error:`, error.response?.status, error.message);
-        
+        console.error(
+          `[${this.platform}] Response error:`,
+          error.response?.status,
+          error.message,
+        );
+
         // Handle rate limiting with retry
         if (error.response?.status === 429) {
           await this.handleRateLimit(error);
           // Optionally retry the request
         }
-        
+
         return Promise.reject(error);
-      }
+      },
     );
   }
 
@@ -380,8 +455,10 @@ export abstract class BaseConnector {
   // Check if we're approaching rate limits
   public isApproachingRateLimit(threshold: number = 0.1): boolean {
     if (!this.rateLimitInfo) return false;
-    
-    const usageRatio = (this.rateLimitInfo.limit - this.rateLimitInfo.remaining) / this.rateLimitInfo.limit;
-    return usageRatio > (1 - threshold);
+
+    const usageRatio =
+      (this.rateLimitInfo.limit - this.rateLimitInfo.remaining) /
+      this.rateLimitInfo.limit;
+    return usageRatio > 1 - threshold;
   }
 }
