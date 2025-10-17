@@ -1126,6 +1126,221 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
+
+  // ============================================
+  // SYNC LOGS ENDPOINTS
+  // ============================================
+
+  /**
+   * GET /api/sync/logs
+   * Listar sincronizaciones con filtros y paginación
+   */
+  app.get("/api/sync/logs", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { 
+        storeId, 
+        status, 
+        limit = '20', 
+        offset = '0' 
+      } = req.query;
+
+      console.log('[API] Obteniendo logs de sincronización', { 
+        tenantId: user.tenantId, 
+        storeId, 
+        status, 
+        limit, 
+        offset 
+      });
+
+      const options: any = {
+        limit: parseInt(limit as string),
+        offset: parseInt(offset as string)
+      };
+
+      if (storeId) {
+        options.storeId = parseInt(storeId as string);
+      }
+
+      if (status) {
+        options.status = status as string;
+      }
+
+      const result = await storage.getSyncLogs(user.tenantId, options);
+
+      // Enriquecer logs con información de tienda
+      const logsWithStoreInfo = await Promise.all(
+        result.logs.map(async (log) => {
+          const store = log.storeId !== null
+          ? await storage.getStore(log.storeId) 
+          : null;
+          return {
+            ...log,
+            storeName: store?.storeName || 'N/A',
+            storePlatform: store?.platform || 'N/A',
+          };
+        })
+      );
+
+      res.json({
+        logs: logsWithStoreInfo,
+        pagination: {
+          total: result.total,
+          limit: options.limit,
+          offset: options.offset,
+          hasMore: options.offset + options.limit < result.total
+        }
+      });
+
+    } catch (error: any) {
+      console.error('[API] Error obteniendo logs:', error);
+      res.status(500).json({ 
+        message: "Error al obtener logs de sincronización", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/sync/logs/:id
+   * Obtener detalle de una sincronización con sus items
+   */
+  app.get("/api/sync/logs/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { id } = req.params;
+
+      console.log('[API] Obteniendo detalle de log', { syncLogId: id });
+
+      const result = await storage.getSyncLogWithItems(parseInt(id));
+
+      if (!result.syncLog) {
+        return res.status(404).json({ message: "Log de sincronización no encontrado" });
+      }
+
+      // Verificar que pertenece al tenant del usuario
+      if (result.syncLog.tenantId !== user.tenantId) {
+        return res.status(403).json({ message: "No autorizado para ver este log" });
+      }
+
+      // Obtener información de tienda
+      const store = result.syncLog.storeId 
+        ? await storage.getStore(result.syncLog.storeId)
+        : null;
+
+      // Obtener estadísticas de errores por categoría
+      const errorStats = await storage.getSyncLogItemsErrorStats(parseInt(id));
+
+      res.json({
+        syncLog: {
+          ...result.syncLog,
+          storeName: store?.storeName || 'N/A',
+          storePlatform: store?.platform || 'N/A',
+        },
+        items: result.items,
+        errorStats,
+        summary: {
+          total: result.items.length,
+          success: result.items.filter(i => i.status === 'success').length,
+          failed: result.items.filter(i => i.status === 'failed').length,
+          skipped: result.items.filter(i => i.status === 'skipped').length,
+        }
+      });
+
+    } catch (error: any) {
+      console.error('[API] Error obteniendo detalle de log:', error);
+      res.status(500).json({ 
+        message: "Error al obtener detalle de sincronización", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/sync/stats
+   * Obtener métricas agregadas para Dashboard
+   */
+  app.get("/api/sync/stats", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { days = '7' } = req.query;
+
+      console.log('[API] Obteniendo estadísticas de sincronización', { 
+        tenantId: user.tenantId,
+        days 
+      });
+
+      // Obtener logs de los últimos N días
+      const daysAgo = new Date();
+      daysAgo.setDate(daysAgo.getDate() - parseInt(days as string));
+
+      // Obtener todos los logs del período
+      const allLogs = await storage.getSyncLogs(user.tenantId, { 
+        limit: 1000 // Suficiente para stats
+      });
+
+      // Filtrar por fecha
+      const recentLogs = allLogs.logs.filter(log => 
+        new Date(log.createdAt) >= daysAgo
+      );
+
+      // Calcular métricas
+      const totalSyncs = recentLogs.length;
+      const totalProducts = recentLogs.reduce((sum, log) => sum + (log.syncedCount || 0), 0);
+      const totalErrors = recentLogs.reduce((sum, log) => sum + (log.errorCount || 0), 0);
+      const successfulSyncs = recentLogs.filter(log => log.status === 'success').length;
+      const successRate = totalSyncs > 0 
+        ? Math.round((successfulSyncs / totalSyncs) * 100) 
+        : 0;
+
+      // Logs recientes (últimos 5)
+      const recentActivity = recentLogs
+        .slice(0, 5)
+        .map(log => ({
+          id: log.id,
+          storeId: log.storeId,
+          syncType: log.syncType,
+          status: log.status,
+          syncedCount: log.syncedCount,
+          errorCount: log.errorCount,
+          createdAt: log.createdAt,
+        }));
+
+      res.json({
+        period: {
+          days: parseInt(days as string),
+          from: daysAgo.toISOString(),
+          to: new Date().toISOString(),
+        },
+        metrics: {
+          totalSyncs,
+          totalProducts,
+          totalErrors,
+          successRate,
+        },
+        recentActivity,
+      });
+
+    } catch (error: any) {
+      console.error('[API] Error obteniendo estadísticas:', error);
+      res.status(500).json({ 
+        message: "Error al obtener estadísticas", 
+        error: error.message 
+      });
+    }
+  });
   
   const httpServer = createServer(app);
   return httpServer;
