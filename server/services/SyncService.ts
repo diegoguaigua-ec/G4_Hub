@@ -56,6 +56,10 @@ export class SyncService {
       errors: []
     };
 
+    // ✅ Array para almacenar items a guardar
+    const itemsToSave: Array<any> = [];
+    let syncLogId: number | null = null;
+
     try {
       // 1. Obtener la tienda y verificar que existe
       const store = await storage.getStore(storeId);
@@ -101,6 +105,11 @@ export class SyncService {
 
       const contificoConnector = new ContificoConnector(contificoStore);
 
+      // ✅ Obtener nombre de bodega
+      const warehouseName = settings.warehouse_primary 
+        ? await this.getWarehouseName(contificoConnector, settings.warehouse_primary)
+        : 'Stock Global';
+
       // 5. ESTRATEGIA CORRECTA: Obtener productos de la TIENDA que tienen SKU
       console.log(`[Sync] Obteniendo productos de ${store.platform} que tienen SKU...`);
       const storeProducts = await storeConnector.getProductsWithSku();
@@ -125,6 +134,19 @@ export class SyncService {
         // Procesar cada producto del lote en paralelo
         await Promise.all(
           batch.map(async (storeProduct) => {
+            // ✅ Crear registro base del item DENTRO del map
+            const itemRecord: any = {
+              syncLogId: 0, // Se actualizará después
+              sku: storeProduct.sku,
+              productId: storeProduct.variant_id.toString(),
+              productName: storeProduct.title,
+              status: 'skipped',
+              stockBefore: storeProduct.inventory_quantity,
+              stockAfter: storeProduct.inventory_quantity,
+              errorCategory: null,
+              errorMessage: null,
+            };
+
             try {
               const { 
                 sku, 
@@ -143,12 +165,24 @@ export class SyncService {
               } catch (error: any) {
                 console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico, omitiendo`);
                 results.skipped++;
+
+                // ✅ Guardar item omitido
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'not_found_contifico';
+                itemRecord.errorMessage = 'Producto no encontrado en Contífico';
+                itemsToSave.push(itemRecord);
                 return;
               }
 
               if (!contificoProductResult.product) {
                 console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico, omitiendo`);
                 results.skipped++;
+
+                // ✅ Guardar item omitido
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'not_found_contifico';
+                itemRecord.errorMessage = 'Producto no encontrado en Contífico';
+                itemsToSave.push(itemRecord);
                 return;
               }
 
@@ -181,6 +215,12 @@ export class SyncService {
               if (currentStock === contificoStock) {
                 console.log(`[Sync] ✓ Stock igual (${contificoStock}), omitiendo: ${sku}`);
                 results.skipped++;
+
+                // ✅ Guardar item omitido
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'no_changes';
+                itemRecord.errorMessage = 'Stock sin cambios';
+                itemsToSave.push(itemRecord);
                 return;
               }
 
@@ -201,13 +241,19 @@ export class SyncService {
                     await (storeConnector as WooCommerceConnector).updateProductStock!(
                       variant_id,
                       Math.floor(contificoStock)
-                    );  
+                    );
                   } else {
                     throw new Error(`Plataforma ${store.platform} no soportada para actualización de stock`);
                   }
 
                   console.log(`[Sync] ✅ Actualizado: ${sku} → ${contificoStock} unidades`);
                   results.success++;
+
+                  // ✅ Guardar item exitoso
+                  itemRecord.status = 'success';
+                  itemRecord.stockAfter = Math.floor(contificoStock);
+                  itemsToSave.push(itemRecord);
+
                 } catch (updateError: any) {
                   console.error(`[Sync] ❌ Error actualizando stock para ${sku}:`, updateError.message);
                   results.failed++;
@@ -215,10 +261,21 @@ export class SyncService {
                     sku,
                     error: `Error al actualizar stock: ${updateError.message}`
                   });
+
+                  // ✅ Guardar item fallido
+                  itemRecord.status = 'failed';
+                  itemRecord.errorCategory = 'update_error';
+                  itemRecord.errorMessage = updateError.message;
+                  itemsToSave.push(itemRecord);
                 }
               } else {
                 console.log(`[Sync] [DRY-RUN] Se actualizaría: ${sku} → ${contificoStock} unidades`);
                 results.success++;
+
+                // ✅ En dry-run también guardamos como éxito
+                itemRecord.status = 'success';
+                itemRecord.stockAfter = Math.floor(contificoStock);
+                itemsToSave.push(itemRecord);
               }
 
             } catch (error: any) {
@@ -228,6 +285,12 @@ export class SyncService {
                 sku: storeProduct.sku || 'unknown',
                 error: error.message
               });
+
+              // ✅ Guardar item con error general
+              itemRecord.status = 'failed';
+              itemRecord.errorCategory = 'processing_error';
+              itemRecord.errorMessage = error.message;
+              itemsToSave.push(itemRecord);
             }
           })
         );
@@ -245,26 +308,41 @@ export class SyncService {
 
       // 7. Registrar el resultado de la sincronización
       if (!dryRun) {
-        await storage.createSyncLog({
+        const syncLog = await storage.createSyncLog({
           tenantId: store.tenantId,
           storeId: store.id,
           syncType: 'pull',
-          status: results.failed > 0 ? 'completed_with_errors' : 'completed',
+          status: results.failed > 0 ? 'partial' : 'success',
           syncedCount: results.success,
           errorCount: results.failed,
           durationMs,
           errorMessage: null,
           details: {
             integration_id: integrationId,
+            warehouse_id: settings.warehouse_primary || null,
+            warehouse_name: warehouseName,
             total_found_in_store: storeProducts.length,
             total_processed: productsToSync.length,
             success: results.success,
             failed: results.failed,
             skipped: results.skipped,
-            warehouse_used: settings.warehouse_primary || 'global',
-            errors: results.errors.slice(0, 20) // Primeros 20 errores
+            errors: results.errors.slice(0, 20)
           }
         });
+
+        syncLogId = syncLog.id;
+
+        // ✅ NUEVO: Guardar todos los items procesados
+        if (itemsToSave.length > 0) {
+          // Actualizar syncLogId en todos los items
+          const itemsWithLogId = itemsToSave.map(item => ({
+            ...item,
+            syncLogId: syncLog.id
+          }));
+
+          await storage.createSyncLogItems(itemsWithLogId);
+          console.log(`[Sync] ✅ Guardados ${itemsWithLogId.length} items en sync_log_items`);
+        }
 
         // Actualizar última sincronización
         await storage.updateStore(storeId, {
@@ -290,15 +368,15 @@ export class SyncService {
       try {
         const store = await storage.getStore(storeId);
         if (store) {
-          await storage.createSyncLog({
+          const syncLog = await storage.createSyncLog({
             tenantId: store.tenantId,
             storeId,
             syncType: 'pull',
-            status: 'failed',
+            status: 'error',
             syncedCount: results.success,
             errorCount: results.failed + 1,
             durationMs,
-            errorMessage: error.message,
+            errorMessage: error.message?.substring(0, 200) || 'Unknown error',
             details: { 
               integration_id: integrationId,
               fatal_error: true,
@@ -309,12 +387,38 @@ export class SyncService {
               }
             }
           });
+
+          // ✅ Guardar items parciales si existen
+          if (itemsToSave.length > 0) {
+            const itemsWithLogId = itemsToSave.map(item => ({
+              ...item,
+              syncLogId: syncLog.id
+            }));
+            await storage.createSyncLogItems(itemsWithLogId);
+          }
         }
       } catch (logError) {
         console.error('[Sync] Error al registrar log de fallo:', logError);
       }
 
       throw error;
+    }
+  }
+
+  /**
+   * Obtiene el nombre de una bodega desde Contífico
+   */
+  private static async getWarehouseName(
+    contificoConnector: ContificoConnector,
+    warehouseId: string
+  ): Promise<string> {
+    try {
+      const warehouses = await contificoConnector.getWarehouses();
+      const warehouse = warehouses.find(w => w.id === warehouseId);
+      return warehouse?.nombre || warehouseId;
+    } catch (error) {
+      console.warn('[Sync] No se pudo obtener nombre de bodega, usando ID');
+      return warehouseId;
     }
   }
 }

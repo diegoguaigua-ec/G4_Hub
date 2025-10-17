@@ -139,7 +139,31 @@ export const syncLogs = pgTable("sync_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-// NUEVAS TABLAS: Integraciones
+// Sync Log Items - Detalle de productos por sincronización
+export const syncLogItems = pgTable("sync_log_items", {
+  id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+  syncLogId: integer("sync_log_id")
+    .notNull()
+    .references(() => syncLogs.id, { onDelete: "cascade" }),
+  sku: varchar("sku", { length: 255 }).notNull(),
+  productId: varchar("product_id", { length: 255 }), // ID en la tienda (Shopify/WooCommerce)
+  productName: varchar("product_name", { length: 500 }),
+  status: varchar("status", { length: 20 }).notNull(), // 'success', 'failed', 'skipped'
+  stockBefore: integer("stock_before"),
+  stockAfter: integer("stock_after"),
+  errorCategory: varchar("error_category", { length: 50 }), // 'not_found_contifico', 'not_found_store', 'api_error', etc.
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Tipo TypeScript para sync_log_items
+export type SyncLogItem = typeof syncLogItems.$inferSelect;
+export type InsertSyncLogItem = typeof syncLogItems.$inferInsert;
+
+// Schema de inserción con Zod
+export const insertSyncLogItemSchema = createInsertSchema(syncLogItems);
+
+// Integraciones
 export const integrations = pgTable(
   "integrations",
   {
@@ -218,7 +242,14 @@ export const storeProductsRelations = relations(storeProducts, ({ one }) => ({
   }),
 }));
 
-export const syncLogsRelations = relations(syncLogs, ({ one }) => ({
+export const syncLogItemsRelations = relations(syncLogItems, ({ one }) => ({
+  syncLog: one(syncLogs, {
+    fields: [syncLogItems.syncLogId],
+    references: [syncLogs.id],
+  }),
+}));
+
+export const syncLogsRelations = relations(syncLogs, ({ one, many }) => ({
   tenant: one(tenants, {
     fields: [syncLogs.tenantId],
     references: [tenants.id],
@@ -227,6 +258,7 @@ export const syncLogsRelations = relations(syncLogs, ({ one }) => ({
     fields: [syncLogs.storeId],
     references: [stores.id],
   }),
+   items: many(syncLogItems),
 }));
 
 export const integrationsRelations = relations(

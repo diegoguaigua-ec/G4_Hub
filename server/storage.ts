@@ -6,6 +6,7 @@ import {
   syncLogs,
   integrations,
   storeIntegrations,
+  syncLogItems,
   type User,
   type InsertUser,
   type Tenant,
@@ -15,13 +16,14 @@ import {
   type StoreProduct,
   type InsertStoreProduct,
   type SyncLog,
+  type SyncLogItem,
   type Integration,
-  type InsertIntegration,
+  type InsertIntegration,  
   type StoreIntegration,
   type InsertStoreIntegration,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -225,15 +227,183 @@ export class DatabaseStorage implements IStorage {
     const sanitizedData = {
       ...logData,
       // Truncar sync_type a máximo 50 caracteres
-      syncType: logData.syncType?.substring(0, 50) || '',
+      syncType: logData.syncType?.substring(0, 50) || "",
       // Truncar status a máximo 50 caracteres
-      status: logData.status?.substring(0, 50) || '',
+      status: logData.status?.substring(0, 50) || "",
       // Truncar errorMessage si existe (aunque es TEXT, por seguridad)
       errorMessage: logData.errorMessage?.substring(0, 500) || null,
     };
 
-    const [syncLog] = await db.insert(syncLogs).values(sanitizedData).returning();
+    const [syncLog] = await db
+      .insert(syncLogs)
+      .values(sanitizedData)
+      .returning();
     return syncLog;
+  }
+
+  /*** Crear un registro de producto sincronizado */
+  async createSyncLogItem(
+    itemData: Omit<SyncLogItem, "id" | "createdAt">,
+  ): Promise<SyncLogItem> {
+    const [item] = await db.insert(syncLogItems).values(itemData).returning();
+    return item;
+  }
+
+  /**
+   * Crear múltiples registros de productos de una vez (bulk insert)
+   */
+  async createSyncLogItems(
+    items: Omit<SyncLogItem, "id" | "createdAt">[],
+  ): Promise<void> {
+    if (items.length === 0) return;
+
+    await db.insert(syncLogItems).values(items);
+  }
+
+  /**
+   * Obtener todos los items (productos) de una sincronización
+   */
+  async getSyncLogItems(syncLogId: number): Promise<SyncLogItem[]> {
+    return await db
+      .select()
+      .from(syncLogItems)
+      .where(eq(syncLogItems.syncLogId, syncLogId))
+      .orderBy(desc(syncLogItems.createdAt));
+  }
+
+  /**
+   * Obtener solo los items con errores de una sincronización
+   */
+  async getSyncLogItemsWithErrors(syncLogId: number): Promise<SyncLogItem[]> {
+    return await db
+      .select()
+      .from(syncLogItems)
+      .where(
+        and(
+          eq(syncLogItems.syncLogId, syncLogId),
+          eq(syncLogItems.status, "failed"),
+        ),
+      )
+      .orderBy(desc(syncLogItems.createdAt));
+  }
+
+  /**
+   * Obtener items omitidos de una sincronización
+   */
+  async getSyncLogItemsSkipped(syncLogId: number): Promise<SyncLogItem[]> {
+    return await db
+      .select()
+      .from(syncLogItems)
+      .where(
+        and(
+          eq(syncLogItems.syncLogId, syncLogId),
+          eq(syncLogItems.status, "skipped"),
+        ),
+      )
+      .orderBy(desc(syncLogItems.createdAt));
+  }
+
+  /**
+   * Obtener estadísticas agregadas por categoría de error
+   */
+  async getSyncLogItemsErrorStats(syncLogId: number): Promise<
+    Array<{
+      errorCategory: string | null;
+      count: number;
+    }>
+  > {
+    const results = await db
+      .select({
+        errorCategory: syncLogItems.errorCategory,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(syncLogItems)
+      .where(
+        and(
+          eq(syncLogItems.syncLogId, syncLogId),
+          eq(syncLogItems.status, "skipped"),
+        ),
+      )
+      .groupBy(syncLogItems.errorCategory);
+
+    return results;
+  }
+
+  /**
+   * Obtener un sync log con todos sus items incluidos
+   */
+  async getSyncLogWithItems(syncLogId: number): Promise<{
+    syncLog: SyncLog | null;
+    items: SyncLogItem[];
+  }> {
+    const syncLog = await this.getSyncLog(syncLogId);
+
+    if (!syncLog) {
+      return { syncLog: null, items: [] };
+    }
+
+    const items = await this.getSyncLogItems(syncLogId);
+
+    return { syncLog, items };
+  }
+
+  /**
+   * Obtener un sync log por ID (método helper si no existe)
+   */
+  async getSyncLog(id: number): Promise<SyncLog | null> {
+    const [log] = await db
+      .select()
+      .from(syncLogs)
+      .where(eq(syncLogs.id, id))
+      .limit(1);
+
+    return log || null;
+  }
+
+  /**
+   * Obtener todos los sync logs de un tenant con paginación
+   */
+  async getSyncLogs(
+    tenantId: number,
+    options: {
+      storeId?: number;
+      status?: string;
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<{ logs: SyncLog[]; total: number }> {
+    const { storeId, status, limit = 20, offset = 0 } = options;
+
+    // Construir condiciones
+    const conditions = [eq(syncLogs.tenantId, tenantId)];
+
+    if (storeId) {
+      conditions.push(eq(syncLogs.storeId, storeId));
+    }
+
+    if (status) {
+      conditions.push(eq(syncLogs.status, status));
+    }
+
+    // Obtener logs
+    const logs = await db
+      .select()
+      .from(syncLogs)
+      .where(and(...conditions))
+      .orderBy(desc(syncLogs.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    // Contar total
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(syncLogs)
+      .where(and(...conditions));
+
+    return {
+      logs,
+      total: countResult?.count || 0,
+    };
   }
 
   async getSyncLogsByStore(
