@@ -1,45 +1,104 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Store, RefreshCw, FileText, Clock, Check, FilePlus, Plus, BarChart, Settings, Bell } from "lucide-react";
+import {
+  Store,
+  RefreshCw,
+  FileText,
+  Check,
+  BarChart,
+  Settings,
+  Bell,
+  Activity,
+  Package,
+  TrendingUp,
+} from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Store as StoreType } from "@shared/schema";
 
+interface SyncStats {
+  metrics: {
+    totalSyncs: number;
+    totalProducts: number;
+    totalErrors: number;
+    successRate: number;
+  };
+}
+
 export default function OverviewSection() {
-  // Fetch real stores data
-  const { data: stores = [], isLoading, error } = useQuery<StoreType[]>({
-    queryKey: ["/api/stores"],
+  // Fetch stores data
+  const { data: stores = [], isLoading: storesLoading } = useQuery<StoreType[]>(
+    {
+      queryKey: ["/api/stores"],
+    },
+  );
+
+  // Fetch sync stats
+  const { data: syncStats, isLoading: statsLoading } = useQuery<SyncStats>({
+    queryKey: ["/api/sync/stats"],
   });
 
-  // Calculate real stats from stores data
-  const connectedStores = stores.filter(store => store.connectionStatus === 'connected').length;
-  const totalProducts = stores.reduce((total, store) => total + (store.productsCount || 0), 0);
+  const isLoading = storesLoading || statsLoading;
+
+  // Calculate stats
+  const connectedStores = stores.filter(
+    (store) => store.connectionStatus === "connected",
+  ).length;
+  const totalProducts = stores.reduce(
+    (total, store) => total + (store.productsCount || 0),
+    0,
+  );
 
   const stats = [
     {
       title: "Tiendas Conectadas",
       value: connectedStores.toString(),
-      change: undefined,
       icon: Store,
-      color: "bg-primary/10 text-primary"
+      color: "bg-blue-500/10 text-blue-600",
     },
     {
       title: "Productos Sincronizados",
       value: totalProducts.toLocaleString(),
-      change: undefined,
-      icon: RefreshCw,
-      color: "bg-primary/10 text-primary"
+      icon: Package,
+      color: "bg-green-500/10 text-green-600",
+    },
+    {
+      title: "Sincronizaciones",
+      value: syncStats?.metrics.totalSyncs || 0,
+      subtitle: "Últimos 7 días",
+      icon: Activity,
+      color: "bg-purple-500/10 text-purple-600",
+    },
+    {
+      title: "Tasa de Éxito",
+      value: `${syncStats?.metrics.successRate || 0}%`,
+      subtitle: "Promedio",
+      icon: TrendingUp,
+      color: "bg-orange-500/10 text-orange-600",
     },
   ];
-
-  // Real activity feed will be implemented when /api/sync-events endpoint is available
-  const recentActivity: any[] = [];
 
   const quickActions = [
     { title: "Agregar Tienda", icon: Store },
     { title: "Forzar Sincronización", icon: RefreshCw },
-    { title: "Ver Reportes", icon: BarChart },
+    { title: "Ver Reportes", icon: FileText },
     { title: "Configuración", icon: Settings },
   ];
+
+  // Helper to format last sync time
+  const formatLastSync = (lastSyncAt?: Date | string | null) => {
+    if (!lastSyncAt) return "Nunca";
+    const date = new Date(lastSyncAt);
+    const now = new Date();
+    const diffInHours = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
+    );
+
+    if (diffInHours < 1) return "Hace menos de 1 hora";
+    if (diffInHours < 24)
+      return `Hace ${diffInHours} hora${diffInHours > 1 ? "s" : ""}`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `Hace ${diffInDays} día${diffInDays > 1 ? "s" : ""}`;
+  };
 
   // Loading state
   if (isLoading) {
@@ -50,110 +109,151 @@ export default function OverviewSection() {
     );
   }
 
-  // Error state
-  if (error) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <p className="text-red-600">Error al cargar datos del resumen</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
-      {/* Header con notificaciones */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold text-foreground">Resumen</h2>
-          <p className="text-muted-foreground">Monitorea el rendimiento de tu automatización de e-commerce</p>
+          <p className="text-muted-foreground">
+            Monitorea el rendimiento de tu automatización de e-commerce
+          </p>
         </div>
-        <Button variant="ghost" size="icon" className="relative" data-testid="button-notifications">
+        <Button variant="ghost" size="icon" className="relative">
           <Bell className="h-5 w-5" />
           <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
         </Button>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Stats Grid - 4 columnas en una fila */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat, index) => {
           const Icon = stat.icon;
           return (
-            <Card key={index} className="border border-border" data-testid={`stat-card-${index}`}>
+            <Card key={index}>
               <CardContent className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.color}`}>
-                    <Icon className="h-6 w-6" />
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm text-muted-foreground mb-1">
+                      {stat.title}
+                    </p>
+                    <h3 className="text-2xl font-bold text-foreground">
+                      {stat.value}
+                    </h3>
+                    {stat.subtitle && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {stat.subtitle}
+                      </p>
+                    )}
                   </div>
-                  {stat.change && (
-                    <span className="text-sm font-medium text-green-600">{stat.change}</span>
-                  )}
+                  <div
+                    className={`w-10 h-10 rounded-lg ${stat.color} flex items-center justify-center flex-shrink-0`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
                 </div>
-                <h3 className="text-2xl font-bold text-foreground mb-1">{stat.value}</h3>
-                <p className="text-muted-foreground text-sm">{stat.title}</p>
               </CardContent>
             </Card>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activity */}
-        <Card className="border border-border">
-          <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-6">Actividad Reciente</h2>
-            <div className="space-y-4">
-              {recentActivity.length > 0 ? (
-                recentActivity.map((activity, index) => {
-                  const Icon = activity.icon;
-                  return (
-                    <div key={index} className="flex items-center gap-4" data-testid={`activity-${index}`}>
-                      <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
-                        <Icon className="h-4 w-4 text-primary" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-foreground">{activity.title}</p>
-                        <p className="text-muted-foreground text-sm">{activity.store} • {activity.time}</p>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No hay actividad reciente</p>
-                  <p className="text-sm text-muted-foreground mt-2">La actividad aparecerá cuando las tiendas realicen sincronizaciones</p>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Quick Actions - Más espaciados */}
+      <div>
+        <h3 className="text-lg font-semibold text-foreground mb-4">
+          Acciones Rápidas
+        </h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {quickActions.map((action, index) => {
+            const Icon = action.icon;
+            return (
+              <Button
+                key={index}
+                variant="outline"
+                className="h-auto py-6 flex flex-col items-center justify-center gap-3"
+              >
+                <Icon className="h-6 w-6" />
+                <span className="text-sm font-medium">{action.title}</span>
+              </Button>
+            );
+          })}
+        </div>
+      </div>
 
-        {/* Quick Actions */}
-        <Card className="border border-border">
+      {/* Recent Activity */}
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-foreground">
+              Actividad Reciente
+            </h3>
+            <Button variant="ghost" size="sm">
+              Ver Todo
+            </Button>
+          </div>
+
+          <div className="text-center py-8 text-muted-foreground">
+            <p>No hay actividad reciente</p>
+            <p className="text-sm mt-2">
+              La actividad aparecerá cuando las tiendas realicen
+              sincronizaciones
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Connected Stores Status */}
+      {stores.length > 0 && (
+        <Card>
           <CardContent className="p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-6">Acciones Rápidas</h2>
-            <div className="grid grid-cols-2 gap-4">
-              {quickActions.map((action, index) => {
-                const Icon = action.icon;
+            <h3 className="text-lg font-semibold text-foreground mb-4">
+              Estado de Tiendas
+            </h3>
+            <div className="space-y-3">
+              {stores.map((store) => {
+                const hasRecentSync =
+                  store.lastSyncAt &&
+                  new Date().getTime() - new Date(store.lastSyncAt).getTime() <
+                    24 * 60 * 60 * 1000;
+
                 return (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    className="h-auto p-4 flex flex-col items-center gap-3 group hover:bg-muted/50"
-                    data-testid={`action-${action.title.toLowerCase().replace(/\s+/g, '-')}`}
+                  <div
+                    key={store.id}
+                    className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                   >
-                    <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      <Icon className="h-6 w-6 text-primary" />
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                        <Store className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {store.storeName}
+                        </p>
+                        <p className="text-xs text-muted-foreground capitalize">
+                          {store.platform}
+                        </p>
+                      </div>
                     </div>
-                    <p className="font-medium text-foreground text-sm">{action.title}</p>
-                  </Button>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-xs text-muted-foreground">
+                          Última sincronización
+                        </p>
+                        <p className="text-sm font-medium text-foreground">
+                          {formatLastSync(store.lastSyncAt)}
+                        </p>
+                      </div>
+                      {hasRecentSync && (
+                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 }

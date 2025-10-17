@@ -1,11 +1,12 @@
 import { useState } from "react";
 import Sidebar from "@/components/dashboard/sidebar";
 import OverviewSection from "@/components/dashboard/overview-section";
-import AutomationSection from "@/components/dashboard/automation-section";
 import StoresSection from "@/components/dashboard/stores-section";
+import AutomationSection from "@/components/dashboard/automation-section";
 import IntegrationsSection from "@/components/dashboard/integrations-section";
+import SyncLogsSection from "@/components/dashboard/sync-logs-section";
 
-type SectionType = "overview" | "stores" | "automation" | "integrations" | "analytics" | "settings";
+type SectionType = "overview" | "stores" | "automation" | "integrations" | "analytics" | "settings" | "sync-logs";
 
 export default function HomePage() {
   const [activeSection, setActiveSection] = useState<SectionType>("overview");
@@ -14,38 +15,26 @@ export default function HomePage() {
     switch (activeSection) {
       case "overview":
         return <OverviewSection />;
-      case "automation":
-        return <AutomationSection />;
       case "stores":
         return <StoresSection />;
+      case "sync-logs":
+        return <SyncLogsSection />;
+      case "automation":
+        return <AutomationSection />;
       case "integrations":
         return <IntegrationsSection />;
       case "analytics":
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">Analítica</h2>
-                <p className="text-muted-foreground">Información detallada sobre el rendimiento de tu e-commerce</p>
-              </div>
-            </div>
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">La analítica estará disponible próximamente</p>
-            </div>
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-foreground mb-2">Analítica</h2>
+            <p className="text-muted-foreground">Sección en desarrollo</p>
           </div>
         );
       case "settings":
         return (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-foreground">Configuración</h2>
-                <p className="text-muted-foreground">Configura tus preferencias de G4 Hub</p>
-              </div>
-            </div>
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">La configuración estará disponible próximamente</p>
-            </div>
+          <div className="text-center py-12">
+            <h2 className="text-2xl font-bold text-foreground mb-2">Configuración</h2>
+            <p className="text-muted-foreground">Sección en desarrollo</p>
           </div>
         );
       default:
@@ -56,12 +45,9 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar activeSection={activeSection} onSectionChange={setActiveSection} />
-      <div className="ml-64">
-        {/* Header removido - cada sección maneja su propio encabezado */}
-        <main className="p-8">
-          {renderSection()}
-        </main>
-      </div>
+      <main className="ml-64 p-8">
+        {renderSection()}
+      </main>
     </div>
   );
 }

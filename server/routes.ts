@@ -1,7 +1,7 @@
 import type { Express, Request } from "express";
 import { createServer, type Server } from "http";
 import { User } from "@shared/schema";
-
+import ExcelJS from "exceljs";
 // Proper TypeScript interface for authenticated requests
 interface AuthenticatedRequest extends Request {
   user: User;
@@ -1338,6 +1338,179 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ 
         message: "Error al obtener estadísticas", 
         error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/sync/logs/:id/export
+   * Exportar productos de una sincronización a Excel
+   */
+  app.get("/api/sync/logs/:id/export", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { id } = req.params;
+
+      console.log("[API] Exportando log a Excel", { syncLogId: id });
+
+      // Obtener el sync log con items
+      const result = await storage.getSyncLogWithItems(parseInt(id));
+
+      if (!result.syncLog) {
+        return res
+          .status(404)
+          .json({ message: "Log de sincronización no encontrado" });
+      }
+
+      // Verificar que pertenece al tenant del usuario
+      if (result.syncLog.tenantId !== user.tenantId) {
+        return res
+          .status(403)
+          .json({ message: "No autorizado para exportar este log" });
+      }
+
+      // Importar ExcelJS dinámicamente
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("Productos Sincronizados");
+
+      // Obtener información de tienda
+      let storeName = "N/A";
+      if (result.syncLog.storeId && typeof result.syncLog.storeId === 'number') {
+        try {
+          const store = await storage.getStore(result.syncLog.storeId);
+          if (store) {
+            storeName = store.storeName;
+          }
+        } catch (error) {
+          console.warn(`[API] No se pudo obtener tienda para export`);
+        }
+      }
+
+      // Configurar columnas
+      worksheet.columns = [
+        { header: "SKU", key: "sku", width: 20 },
+        { header: "Producto", key: "productName", width: 40 },
+        { header: "Estado", key: "status", width: 15 },
+        { header: "Stock Antes", key: "stockBefore", width: 15 },
+        { header: "Stock Después", key: "stockAfter", width: 15 },
+        { header: "Categoría Error", key: "errorCategory", width: 25 },
+        { header: "Mensaje Error", key: "errorMessage", width: 50 },
+      ];
+
+      // Estilo del header
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF4472C4" },
+      };
+      worksheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+      // Filtrar solo productos con errores u omitidos
+      const itemsToExport = result.items.filter(
+        (item) => item.status === "failed" || item.status === "skipped"
+      );
+
+      // Agregar datos
+      itemsToExport.forEach((item) => {
+        const row = worksheet.addRow({
+          sku: item.sku,
+          productName: item.productName || "N/A",
+          status:
+            item.status === "failed"
+              ? "Error"
+              : item.status === "skipped"
+              ? "Omitido"
+              : item.status,
+          stockBefore: item.stockBefore ?? "N/A",
+          stockAfter: item.stockAfter ?? "N/A",
+          errorCategory: item.errorCategory || "N/A",
+          errorMessage: item.errorMessage || "N/A",
+        });
+
+        // Colorear fila según estado
+        if (item.status === "failed") {
+          row.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFC7CE" }, // Rojo claro
+          };
+        } else if (item.status === "skipped") {
+          row.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFFEB9C" }, // Amarillo claro
+          };
+        }
+      });
+
+      // Agregar hoja de resumen
+      const summarySheet = workbook.addWorksheet("Resumen");
+      summarySheet.columns = [
+        { header: "Detalle", key: "label", width: 30 },
+        { header: "Valor", key: "value", width: 20 },
+      ];
+
+      summarySheet.getRow(1).font = { bold: true };
+      summarySheet.getRow(1).fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF4472C4" },
+      };
+      summarySheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+
+      summarySheet.addRow({ label: "Tienda", value: storeName });
+      summarySheet.addRow({
+        label: "Fecha de Sincronización",
+        value: new Date(result.syncLog.createdAt).toLocaleString("es-ES"),
+      });
+      summarySheet.addRow({
+        label: "Tipo de Sincronización",
+        value: result.syncLog.syncType,
+      });
+      summarySheet.addRow({ label: "Estado", value: result.syncLog.status });
+      summarySheet.addRow({
+        label: "Productos Exitosos",
+        value: result.syncLog.syncedCount,
+      });
+      summarySheet.addRow({
+        label: "Productos con Error",
+        value: result.syncLog.errorCount,
+      });
+      summarySheet.addRow({
+        label: "Total Productos",
+        value: result.items.length,
+      });
+      summarySheet.addRow({
+        label: "Duración (ms)",
+        value: result.syncLog.durationMs || "N/A",
+      });
+
+      // Generar nombre de archivo
+      const timestamp = new Date().toISOString().split("T")[0];
+      const filename = `sync-log-${id}-${timestamp}.xlsx`;
+
+      // Configurar headers para descarga
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+
+      // Escribir el archivo al response
+      await workbook.xlsx.write(res);
+      res.end();
+
+      console.log(`[API] Excel exportado exitosamente: ${filename}`);
+    } catch (error: any) {
+      console.error("[API] Error exportando a Excel:", error);
+      res.status(500).json({
+        message: "Error al exportar a Excel",
+        error: error.message,
       });
     }
   });
