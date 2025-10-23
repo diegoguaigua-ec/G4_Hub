@@ -30,7 +30,7 @@ async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET!,
+    secret: process.env.SESSION_SECRET, // Validated at startup in server/index.ts
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -62,38 +62,45 @@ export function setupAuth(app: Express) {
   app.post("/api/register", async (req, res, next) => {
     try {
       const { tenantName, subdomain, name, email, password } = req.body;
-      
+
+      // Validate required fields
+      if (!name || !email || !password) {
+        return res.status(400).json({ message: "Name, email, and password are required" });
+      }
+
+      // Validate tenant information (required - all users must belong to a tenant)
+      if (!tenantName || !subdomain) {
+        return res.status(400).json({
+          message: "Tenant name and subdomain are required. All users must belong to a tenant."
+        });
+      }
+
       // Check if email already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res.status(400).json({ message: "Email already exists" });
       }
-      
+
       // Check if subdomain already exists
-      if (subdomain) {
-        const existingTenant = await storage.getTenantBySubdomain(subdomain);
-        if (existingTenant) {
-          return res.status(400).json({ message: "Subdomain already exists" });
-        }
+      const existingTenant = await storage.getTenantBySubdomain(subdomain);
+      if (existingTenant) {
+        return res.status(400).json({ message: "Subdomain already exists" });
       }
-      
-      // Create tenant first if provided
-      let tenant = null;
-      if (tenantName && subdomain) {
-        const apiKey = randomBytes(32).toString('hex');
-        tenant = await storage.createTenant({
-          name: tenantName,
-          subdomain,
-          planType: "starter",
-          status: "active",
-          settings: {},
-          apiKey,
-        });
-      }
+
+      // Create tenant first (required for user creation)
+      const apiKey = randomBytes(32).toString('hex');
+      const tenant = await storage.createTenant({
+        name: tenantName,
+        subdomain,
+        planType: "starter",
+        status: "active",
+        settings: {},
+        apiKey,
+      });
 
       // Create user with tenant association
       const user = await storage.createUser({
-        tenantId: tenant?.id,
+        tenantId: tenant.id, // Now guaranteed to exist
         name,
         email,
         passwordHash: await hashPassword(password),

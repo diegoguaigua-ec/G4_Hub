@@ -2,6 +2,42 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
+// Validate critical environment variables before starting the app
+function validateEnv() {
+  const requiredVars = ['DATABASE_URL', 'SESSION_SECRET'] as const;
+  const missing: string[] = [];
+
+  for (const varName of requiredVars) {
+    if (!process.env[varName]) {
+      missing.push(varName);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.error('❌ CRITICAL ERROR: Missing required environment variables:');
+    missing.forEach(varName => {
+      console.error(`   - ${varName}`);
+    });
+    console.error('\nPlease set these variables in your .env file or environment.');
+    console.error('Example .env file:');
+    console.error('  DATABASE_URL=postgresql://user:password@host:5432/database');
+    console.error('  SESSION_SECRET=your-secret-key-min-32-characters');
+    process.exit(1);
+  }
+
+  // Validate SESSION_SECRET length (should be at least 32 characters for security)
+  if (process.env.SESSION_SECRET!.length < 32) {
+    console.error('❌ CRITICAL ERROR: SESSION_SECRET must be at least 32 characters long');
+    console.error('Current length:', process.env.SESSION_SECRET!.length);
+    process.exit(1);
+  }
+
+  log('✓ Environment variables validated successfully');
+}
+
+// Validate environment before doing anything else
+validateEnv();
+
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));

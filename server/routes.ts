@@ -995,27 +995,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         const durationMs = Date.now() - syncStartTime;
-        
-        // Update sync log with results
-        await storage.createSyncLog({
-          tenantId: user.tenantId,
-          storeId: parseInt(storeId),
-          syncType: 'inventory',
+
+        // Update the initial sync log with results (instead of creating a new one)
+        await storage.updateSyncLog(syncLog.id, {
           status: errorCount > 0 ? 'completed_with_errors' : 'completed',
           syncedCount,
           errorCount,
           durationMs,
           errorMessage: null,
-          details: { 
-            manual: true, 
+          details: {
+            manual: true,
+            startedAt: new Date(syncStartTime),
             totalProducts: productsResult.products.length,
             completedAt: new Date()
           }
         });
-        
+
         // Update store sync status
         await storage.updateStoreSyncStatus(parseInt(storeId), syncedCount, new Date());
-        
+
         res.json({
           success: true,
           syncedCount,
@@ -1023,23 +1021,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
           durationMs,
           totalProducts: productsResult.products.length
         });
-        
+
       } catch (syncError: any) {
         const durationMs = Date.now() - syncStartTime;
-        
-        // Log sync failure
-        await storage.createSyncLog({
-          tenantId: user.tenantId,
-          storeId: parseInt(storeId),
-          syncType: 'inventory',
-          status: 'failed',
-          syncedCount: 0,
-          errorCount: 1,
-          durationMs,
-          errorMessage: syncError.message,
-          details: { manual: true, error: syncError.message }
-        });
-        
+
+        // Update sync log with failure status (instead of creating a new one)
+        if (syncLog && syncLog.id) {
+          await storage.updateSyncLog(syncLog.id, {
+            status: 'failed',
+            syncedCount: 0,
+            errorCount: 1,
+            durationMs,
+            errorMessage: syncError.message,
+            details: {
+              manual: true,
+              startedAt: new Date(syncStartTime),
+              error: syncError.message,
+              failedAt: new Date()
+            }
+          });
+        }
+
         throw syncError;
       }
       
