@@ -29,7 +29,7 @@ import connectPg from "connect-pg-simple";
 
 // Proper typing for user creation
 interface CreateUserData {
-  tenantId?: number;
+  tenantId: number; // Required - all users must belong to a tenant
   email: string;
   name: string;
   role?: string;
@@ -63,6 +63,10 @@ export interface IStorage {
 
   // Sync operations
   createSyncLog(log: Omit<SyncLog, "id" | "createdAt">): Promise<SyncLog>;
+  updateSyncLog(
+    id: number,
+    updates: Partial<Omit<SyncLog, "id" | "createdAt" | "tenantId" | "storeId">>,
+  ): Promise<SyncLog>;
   getSyncLogsByStore(storeId: number, limit?: number): Promise<SyncLog[]>;
   updateStoreSyncStatus(
     storeId: number,
@@ -126,7 +130,7 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .insert(users)
       .values({
-        tenantId: insertUser.tenantId!,
+        tenantId: insertUser.tenantId,
         email: insertUser.email,
         passwordHash: insertUser.passwordHash,
         name: insertUser.name,
@@ -160,7 +164,7 @@ export class DatabaseStorage implements IStorage {
   async createTenant(insertTenant: InsertTenant): Promise<Tenant> {
     const [tenant] = await db
       .insert(tenants)
-      .values(insertTenant as any)
+      .values(insertTenant)
       .returning();
     return tenant;
   }
@@ -177,7 +181,7 @@ export class DatabaseStorage implements IStorage {
   async createStore(insertStore: InsertStore): Promise<Store> {
     const [store] = await db
       .insert(stores)
-      .values(insertStore as any)
+      .values(insertStore)
       .returning();
     return store;
   }
@@ -206,10 +210,18 @@ export class DatabaseStorage implements IStorage {
   async upsertProduct(product: InsertStoreProduct): Promise<StoreProduct> {
     const [upsertedProduct] = await db
       .insert(storeProducts)
-      .values(product as any)
+      .values(product)
       .onConflictDoUpdate({
         target: [storeProducts.storeId, storeProducts.platformProductId],
-        set: product as any,
+        set: {
+          sku: product.sku,
+          name: product.name,
+          price: product.price,
+          stockQuantity: product.stockQuantity,
+          manageStock: product.manageStock,
+          data: product.data,
+          lastUpdated: new Date(),
+        },
       })
       .returning();
     return upsertedProduct;
@@ -239,6 +251,54 @@ export class DatabaseStorage implements IStorage {
       .values(sanitizedData)
       .returning();
     return syncLog;
+  }
+
+  async updateSyncLog(
+    id: number,
+    updates: Partial<Omit<SyncLog, "id" | "createdAt" | "tenantId" | "storeId">>,
+  ): Promise<SyncLog> {
+    // Validar y truncar campos que tienen límite de caracteres
+    type SyncLogUpdate = {
+      syncType?: string;
+      status?: string;
+      errorMessage?: string | null;
+      syncedCount?: number | null;
+      errorCount?: number | null;
+      durationMs?: number | null;
+      details?: any;
+    };
+
+    const sanitizedUpdates: SyncLogUpdate = {};
+
+    if (updates.syncType !== undefined) {
+      sanitizedUpdates.syncType = updates.syncType.substring(0, 50);
+    }
+    if (updates.status !== undefined) {
+      sanitizedUpdates.status = updates.status.substring(0, 50);
+    }
+    if (updates.errorMessage !== undefined) {
+      sanitizedUpdates.errorMessage = updates.errorMessage ? updates.errorMessage.substring(0, 500) : null;
+    }
+    if (updates.syncedCount !== undefined) {
+      sanitizedUpdates.syncedCount = updates.syncedCount;
+    }
+    if (updates.errorCount !== undefined) {
+      sanitizedUpdates.errorCount = updates.errorCount;
+    }
+    if (updates.durationMs !== undefined) {
+      sanitizedUpdates.durationMs = updates.durationMs;
+    }
+    if (updates.details !== undefined) {
+      sanitizedUpdates.details = updates.details;
+    }
+
+    const [updatedLog] = await db
+      .update(syncLogs)
+      .set(sanitizedUpdates)
+      .where(eq(syncLogs.id, id))
+      .returning();
+
+    return updatedLog;
   }
 
   /*** Crear un registro de producto sincronizado */
@@ -455,7 +515,7 @@ export class DatabaseStorage implements IStorage {
   ): Promise<Integration> {
     const [created] = await db
       .insert(integrations)
-      .values(integration as any)
+      .values(integration)
       .returning();
     return created;
   }
@@ -498,7 +558,7 @@ export class DatabaseStorage implements IStorage {
   ): Promise<StoreIntegration> {
     const [link] = await db
       .insert(storeIntegrations)
-      .values(data as any)
+      .values(data)
       .returning();
     return link;
   }
