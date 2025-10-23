@@ -46,11 +46,15 @@ interface SyncLogsResponse {
   };
 }
 
-export default function SyncLogsSection() {
+interface SyncLogsSectionProps {
+  storeId?: number; // Optional - if provided, filters logs for this store automatically
+}
+
+export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) {
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filters, setFilters] = useState({
-    storeId: undefined as string | undefined,
+    storeId: storeId?.toString() as string | undefined,
     status: undefined as string | undefined,
     search: "",
   });
@@ -184,31 +188,33 @@ export default function SyncLogsSection() {
       {/* Filters */}
       <Card>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Store Filter */}
-            <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
-                Tienda
-              </label>
-              <Select
-                value={filters.storeId}
-                onValueChange={(value) =>
-                  setFilters({ ...filters, storeId: value === "all" ? undefined : value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas las tiendas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las tiendas</SelectItem>
-                  {stores.map((store: any) => (
-                    <SelectItem key={store.id} value={store.id.toString()}>
-                      {store.storeName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className={`grid grid-cols-1 gap-4 ${storeId ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+            {/* Store Filter - only show if storeId is not provided */}
+            {!storeId && (
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Tienda
+                </label>
+                <Select
+                  value={filters.storeId}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, storeId: value === "all" ? undefined : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas las tiendas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las tiendas</SelectItem>
+                    {stores.map((store: any) => (
+                      <SelectItem key={store.id} value={store.id.toString()}>
+                        {store.storeName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Status Filter */}
             <div>
