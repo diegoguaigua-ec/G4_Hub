@@ -474,7 +474,20 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(syncLogs)
       .where(eq(syncLogs.storeId, storeId))
-      .orderBy(syncLogs.createdAt)
+      .orderBy(desc(syncLogs.createdAt))  // Order by most recent first
+      .limit(limit);
+  }
+
+  async getSyncLogsByStoreAndType(
+    storeId: number,
+    syncType: string,
+    limit: number = 50,
+  ): Promise<SyncLog[]> {
+    return await db
+      .select()
+      .from(syncLogs)
+      .where(and(eq(syncLogs.storeId, storeId), eq(syncLogs.syncType, syncType)))
+      .orderBy(desc(syncLogs.createdAt))  // Order by most recent first
       .limit(limit);
   }
 
