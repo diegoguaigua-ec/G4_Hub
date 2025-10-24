@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Download, 
-  RefreshCw, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Search,
+  Download,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   Eye,
   ChevronLeft,
@@ -46,11 +46,15 @@ interface SyncLogsResponse {
   };
 }
 
-export default function SyncLogsSection() {
+interface SyncLogsSectionProps {
+  storeId?: number; // Optional - if provided, filters logs for this store automatically
+}
+
+export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) {
   const [selectedLogId, setSelectedLogId] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [filters, setFilters] = useState({
-    storeId: undefined as string | undefined,
+    storeId: storeId?.toString() as string | undefined,
     status: undefined as string | undefined,
     search: "",
   });
@@ -58,6 +62,21 @@ export default function SyncLogsSection() {
     limit: 20,
     offset: 0,
   });
+
+  // Update filters when storeId prop changes
+  useEffect(() => {
+    if (storeId !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        storeId: storeId.toString(),
+      }));
+      // Reset pagination when store changes
+      setPagination({
+        limit: 20,
+        offset: 0,
+      });
+    }
+  }, [storeId]);
 
   // Build query string
   const buildQueryString = () => {
@@ -184,31 +203,33 @@ export default function SyncLogsSection() {
       {/* Filters */}
       <Card>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Store Filter */}
-            <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
-                Tienda
-              </label>
-              <Select
-                value={filters.storeId}
-                onValueChange={(value) =>
-                  setFilters({ ...filters, storeId: value === "all" ? undefined : value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas las tiendas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las tiendas</SelectItem>
-                  {stores.map((store: any) => (
-                    <SelectItem key={store.id} value={store.id.toString()}>
-                      {store.storeName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className={`grid grid-cols-1 gap-4 ${storeId ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+            {/* Store Filter - only show if storeId is not provided */}
+            {!storeId && (
+              <div>
+                <label className="text-sm font-medium text-foreground mb-2 block">
+                  Tienda
+                </label>
+                <Select
+                  value={filters.storeId}
+                  onValueChange={(value) =>
+                    setFilters({ ...filters, storeId: value === "all" ? undefined : value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas las tiendas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas las tiendas</SelectItem>
+                    {stores.map((store: any) => (
+                      <SelectItem key={store.id} value={store.id.toString()}>
+                        {store.storeName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             {/* Status Filter */}
             <div>

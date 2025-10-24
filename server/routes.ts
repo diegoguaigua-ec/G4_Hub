@@ -785,6 +785,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get product sync status comparison (Inventory Tab)
+  // IMPORTANT: This route must be BEFORE the generic /products/:productId route
+  app.get("/api/stores/:storeId/products/sync-status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const {
+        page = "1",
+        limit = "20",
+        status: statusFilter,
+        search
+      } = req.query;
+
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      // Verify store access
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Find Contífico integration linked to this store
+      const storeIntegrations = await storage.getStoreIntegrations(parseInt(storeId));
+
+      // Get integration details for each store integration
+      let contificoIntegration = null;
+      for (const si of storeIntegrations) {
+        const integration = await storage.getIntegration(si.integrationId);
+        if (integration && (
+          integration.name?.toLowerCase().includes('contífico') ||
+          integration.name?.toLowerCase().includes('contifico')
+        )) {
+          contificoIntegration = si;
+          break;
+        }
+      }
+
+      if (!contificoIntegration) {
+        return res.status(404).json({
+          message: "No se encontró integración de Contífico para esta tienda"
+        });
+      }
+
+      // Get the latest PULL sync log for this store (inventory sync from Contífico)
+      const recentLogs = await storage.getSyncLogsByStoreAndType(parseInt(storeId), 'pull', 1);
+      const latestSyncLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
+
+      if (!latestSyncLog) {
+        return res.json({
+          products: [],
+          pagination: {
+            total: 0,
+            page: pageNum,
+            limit: limitNum,
+            totalPages: 0,
+            hasMore: false,
+          },
+          lastSyncAt: null,
+        });
+      }
+
+      // Get sync log items (products from Contífico sync)
+      const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
+
+      // Filter sync items with SKU only
+      const syncItemsWithSku = syncItems.filter((item: any) => item.sku);
+
+      // Get all store products (cached) and create a map by SKU for quick lookup
+      const allStoreProducts = await storage.getProductsByStore(parseInt(storeId));
+      const storeProductsMap = new Map();
+      allStoreProducts.forEach((p: any) => {
+        if (p.sku) {
+          storeProductsMap.set(p.sku, p);
+        }
+      });
+
+      // Build comparison data based on sync items (Contífico products)
+      const comparisonData = syncItemsWithSku.map((syncItem: any) => {
+        const storeProduct = storeProductsMap.get(syncItem.sku);
+
+        let syncStatus = 'pending'; // pending, synced, different, error
+        let stockStore = storeProduct ? storeProduct.stockQuantity : null;
+        let productName = syncItem.productName || (storeProduct ? storeProduct.name : null);
+        let platformProductId = syncItem.productId || (storeProduct ? storeProduct.platformProductId : null);
+
+        if (syncItem.status === 'failed') {
+          syncStatus = 'error';
+        } else if (syncItem.status === 'success') {
+          // Compare stocks if we have store data
+          if (storeProduct) {
+            if (storeProduct.stockQuantity === syncItem.stockAfter) {
+              syncStatus = 'synced';
+            } else {
+              syncStatus = 'different';
+            }
+          } else {
+            // Product synced but not found in store cache
+            syncStatus = 'synced';
+          }
+        }
+
+        return {
+          sku: syncItem.sku,
+          name: productName,
+          stockStore: stockStore,
+          stockContifico: syncItem.stockAfter,
+          status: syncStatus,
+          lastSync: syncItem.createdAt,
+          platformProductId: platformProductId,
+        };
+      });
+
+      // Apply search filter
+      let filteredData = comparisonData;
+      if (search && typeof search === 'string' && search.trim() !== '') {
+        const searchLower = search.trim().toLowerCase();
+        filteredData = filteredData.filter((item: any) =>
+          item.sku?.toLowerCase().includes(searchLower) ||
+          item.name?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Apply status filter
+      if (statusFilter && typeof statusFilter === 'string' && statusFilter !== 'all') {
+        filteredData = filteredData.filter((item: any) => item.status === statusFilter);
+      }
+
+      // Calculate total before pagination
+      const total = filteredData.length;
+
+      // Apply pagination
+      const paginatedData = filteredData.slice(offset, offset + limitNum);
+
+      res.json({
+        products: paginatedData,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+          hasMore: offset + limitNum < total,
+        },
+        lastSyncAt: latestSyncLog?.createdAt || null,
+      });
+    } catch (error: any) {
+      console.error("Error fetching product sync status:", error);
+      res.status(500).json({
+        message: "Failed to fetch product sync status",
+        error: error.message
+      });
+    }
+  });
+
   // Get a specific product from a store
   app.get("/api/stores/:storeId/products/:productId", async (req, res) => {
     if (!req.isAuthenticated()) {

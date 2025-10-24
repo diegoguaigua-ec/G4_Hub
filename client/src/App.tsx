@@ -13,6 +13,7 @@ import OverviewPage from "@/pages/dashboard/overview";
 import StoresPage from "@/pages/dashboard/stores/index";
 import IntegrationsPage from "@/pages/dashboard/integrations/index";
 import ContificoModulesPage from "@/pages/dashboard/integrations/contifico/index";
+import ContificoInventoryPage from "@/pages/dashboard/integrations/contifico/inventory";
 import SyncLogsPage from "@/pages/dashboard/sync-logs";
 import AutomationPage from "@/pages/dashboard/automation";
 import AnalyticsPage from "@/pages/dashboard/analytics";
@@ -31,6 +32,7 @@ function Router() {
       <ProtectedRoute path="/dashboard/stores" component={StoresPage} />
       <ProtectedRoute path="/dashboard/integrations" component={IntegrationsPage} />
       <ProtectedRoute path="/dashboard/integrations/contifico" component={ContificoModulesPage} />
+      <ProtectedRoute path="/dashboard/integrations/contifico/inventory" component={ContificoInventoryPage} />
       <ProtectedRoute path="/dashboard/sync-logs" component={SyncLogsPage} />
       <ProtectedRoute path="/dashboard/automation" component={AutomationPage} />
       <ProtectedRoute path="/dashboard/analytics" component={AnalyticsPage} />
