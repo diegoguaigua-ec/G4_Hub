@@ -834,59 +834,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Get all store products (cached)
-      const allStoreProducts = await storage.getProductsByStore(parseInt(storeId));
-
-      // Filter products with SKU only
-      let storeProductsWithSku = allStoreProducts.filter((p: any) => p.sku);
-
       // Get the latest PULL sync log for this store (inventory sync from Contífico)
       const recentLogs = await storage.getSyncLogsByStoreAndType(parseInt(storeId), 'pull', 1);
       const latestSyncLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
 
-      // Get sync log items if we have a recent sync
-      let syncLogItemsMap = new Map();
-      if (latestSyncLog) {
-        const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
-        syncItems.forEach((item: any) => {
-          if (item.sku) {
-            syncLogItemsMap.set(item.sku, item);
-          }
+      if (!latestSyncLog) {
+        return res.json({
+          products: [],
+          pagination: {
+            total: 0,
+            page: pageNum,
+            limit: limitNum,
+            totalPages: 0,
+            hasMore: false,
+          },
+          lastSyncAt: null,
         });
       }
 
-      // Build comparison data
-      const comparisonData = storeProductsWithSku.map((storeProduct: any) => {
-        const syncItem = syncLogItemsMap.get(storeProduct.sku);
+      // Get sync log items (products from Contífico sync)
+      const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
+
+      // Filter sync items with SKU only
+      const syncItemsWithSku = syncItems.filter((item: any) => item.sku);
+
+      // Get all store products (cached) and create a map by SKU for quick lookup
+      const allStoreProducts = await storage.getProductsByStore(parseInt(storeId));
+      const storeProductsMap = new Map();
+      allStoreProducts.forEach((p: any) => {
+        if (p.sku) {
+          storeProductsMap.set(p.sku, p);
+        }
+      });
+
+      // Build comparison data based on sync items (Contífico products)
+      const comparisonData = syncItemsWithSku.map((syncItem: any) => {
+        const storeProduct = storeProductsMap.get(syncItem.sku);
 
         let syncStatus = 'pending'; // pending, synced, different, error
-        let stockContifico = null;
-        let lastSync = null;
+        let stockStore = storeProduct ? storeProduct.stockQuantity : null;
+        let productName = syncItem.productName || (storeProduct ? storeProduct.name : null);
+        let platformProductId = syncItem.productId || (storeProduct ? storeProduct.platformProductId : null);
 
-        if (syncItem) {
-          lastSync = syncItem.createdAt;
-          stockContifico = syncItem.stockAfter;
-
-          if (syncItem.status === 'failed') {
-            syncStatus = 'error';
-          } else if (syncItem.status === 'success') {
-            // Compare stocks
+        if (syncItem.status === 'failed') {
+          syncStatus = 'error';
+        } else if (syncItem.status === 'success') {
+          // Compare stocks if we have store data
+          if (storeProduct) {
             if (storeProduct.stockQuantity === syncItem.stockAfter) {
               syncStatus = 'synced';
             } else {
               syncStatus = 'different';
             }
+          } else {
+            // Product synced but not found in store cache
+            syncStatus = 'synced';
           }
         }
 
         return {
-          sku: storeProduct.sku,
-          name: storeProduct.name,
-          stockStore: storeProduct.stockQuantity,
-          stockContifico: stockContifico,
+          sku: syncItem.sku,
+          name: productName,
+          stockStore: stockStore,
+          stockContifico: syncItem.stockAfter,
           status: syncStatus,
-          lastSync: lastSync,
-          platformProductId: storeProduct.platformProductId,
+          lastSync: syncItem.createdAt,
+          platformProductId: platformProductId,
         };
       });
 
