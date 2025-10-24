@@ -785,58 +785,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get a specific product from a store
-  app.get("/api/stores/:storeId/products/:productId", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    try {
-      const user = (req as AuthenticatedRequest).user;
-      const { storeId, productId } = req.params;
-      
-      const store = await storage.getStore(parseInt(storeId));
-      if (!store || store.tenantId !== user.tenantId) {
-        return res.status(404).json({ message: "Store not found" });
-      }
-
-      const connector = getConnector(store);
-      const result = await connector.getProduct(productId);
-      
-      res.json(result);
-    } catch (error: any) {
-      console.error("Error fetching product:", error);
-      res.status(500).json({ message: "Failed to fetch product", error: error.message });
-    }
-  });
-
-  // Update a product in a store
-  app.put("/api/stores/:storeId/products/:productId", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-
-    try {
-      const user = (req as AuthenticatedRequest).user;
-      const { storeId, productId } = req.params;
-      const productData = req.body;
-      
-      const store = await storage.getStore(parseInt(storeId));
-      if (!store || store.tenantId !== user.tenantId) {
-        return res.status(404).json({ message: "Store not found" });
-      }
-
-      const connector = getConnector(store);
-      const result = await connector.updateProduct(productId, productData);
-      
-      res.json(result);
-    } catch (error: any) {
-      console.error("Error updating product:", error);
-      res.status(500).json({ message: "Failed to update product", error: error.message });
-    }
-  });
-
   // Get product sync status comparison (Inventory Tab)
+  // IMPORTANT: This route must be BEFORE the generic /products/:productId route
   app.get("/api/stores/:storeId/products/sync-status", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -978,6 +928,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Failed to fetch product sync status",
         error: error.message
       });
+    }
+  });
+
+  // Get a specific product from a store
+  app.get("/api/stores/:storeId/products/:productId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, productId } = req.params;
+      
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const connector = getConnector(store);
+      const result = await connector.getProduct(productId);
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error fetching product:", error);
+      res.status(500).json({ message: "Failed to fetch product", error: error.message });
+    }
+  });
+
+  // Update a product in a store
+  app.put("/api/stores/:storeId/products/:productId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, productId } = req.params;
+      const productData = req.body;
+      
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const connector = getConnector(store);
+      const result = await connector.updateProduct(productId, productData);
+      
+      res.json(result);
+    } catch (error: any) {
+      console.error("Error updating product:", error);
+      res.status(500).json({ message: "Failed to update product", error: error.message });
     }
   });
 
