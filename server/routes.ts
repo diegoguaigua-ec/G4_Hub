@@ -836,6 +836,151 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get product sync status comparison (Inventory Tab)
+  app.get("/api/stores/:storeId/products/sync-status", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const {
+        page = "1",
+        limit = "20",
+        status: statusFilter,
+        search
+      } = req.query;
+
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      // Verify store access
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Find Contífico integration linked to this store
+      const storeIntegrations = await storage.getStoreIntegrations(parseInt(storeId));
+
+      // Get integration details for each store integration
+      let contificoIntegration = null;
+      for (const si of storeIntegrations) {
+        const integration = await storage.getIntegration(si.integrationId);
+        if (integration && (
+          integration.name?.toLowerCase().includes('contífico') ||
+          integration.name?.toLowerCase().includes('contifico')
+        )) {
+          contificoIntegration = si;
+          break;
+        }
+      }
+
+      if (!contificoIntegration) {
+        return res.status(404).json({
+          message: "No se encontró integración de Contífico para esta tienda"
+        });
+      }
+
+      // Get all store products (cached)
+      const allStoreProducts = await storage.getProductsByStore(parseInt(storeId));
+
+      // Filter products with SKU only
+      let storeProductsWithSku = allStoreProducts.filter((p: any) => p.sku);
+
+      // Get the latest sync log for this store
+      const recentLogs = await storage.getSyncLogsByStore(parseInt(storeId), 1);
+      const latestSyncLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
+
+      // Get sync log items if we have a recent sync
+      let syncLogItemsMap = new Map();
+      if (latestSyncLog) {
+        const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
+        syncItems.forEach((item: any) => {
+          if (item.sku) {
+            syncLogItemsMap.set(item.sku, item);
+          }
+        });
+      }
+
+      // Build comparison data
+      const comparisonData = storeProductsWithSku.map((storeProduct: any) => {
+        const syncItem = syncLogItemsMap.get(storeProduct.sku);
+
+        let syncStatus = 'pending'; // pending, synced, different, error
+        let stockContifico = null;
+        let lastSync = null;
+
+        if (syncItem) {
+          lastSync = syncItem.createdAt;
+          stockContifico = syncItem.stockAfter;
+
+          if (syncItem.status === 'failed') {
+            syncStatus = 'error';
+          } else if (syncItem.status === 'success') {
+            // Compare stocks
+            if (storeProduct.stockQuantity === syncItem.stockAfter) {
+              syncStatus = 'synced';
+            } else {
+              syncStatus = 'different';
+            }
+          }
+        }
+
+        return {
+          sku: storeProduct.sku,
+          name: storeProduct.name,
+          stockStore: storeProduct.stockQuantity,
+          stockContifico: stockContifico,
+          status: syncStatus,
+          lastSync: lastSync,
+          platformProductId: storeProduct.platformProductId,
+        };
+      });
+
+      // Apply search filter
+      let filteredData = comparisonData;
+      if (search && typeof search === 'string' && search.trim() !== '') {
+        const searchLower = search.trim().toLowerCase();
+        filteredData = filteredData.filter((item: any) =>
+          item.sku?.toLowerCase().includes(searchLower) ||
+          item.name?.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Apply status filter
+      if (statusFilter && typeof statusFilter === 'string' && statusFilter !== 'all') {
+        filteredData = filteredData.filter((item: any) => item.status === statusFilter);
+      }
+
+      // Calculate total before pagination
+      const total = filteredData.length;
+
+      // Apply pagination
+      const paginatedData = filteredData.slice(offset, offset + limitNum);
+
+      res.json({
+        products: paginatedData,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+          hasMore: offset + limitNum < total,
+        },
+        lastSyncAt: latestSyncLog?.createdAt || null,
+      });
+    } catch (error: any) {
+      console.error("Error fetching product sync status:", error);
+      res.status(500).json({
+        message: "Failed to fetch product sync status",
+        error: error.message
+      });
+    }
+  });
+
   // Get store information with caching
   app.get("/api/stores/:storeId/info", async (req, res) => {
     if (!req.isAuthenticated()) {
