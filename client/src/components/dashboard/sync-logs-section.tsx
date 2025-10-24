@@ -1,13 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { 
-  Search, 
-  Download, 
-  RefreshCw, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Search,
+  Download,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
   AlertCircle,
   Eye,
   ChevronLeft,
@@ -62,6 +62,21 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
     limit: 20,
     offset: 0,
   });
+
+  // Update filters when storeId prop changes
+  useEffect(() => {
+    if (storeId !== undefined) {
+      setFilters(prev => ({
+        ...prev,
+        storeId: storeId.toString(),
+      }));
+      // Reset pagination when store changes
+      setPagination({
+        limit: 20,
+        offset: 0,
+      });
+    }
+  }, [storeId]);
 
   // Build query string
   const buildQueryString = () => {

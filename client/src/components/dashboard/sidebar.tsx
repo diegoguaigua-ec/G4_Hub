@@ -7,7 +7,6 @@ import {
   TrendingUp,
   Settings,
   LogOut,
-  FileText,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
@@ -19,7 +18,6 @@ export default function Sidebar() {
   const menuItems = [
     { path: "/dashboard", label: "Resumen", icon: BarChart },
     { path: "/dashboard/stores", label: "Tiendas", icon: Store },
-    { path: "/dashboard/sync-logs", label: "Sincronizaciones", icon: FileText },
     {
       path: "/dashboard/automation",
       label: "Automatización",
