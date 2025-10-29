@@ -72,6 +72,25 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     setSelectedProducts(new Set());
   }, [pagination.page]);
 
+  // Fetch store integrations to get Contífico integration ID
+  const { data: integrationsData } = useQuery({
+    queryKey: [`/api/stores/${storeId}/integrations`],
+    queryFn: async () => {
+      const res = await fetch(`/api/stores/${storeId}/integrations`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Error al cargar integraciones");
+      return res.json();
+    },
+  });
+
+  // Find Contífico integration
+  const contificoIntegration = integrationsData?.find(
+    (integration: any) =>
+      integration.integration?.name?.toLowerCase().includes("contífico") ||
+      integration.integration?.name?.toLowerCase().includes("contifico")
+  );
+
   // Fetch product sync status
   const { data, isLoading, refetch } = useQuery<SyncStatusResponse>({
     queryKey: [
@@ -96,21 +115,45 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     },
   });
 
-  // Sync mutation (placeholder - will be implemented with selective sync)
+  // Sync mutation - triggers pull from Contífico
   const syncMutation = useMutation({
-    mutationFn: async (skus: string[]) => {
-      // TODO: Implement sync endpoint in backend
-      throw new Error("Sync functionality not implemented yet");
+    mutationFn: async () => {
+      if (!contificoIntegration) {
+        throw new Error("No se encontró integración de Contífico para esta tienda");
+      }
+
+      const res = await fetch(
+        `/api/sync/pull/${storeId}/${contificoIntegration.integrationId}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            dryRun: false,
+            limit: 1000,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al sincronizar");
+      }
+
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: [`/api/stores/${storeId}/products/sync-status`],
       });
       toast({
         title: "Sincronización completada",
-        description: "Los productos se han sincronizado correctamente",
+        description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
       });
       setSelectedProducts(new Set());
+      refetch(); // Refresh the product list
     },
     onError: (error: Error) => {
       toast({
@@ -148,19 +191,26 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
       });
       return;
     }
-    syncMutation.mutate(Array.from(selectedProducts));
+
+    // Note: Currently syncs all products as selective sync is not implemented
+    toast({
+      title: "Sincronización iniciada",
+      description: "Se sincronizarán todos los productos de la tienda",
+    });
+    syncMutation.mutate();
   };
 
   const handleSyncAll = () => {
-    if (!data?.products || data.products.length === 0) {
+    if (!contificoIntegration) {
       toast({
-        title: "Sin productos",
-        description: "No hay productos para sincronizar",
+        title: "Sin integración",
+        description: "No se encontró integración de Contífico para esta tienda",
         variant: "destructive",
       });
       return;
     }
-    syncMutation.mutate(data.products.map((p) => p.sku));
+
+    syncMutation.mutate();
   };
 
   const getStatusIcon = (status: string) => {
@@ -245,7 +295,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
           </Button>
           <Button
             onClick={handleSyncAll}
-            disabled={syncMutation.isPending || !data?.products || data.products.length === 0}
+            disabled={syncMutation.isPending || !contificoIntegration}
             size="sm"
           >
             {syncMutation.isPending ? (
