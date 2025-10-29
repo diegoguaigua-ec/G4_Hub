@@ -21,7 +21,11 @@ interface ConfigTabProps {
 interface StoreIntegration {
   id: number;
   integrationId: number;
-  integrationName: string;
+  integration?: {
+    id: number;
+    name: string;
+    integrationType: string;
+  };
   syncConfig: {
     pull?: {
       enabled?: boolean;
@@ -65,8 +69,8 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
 
   // Find Contífico integration
   const contificoIntegration = integrations.find((i) =>
-    i.integrationName?.toLowerCase().includes("contífico") ||
-    i.integrationName?.toLowerCase().includes("contifico")
+    i.integration?.name?.toLowerCase().includes("contífico") ||
+    i.integration?.name?.toLowerCase().includes("contifico")
   );
 
   // Update form state when integrations load
@@ -79,14 +83,17 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
   }, [contificoIntegration]);
 
   // Fetch warehouses from Contífico
-  const { data: warehousesData } = useQuery({
+  const { data: warehousesData, isLoading: warehousesLoading, error: warehousesError } = useQuery({
     queryKey: [`/api/integrations/${contificoIntegration?.integrationId}/warehouses`],
     queryFn: async () => {
       const res = await fetch(
         `/api/integrations/${contificoIntegration?.integrationId}/warehouses`,
         { credentials: "include" }
       );
-      if (!res.ok) throw new Error("Error al cargar bodegas");
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: 'Error desconocido' }));
+        throw new Error(error.message || "Error al cargar bodegas");
+      }
       return res.json();
     },
     enabled: !!contificoIntegration?.integrationId,
@@ -202,6 +209,31 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
     );
   }
 
+  // Show message if no Contífico integration exists
+  if (!contificoIntegration) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">
+            Configuración de Sincronización
+          </h2>
+          <p className="text-muted-foreground">
+            Gestiona cómo se sincronizan los productos entre tu tienda y Contífico
+          </p>
+        </div>
+
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            No se encontró una integración de Contífico configurada para esta tienda.
+            Por favor, ve a la sección de <strong>Integraciones</strong> para crear una integración de Contífico
+            con tu API Key y selecciona el ambiente (producción o prueba).
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -276,18 +308,33 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
             <label className="text-sm font-medium text-foreground">
               Bodega principal
             </label>
-            <Select value={warehouse} onValueChange={setWarehouse}>
+            <Select value={warehouse} onValueChange={setWarehouse} disabled={warehousesLoading}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecciona una bodega" />
+                <SelectValue placeholder={
+                  warehousesLoading ? "Cargando bodegas..." :
+                  warehousesError ? "Error al cargar bodegas" :
+                  "Selecciona una bodega"
+                } />
               </SelectTrigger>
               <SelectContent>
-                {warehouses.map((w: any) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.name}
-                  </SelectItem>
-                ))}
+                {warehouses.length === 0 ? (
+                  <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                    {warehousesLoading ? "Cargando..." : "No hay bodegas disponibles"}
+                  </div>
+                ) : (
+                  warehouses.map((w: any) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.nombre || w.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
+            {warehousesError && (
+              <p className="text-sm text-destructive">
+                Error: {(warehousesError as Error).message}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
               Los stocks se sincronizarán desde esta bodega
             </p>
