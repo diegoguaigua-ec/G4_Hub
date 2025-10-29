@@ -1285,6 +1285,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pull selectivo: sincroniza solo productos seleccionados por SKU
+  app.post("/api/sync/pull-selective/:storeId/:integrationId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, integrationId } = req.params;
+      const { skus, dryRun = false } = req.body;
+
+      // Validar que se proporcionen SKUs
+      if (!skus || !Array.isArray(skus) || skus.length === 0) {
+        return res.status(400).json({
+          message: "Debe proporcionar una lista de SKUs para sincronizar"
+        });
+      }
+
+      // Verificar que la tienda pertenece al tenant del usuario
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Tienda no encontrada" });
+      }
+
+      // Verificar que la integración pertenece al tenant del usuario
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      console.log(`[API] Iniciando sincronización Pull Selectiva para store ${storeId}`);
+      console.log(`[API] SKUs seleccionados: ${skus.join(', ')}`);
+
+      const result = await SyncService.pullFromIntegrationSelective(
+        parseInt(storeId),
+        parseInt(integrationId),
+        skus,
+        { dryRun }
+      );
+
+      res.json({
+        success: true,
+        result,
+        message: `Sincronización selectiva completada: ${result.success} productos actualizados, ${result.failed} fallidos, ${result.skipped} omitidos`
+      });
+
+    } catch (error: any) {
+      console.error("[API] Error en sincronización Pull Selectiva:", error);
+      res.status(500).json({
+        message: "Error al sincronizar productos seleccionados",
+        error: error.message
+      });
+    }
+  });
+
   // ============================================
   // SYNC LOGS ENDPOINTS
   // ============================================

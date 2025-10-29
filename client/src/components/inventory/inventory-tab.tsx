@@ -115,7 +115,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     },
   });
 
-  // Sync mutation - triggers pull from Contífico
+  // Sync mutation - triggers full pull from Contífico (all products)
   const syncMutation = useMutation({
     mutationFn: async () => {
       if (!contificoIntegration) {
@@ -164,6 +164,55 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     },
   });
 
+  // Selective sync mutation - only syncs selected products by SKU
+  const syncSelectiveMutation = useMutation({
+    mutationFn: async (skus: string[]) => {
+      if (!contificoIntegration) {
+        throw new Error("No se encontró integración de Contífico para esta tienda");
+      }
+
+      const res = await fetch(
+        `/api/sync/pull-selective/${storeId}/${contificoIntegration.integrationId}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            skus,
+            dryRun: false,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al sincronizar productos seleccionados");
+      }
+
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/stores/${storeId}/products/sync-status`],
+      });
+      toast({
+        title: "Sincronización selectiva completada",
+        description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
+      });
+      setSelectedProducts(new Set());
+      refetch(); // Refresh the product list
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al sincronizar",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSelectAll = (checked: boolean) => {
     if (checked && data?.products) {
       setSelectedProducts(new Set(data.products.map((p) => p.sku)));
@@ -192,12 +241,9 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
       return;
     }
 
-    // Note: Currently syncs all products as selective sync is not implemented
-    toast({
-      title: "Sincronización iniciada",
-      description: "Se sincronizarán todos los productos de la tienda",
-    });
-    syncMutation.mutate();
+    // Use selective sync mutation with selected SKUs
+    const selectedSkus = Array.from(selectedProducts);
+    syncSelectiveMutation.mutate(selectedSkus);
   };
 
   const handleSyncAll = () => {
@@ -379,11 +425,11 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
             {selectedProducts.size > 0 && (
               <Button
                 onClick={handleSyncSelected}
-                disabled={syncMutation.isPending}
+                disabled={syncSelectiveMutation.isPending}
                 size="sm"
                 variant="default"
               >
-                {syncMutation.isPending ? (
+                {syncSelectiveMutation.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <RefreshCw className="h-4 w-4 mr-2" />

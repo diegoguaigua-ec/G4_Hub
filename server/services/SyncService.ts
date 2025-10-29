@@ -499,6 +499,444 @@ export class SyncService {
   }
 
   /**
+   * Sincroniza productos SELECTIVOS desde Contífico hacia una tienda (Pull Selectivo)
+   * Solo sincroniza los productos con los SKUs especificados
+   */
+  static async pullFromIntegrationSelective(
+    storeId: number,
+    integrationId: number,
+    skus: string[],
+    options: SyncOptions = {}
+  ): Promise<SyncResult> {
+    const { dryRun = false } = options;
+    const startTime = Date.now();
+
+    console.log(`[Sync] Iniciando Pull Selectivo: Store ${storeId}, Integration ${integrationId}`);
+    console.log(`[Sync] SKUs a sincronizar: ${skus.join(', ')}`);
+
+    const results: SyncResult = {
+      success: 0,
+      failed: 0,
+      skipped: 0,
+      errors: []
+    };
+
+    const itemsToSave: Array<any> = [];
+    let syncLogId: number | null = null;
+
+    try {
+      // 1. Obtener la tienda y verificar que existe
+      const store = await storage.getStore(storeId);
+      if (!store) {
+        throw new Error(`Tienda ${storeId} no encontrada`);
+      }
+
+      // 2. Obtener la integración y verificar que existe
+      const integration = await storage.getIntegration(integrationId);
+      if (!integration) {
+        throw new Error(`Integración ${integrationId} no encontrada`);
+      }
+
+      // 3. Verificar que ambos pertenecen al mismo tenant
+      if (store.tenantId !== integration.tenantId) {
+        throw new Error('La tienda y la integración no pertenecen al mismo tenant');
+      }
+
+      console.log(`[Sync] Store: ${store.storeName} (${store.platform})`);
+      console.log(`[Sync] Integration: ${integration.name} (${integration.integrationType})`);
+
+      // 4. Crear conectores
+      const storeConnector = this.getStoreConnector(store);
+
+      const settings = integration.settings as any;
+      const contificoStore = {
+        id: 0,
+        tenantId: integration.tenantId,
+        platform: 'contifico',
+        storeName: integration.name,
+        storeUrl: 'https://api.contifico.com',
+        apiCredentials: settings,
+        syncConfig: {},
+        status: 'active' as const,
+        connectionStatus: 'connected' as const,
+        lastConnectionTest: null,
+        storeInfo: {},
+        productsCount: 0,
+        lastSyncAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const contificoConnector = new ContificoConnector(contificoStore);
+
+      const warehouseName = settings.warehouse_primary
+        ? await this.getWarehouseName(contificoConnector, settings.warehouse_primary)
+        : 'Stock Global';
+
+      // 5. Obtener productos de la tienda y FILTRAR por SKUs seleccionados
+      console.log(`[Sync] Obteniendo productos de ${store.platform} que tienen SKU...`);
+      const allStoreProducts = await storeConnector.getProductsWithSku();
+
+      // FILTRO: Solo productos con SKUs seleccionados
+      const productsToSync = allStoreProducts.filter(p => skus.includes(p.sku));
+
+      if (productsToSync.length === 0) {
+        throw new Error('No se encontraron productos con los SKUs especificados');
+      }
+
+      console.log(`[Sync] ${productsToSync.length} productos seleccionados para sincronizar`);
+      console.log(`[Sync] Sincronizando inventario desde Contífico...`);
+
+      // 6. Procesar por lotes (de 20 en 20)
+      const batchSize = 20;
+      let processedCount = 0;
+
+      for (let i = 0; i < productsToSync.length; i += batchSize) {
+        const batch = productsToSync.slice(i, i + batchSize);
+        const batchNumber = Math.floor(i / batchSize) + 1;
+        const totalBatches = Math.ceil(productsToSync.length / batchSize);
+
+        console.log(`[Sync] Procesando lote ${batchNumber}/${totalBatches} (${batch.length} productos)`);
+
+        // Usar la misma lógica de procesamiento que pullFromIntegration
+        // (copiamos el código de procesamiento para mantener consistencia)
+        await Promise.all(
+          batch.map(async (storeProduct) => {
+            const itemRecord: any = {
+              syncLogId: 0,
+              sku: storeProduct.sku,
+              productId: storeProduct.variant_id.toString(),
+              productName: storeProduct.title,
+              status: 'skipped',
+              stockBefore: storeProduct.inventory_quantity,
+              stockAfter: storeProduct.inventory_quantity,
+              errorCategory: null,
+              errorMessage: null,
+            };
+
+            try {
+              const {
+                sku,
+                variant_id,
+                inventory_quantity: currentStock,
+                title,
+                inventory_item_id
+              } = storeProduct;
+
+              console.log(`[Sync] Procesando: ${sku} - ${title}`);
+
+              // Buscar producto en Contífico
+              let contificoProductResult;
+              try {
+                contificoProductResult = await contificoConnector.getProduct(sku);
+              } catch (error: any) {
+                console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico`);
+                results.skipped++;
+
+                if (!dryRun) {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                }
+
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'not_found_contifico';
+                itemRecord.errorMessage = 'Producto no encontrado en Contífico';
+                itemsToSave.push(itemRecord);
+                return;
+              }
+
+              if (!contificoProductResult.product) {
+                console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico`);
+                results.skipped++;
+
+                if (!dryRun) {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                }
+
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'not_found_contifico';
+                itemRecord.errorMessage = 'Producto no encontrado en Contífico';
+                itemsToSave.push(itemRecord);
+                return;
+              }
+
+              const contificoProduct = contificoProductResult.product;
+
+              // Obtener stock
+              let contificoStock: number;
+
+              if (settings.warehouse_primary) {
+                try {
+                  contificoStock = await contificoConnector.getProductStock(
+                    contificoProduct.id,
+                    sku
+                  );
+                } catch (error: any) {
+                  contificoStock = contificoProduct.stock_quantity || 0;
+                }
+              } else {
+                contificoStock = contificoProduct.stock_quantity || 0;
+              }
+
+              // Comparar stocks
+              if (currentStock === contificoStock) {
+                console.log(`[Sync] ✓ Stock igual (${contificoStock}), omitiendo: ${sku}`);
+                results.skipped++;
+
+                if (!dryRun) {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                }
+
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'no_changes';
+                itemRecord.errorMessage = 'Stock sin cambios';
+                itemRecord.stockAfter = contificoStock;
+                itemsToSave.push(itemRecord);
+                return;
+              }
+
+              console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
+
+              // Actualizar stock
+              if (!dryRun) {
+                try {
+                  if (store.platform === 'shopify' && inventory_item_id) {
+                    await (storeConnector as ShopifyConnector).updateVariantStock!(
+                      variant_id,
+                      inventory_item_id,
+                      Math.floor(contificoStock)
+                    );
+                  } else if (store.platform === 'woocommerce') {
+                    await (storeConnector as WooCommerceConnector).updateProductStock!(
+                      variant_id,
+                      Math.floor(contificoStock)
+                    );
+                  } else {
+                    throw new Error(`Plataforma ${store.platform} no soportada`);
+                  }
+
+                  console.log(`[Sync] ✅ Actualizado: ${sku} → ${contificoStock} unidades`);
+
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: Math.floor(contificoStock),
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+
+                  results.success++;
+
+                  itemRecord.status = 'success';
+                  itemRecord.stockAfter = Math.floor(contificoStock);
+                  itemsToSave.push(itemRecord);
+
+                } catch (updateError: any) {
+                  console.error(`[Sync] ❌ Error actualizando stock para ${sku}:`, updateError.message);
+                  results.failed++;
+                  results.errors.push({
+                    sku,
+                    error: `Error al actualizar stock: ${updateError.message}`
+                  });
+
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+
+                  itemRecord.status = 'failed';
+                  itemRecord.errorCategory = 'update_error';
+                  itemRecord.errorMessage = updateError.message;
+                  itemsToSave.push(itemRecord);
+                }
+              } else {
+                console.log(`[Sync] [DRY-RUN] Se actualizaría: ${sku} → ${contificoStock} unidades`);
+                results.success++;
+
+                itemRecord.status = 'success';
+                itemRecord.stockAfter = Math.floor(contificoStock);
+                itemsToSave.push(itemRecord);
+              }
+
+            } catch (error: any) {
+              console.error(`[Sync] ❌ Error procesando producto ${storeProduct.sku}:`, error.message);
+              results.failed++;
+              results.errors.push({
+                sku: storeProduct.sku || 'unknown',
+                error: error.message
+              });
+
+              if (!dryRun) {
+                try {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: storeProduct.variant_id.toString(),
+                    sku: storeProduct.sku,
+                    name: storeProduct.title,
+                    stockQuantity: storeProduct.inventory_quantity,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                } catch (cacheError: any) {
+                  console.error(`[Sync] Error guardando en cache: ${cacheError.message}`);
+                }
+              }
+
+              itemRecord.status = 'failed';
+              itemRecord.errorCategory = 'processing_error';
+              itemRecord.errorMessage = error.message;
+              itemsToSave.push(itemRecord);
+            }
+          })
+        );
+
+        processedCount += batch.length;
+        console.log(`[Sync] Progreso: ${processedCount}/${productsToSync.length} productos procesados`);
+
+        if (i + batchSize < productsToSync.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      const durationMs = Date.now() - startTime;
+
+      // Registrar sincronización
+      if (!dryRun) {
+        const syncLog = await storage.createSyncLog({
+          tenantId: store.tenantId,
+          storeId: store.id,
+          syncType: 'pull_selective',
+          status: results.failed > 0 ? 'partial' : 'success',
+          syncedCount: results.success,
+          errorCount: results.failed,
+          durationMs,
+          errorMessage: null,
+          details: {
+            integration_id: integrationId,
+            warehouse_id: settings.warehouse_primary || null,
+            warehouse_name: warehouseName,
+            selected_skus: skus,
+            total_selected: skus.length,
+            total_processed: productsToSync.length,
+            success: results.success,
+            failed: results.failed,
+            skipped: results.skipped,
+            errors: results.errors.slice(0, 20)
+          }
+        });
+
+        syncLogId = syncLog.id;
+
+        if (itemsToSave.length > 0) {
+          const itemsWithLogId = itemsToSave.map(item => ({
+            ...item,
+            syncLogId: syncLog.id
+          }));
+
+          await storage.createSyncLogItems(itemsWithLogId);
+          console.log(`[Sync] ✅ Guardados ${itemsWithLogId.length} items en sync_log_items`);
+        }
+
+        await storage.updateStore(storeId, {
+          lastSyncAt: new Date()
+        });
+      }
+
+      console.log(`[Sync] ========================================`);
+      console.log(`[Sync] Sincronización Selectiva completada en ${(durationMs / 1000).toFixed(2)}s`);
+      console.log(`[Sync] ✅ Éxitos: ${results.success}`);
+      console.log(`[Sync] ❌ Fallidos: ${results.failed}`);
+      console.log(`[Sync] ⏭️  Omitidos: ${results.skipped}`);
+      console.log(`[Sync] ========================================`);
+
+      return results;
+
+    } catch (error: any) {
+      console.error('[Sync] ❌ Error fatal en sincronización selectiva:', error);
+
+      const durationMs = Date.now() - startTime;
+
+      try {
+        const store = await storage.getStore(storeId);
+        if (store) {
+          const syncLog = await storage.createSyncLog({
+            tenantId: store.tenantId,
+            storeId,
+            syncType: 'pull_selective',
+            status: 'error',
+            syncedCount: results.success,
+            errorCount: results.failed,
+            durationMs,
+            errorMessage: error.message,
+            details: {
+              error: error.message,
+              selected_skus: skus,
+              success: results.success,
+              failed: results.failed,
+              skipped: results.skipped
+            }
+          });
+          syncLogId = syncLog.id;
+
+          if (itemsToSave.length > 0) {
+            const itemsWithLogId = itemsToSave.map(item => ({
+              ...item,
+              syncLogId: syncLog.id
+            }));
+            await storage.createSyncLogItems(itemsWithLogId);
+          }
+        }
+      } catch (logError) {
+        console.error('[Sync] Error al registrar log de fallo:', logError);
+      }
+
+      throw error;
+    }
+  }
+
+  /**
    * Obtiene el nombre de una bodega desde Contífico
    */
   private static async getWarehouseName(
