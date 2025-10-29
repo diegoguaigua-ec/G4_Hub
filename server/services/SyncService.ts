@@ -166,6 +166,21 @@ export class SyncService {
                 console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico, omitiendo`);
                 results.skipped++;
 
+                // Guardar producto en cache aunque no esté en Contífico
+                if (!dryRun) {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                }
+
                 // ✅ Guardar item omitido
                 itemRecord.status = 'skipped';
                 itemRecord.errorCategory = 'not_found_contifico';
@@ -177,6 +192,21 @@ export class SyncService {
               if (!contificoProductResult.product) {
                 console.log(`[Sync] ⚠️ Producto ${sku} no encontrado en Contífico, omitiendo`);
                 results.skipped++;
+
+                // Guardar producto en cache aunque no esté en Contífico
+                if (!dryRun) {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                }
 
                 // ✅ Guardar item omitido
                 itemRecord.status = 'skipped';
@@ -293,6 +323,19 @@ export class SyncService {
                     error: `Error al actualizar stock: ${updateError.message}`
                   });
 
+                  // Guardar producto en cache con stock actual (el update falló)
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+
                   // ✅ Guardar item fallido
                   itemRecord.status = 'failed';
                   itemRecord.errorCategory = 'update_error';
@@ -316,6 +359,25 @@ export class SyncService {
                 sku: storeProduct.sku || 'unknown',
                 error: error.message
               });
+
+              // Guardar producto en cache aunque haya error procesando
+              if (!dryRun) {
+                try {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: storeProduct.variant_id.toString(),
+                    sku: storeProduct.sku,
+                    name: storeProduct.title,
+                    stockQuantity: storeProduct.inventory_quantity,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                } catch (cacheError: any) {
+                  console.error(`[Sync] Error guardando en cache: ${cacheError.message}`);
+                }
+              }
 
               // ✅ Guardar item con error general
               itemRecord.status = 'failed';
