@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Clock,
   Loader2,
+  MinusCircle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -35,7 +36,7 @@ interface ProductSyncStatus {
   name: string;
   stockStore: number;
   stockContifico: number | null;
-  status: "pending" | "synced" | "different" | "error";
+  status: "pending" | "synced" | "different" | "not_in_contifico" | "error";
   lastSync: string | null;
   platformProductId: string;
 }
@@ -168,6 +169,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
         return <CheckCircle className="h-4 w-4 text-green-600" />;
       case "different":
         return <AlertCircle className="h-4 w-4 text-amber-600" />;
+      case "not_in_contifico":
+        return <MinusCircle className="h-4 w-4 text-purple-600" />;
       case "error":
         return <XCircle className="h-4 w-4 text-red-600" />;
       case "pending":
@@ -183,6 +186,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
         return "Sincronizado";
       case "different":
         return "Diferente";
+      case "not_in_contifico":
+        return "No en Contífico";
       case "error":
         return "Error";
       case "pending":
@@ -198,6 +203,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
         return "bg-green-100 text-green-700";
       case "different":
         return "bg-amber-100 text-amber-700";
+      case "not_in_contifico":
+        return "bg-purple-100 text-purple-700";
       case "error":
         return "bg-red-100 text-red-700";
       case "pending":
@@ -283,6 +290,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="synced">Sincronizado</SelectItem>
                   <SelectItem value="different">Diferente</SelectItem>
+                  <SelectItem value="not_in_contifico">No en Contífico</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
                   <SelectItem value="pending">Pendiente</SelectItem>
                 </SelectContent>

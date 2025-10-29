@@ -834,72 +834,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Get all store products (cached) - these are the products in the store
+      const allStoreProducts = await storage.getProductsByStore(parseInt(storeId));
+
+      // Filter products with SKU only
+      const storeProductsWithSku = allStoreProducts.filter((p: any) => p.sku);
+
       // Get the latest PULL sync log for this store (inventory sync from Contífico)
       const recentLogs = await storage.getSyncLogsByStoreAndType(parseInt(storeId), 'pull', 1);
       const latestSyncLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
 
-      if (!latestSyncLog) {
-        return res.json({
-          products: [],
-          pagination: {
-            total: 0,
-            page: pageNum,
-            limit: limitNum,
-            totalPages: 0,
-            hasMore: false,
-          },
-          lastSyncAt: null,
+      // Create a map of sync log items by SKU for quick lookup
+      const syncLogItemsMap = new Map();
+      if (latestSyncLog) {
+        const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
+        syncItems.forEach((item: any) => {
+          if (item.sku) {
+            syncLogItemsMap.set(item.sku, item);
+          }
         });
       }
 
-      // Get sync log items (products from Contífico sync)
-      const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
+      // Build comparison data based on STORE products (what's in my store?)
+      const comparisonData = storeProductsWithSku.map((storeProduct: any) => {
+        const syncItem = syncLogItemsMap.get(storeProduct.sku);
 
-      // Filter sync items with SKU only
-      const syncItemsWithSku = syncItems.filter((item: any) => item.sku);
+        let syncStatus = 'pending'; // pending, synced, different, not_in_contifico, error
+        let stockContifico: number | null = null;
+        let lastSync: Date | null = null;
 
-      // Get all store products (cached) and create a map by SKU for quick lookup
-      const allStoreProducts = await storage.getProductsByStore(parseInt(storeId));
-      const storeProductsMap = new Map();
-      allStoreProducts.forEach((p: any) => {
-        if (p.sku) {
-          storeProductsMap.set(p.sku, p);
-        }
-      });
+        if (!syncItem) {
+          // Never synced with Contífico
+          syncStatus = 'pending';
+        } else {
+          lastSync = syncItem.createdAt;
 
-      // Build comparison data based on sync items (Contífico products)
-      const comparisonData = syncItemsWithSku.map((syncItem: any) => {
-        const storeProduct = storeProductsMap.get(syncItem.sku);
+          if (syncItem.errorCategory === 'not_found_contifico') {
+            // Product doesn't exist in Contífico
+            syncStatus = 'not_in_contifico';
+            stockContifico = null;
+          } else if (syncItem.status === 'failed') {
+            // Sync failed
+            syncStatus = 'error';
+            stockContifico = null;
+          } else if (syncItem.status === 'success' || syncItem.status === 'skipped') {
+            // Sync was successful or skipped (no changes)
+            stockContifico = syncItem.stockAfter;
 
-        let syncStatus = 'pending'; // pending, synced, different, error
-        let stockStore = storeProduct ? storeProduct.stockQuantity : null;
-        let productName = syncItem.productName || (storeProduct ? storeProduct.name : null);
-        let platformProductId = syncItem.productId || (storeProduct ? storeProduct.platformProductId : null);
-
-        if (syncItem.status === 'failed') {
-          syncStatus = 'error';
-        } else if (syncItem.status === 'success') {
-          // Compare stocks if we have store data
-          if (storeProduct) {
             if (storeProduct.stockQuantity === syncItem.stockAfter) {
               syncStatus = 'synced';
             } else {
               syncStatus = 'different';
             }
-          } else {
-            // Product synced but not found in store cache
-            syncStatus = 'synced';
           }
         }
 
         return {
-          sku: syncItem.sku,
-          name: productName,
-          stockStore: stockStore,
-          stockContifico: syncItem.stockAfter,
+          sku: storeProduct.sku,
+          name: storeProduct.name,
+          stockStore: storeProduct.stockQuantity,
+          stockContifico: stockContifico,
           status: syncStatus,
-          lastSync: syncItem.createdAt,
-          platformProductId: platformProductId,
+          lastSync: lastSync,
+          platformProductId: storeProduct.platformProductId,
         };
       });
 

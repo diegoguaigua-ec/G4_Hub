@@ -216,10 +216,26 @@ export class SyncService {
                 console.log(`[Sync] ✓ Stock igual (${contificoStock}), omitiendo: ${sku}`);
                 results.skipped++;
 
+                // Actualizar cache de productos aunque no haya cambios (mantener cache actualizado)
+                if (!dryRun) {
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: currentStock,
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                }
+
                 // ✅ Guardar item omitido
                 itemRecord.status = 'skipped';
                 itemRecord.errorCategory = 'no_changes';
                 itemRecord.errorMessage = 'Stock sin cambios';
+                itemRecord.stockAfter = contificoStock;
                 itemsToSave.push(itemRecord);
                 return;
               }
@@ -247,6 +263,21 @@ export class SyncService {
                   }
 
                   console.log(`[Sync] ✅ Actualizado: ${sku} → ${contificoStock} unidades`);
+
+                  // 5. Actualizar cache de productos (store_products)
+                  await storage.upsertProduct({
+                    tenantId: store.tenantId,
+                    storeId: store.id,
+                    platformProductId: variant_id.toString(),
+                    sku: sku,
+                    name: title,
+                    stockQuantity: Math.floor(contificoStock),
+                    manageStock: true,
+                    price: null,
+                    data: storeProduct
+                  });
+                  console.log(`[Sync] 💾 Cache actualizado para ${sku}`);
+
                   results.success++;
 
                   // ✅ Guardar item exitoso
