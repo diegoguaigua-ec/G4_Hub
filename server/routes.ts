@@ -502,9 +502,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error: any) {
       console.error("Error probando conexión de integración:", error);
-      res.status(500).json({ 
-        message: "Error al probar conexión", 
-        error: error.message 
+      res.status(500).json({
+        message: "Error al probar conexión",
+        error: error.message
+      });
+    }
+  });
+
+  // Get warehouses from Contífico integration
+  app.get("/api/integrations/:integrationId/warehouses", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { integrationId } = req.params;
+
+      const integration = await storage.getIntegration(parseInt(integrationId));
+      if (!integration || integration.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Integración no encontrada" });
+      }
+
+      // Solo soportamos Contífico
+      if (integration.integrationType !== 'contifico') {
+        return res.status(400).json({
+          message: "Obtención de bodegas solo disponible para integraciones Contífico"
+        });
+      }
+
+      // Crear un store temporal para obtener bodegas
+      const settings = integration.settings as any;
+      const tempStore = {
+        id: 0,
+        tenantId: user.tenantId,
+        platform: 'contifico',
+        storeName: integration.name,
+        storeUrl: 'https://api.contifico.com',
+        apiCredentials: settings,
+        syncConfig: {},
+        status: 'active',
+        connectionStatus: 'untested',
+        lastConnectionTest: null,
+        storeInfo: {},
+        productsCount: 0,
+        lastSyncAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      const { ContificoConnector } = await import('./connectors/ContificoConnector');
+      const connector = new ContificoConnector(tempStore);
+      const warehouses = await connector.getWarehouses();
+
+      res.json({ warehouses });
+    } catch (error: any) {
+      console.error("Error obteniendo bodegas de Contífico:", error);
+      res.status(500).json({
+        message: "Error al obtener bodegas",
+        error: error.message
       });
     }
   });
@@ -936,6 +992,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching product sync status:", error);
       res.status(500).json({
         message: "Failed to fetch product sync status",
+        error: error.message
+      });
+    }
+  });
+
+  // Get sync statistics for a store
+  app.get("/api/stores/:storeId/sync-stats", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Tienda no encontrada" });
+      }
+
+      // Get last sync of type 'pull'
+      const pullSyncs = await storage.getSyncLogsByStoreAndType(
+        parseInt(storeId),
+        'pull',
+        1
+      );
+      const lastSyncAt = pullSyncs[0]?.createdAt || null;
+
+      // Count products in store_products for this store
+      const allProducts = await storage.getProductsByStore(parseInt(storeId));
+      const totalProducts = allProducts.length;
+
+      // Calculate success rate from last 30 days of pull syncs
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const recentSyncs = await storage.getSyncLogsByStoreAndType(
+        parseInt(storeId),
+        'pull',
+        100  // Get last 100 syncs to calculate from last 30 days
+      );
+
+      const syncsLast30Days = recentSyncs.filter(
+        sync => sync.createdAt && new Date(sync.createdAt) >= thirtyDaysAgo
+      );
+
+      let successRate = 0;
+      if (syncsLast30Days.length > 0) {
+        const successfulSyncs = syncsLast30Days.filter(
+          sync => sync.status === 'completed'
+        ).length;
+        successRate = Math.round((successfulSyncs / syncsLast30Days.length) * 100);
+      }
+
+      res.json({
+        lastSyncAt,
+        totalProducts,
+        successRate,
+      });
+    } catch (error: any) {
+      console.error("Error obteniendo estadísticas de sincronización:", error);
+      res.status(500).json({
+        message: "Error al obtener estadísticas",
         error: error.message
       });
     }
@@ -1727,7 +1846,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     }
   });
-  
+
+  // ============================================
+  // NOTIFICATIONS
+  // ============================================
+
+  // Get notifications for the current tenant
+  app.get("/api/notifications", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const limit = parseInt(req.query.limit as string) || 50;
+
+      const notifications = await storage.getNotificationsByTenant(
+        user.tenantId,
+        limit
+      );
+
+      const unreadCount = await storage.getUnreadNotificationsCount(
+        user.tenantId
+      );
+
+      res.json({
+        notifications,
+        unreadCount,
+      });
+    } catch (error: any) {
+      console.error("Error obteniendo notificaciones:", error);
+      res.status(500).json({
+        message: "Error al obtener notificaciones",
+        error: error.message,
+      });
+    }
+  });
+
+  // Mark a notification as read
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { id } = req.params;
+
+      // Verify notification belongs to tenant before updating
+      const notifications = await storage.getNotificationsByTenant(
+        user.tenantId,
+        1000
+      );
+      const notification = notifications.find((n) => n.id === parseInt(id));
+
+      if (!notification) {
+        return res.status(404).json({ message: "Notificación no encontrada" });
+      }
+
+      const updated = await storage.markNotificationAsRead(parseInt(id));
+      res.json({ notification: updated });
+    } catch (error: any) {
+      console.error("Error marcando notificación como leída:", error);
+      res.status(500).json({
+        message: "Error al marcar notificación",
+        error: error.message,
+      });
+    }
+  });
+
+  // Mark all notifications as read for the current tenant
+  app.patch("/api/notifications/mark-all-read", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      await storage.markAllNotificationsAsRead(user.tenantId);
+      res.json({ message: "Todas las notificaciones marcadas como leídas" });
+    } catch (error: any) {
+      console.error("Error marcando todas las notificaciones:", error);
+      res.status(500).json({
+        message: "Error al marcar notificaciones",
+        error: error.message,
+      });
+    }
+  });
+
+  // Delete a notification
+  app.delete("/api/notifications/:id", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { id } = req.params;
+
+      // Verify notification belongs to tenant before deleting
+      const notifications = await storage.getNotificationsByTenant(
+        user.tenantId,
+        1000
+      );
+      const notification = notifications.find((n) => n.id === parseInt(id));
+
+      if (!notification) {
+        return res.status(404).json({ message: "Notificación no encontrada" });
+      }
+
+      await storage.deleteNotification(parseInt(id));
+      res.json({ message: "Notificación eliminada" });
+    } catch (error: any) {
+      console.error("Error eliminando notificación:", error);
+      res.status(500).json({
+        message: "Error al eliminar notificación",
+        error: error.message,
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

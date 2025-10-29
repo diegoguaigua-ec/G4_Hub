@@ -206,19 +206,52 @@ export const storeIntegrations = pgTable(
   ],
 );
 
+// Notifications table
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: integer("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    userId: integer("user_id").references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    storeId: integer("store_id").references(() => stores.id, {
+      onDelete: "cascade",
+    }),
+    type: varchar("type", { length: 50 }).notNull(), // 'sync_success', 'sync_failure', 'info', etc.
+    title: varchar("title", { length: 255 }).notNull(),
+    message: text("message").notNull(),
+    severity: varchar("severity", { length: 20 }).notNull().default("info"), // 'info', 'success', 'warning', 'error'
+    read: boolean("read").notNull().default(false),
+    data: jsonb("data").default({}), // Additional data like syncLogId, productCount, etc.
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_notifications_tenant").on(table.tenantId),
+    index("idx_notifications_user").on(table.userId),
+    index("idx_notifications_store").on(table.storeId),
+    index("idx_notifications_read").on(table.read),
+    index("idx_notifications_created").on(table.createdAt),
+  ],
+);
+
 // Relations
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
   stores: many(stores),
   syncLogs: many(syncLogs),
   integrations: many(integrations),
+  notifications: many(notifications),
 }));
 
-export const usersRelations = relations(users, ({ one }) => ({
+export const usersRelations = relations(users, ({ one, many }) => ({
   tenant: one(tenants, {
     fields: [users.tenantId],
     references: [tenants.id],
   }),
+  notifications: many(notifications),
 }));
 
 export const storesRelations = relations(stores, ({ one, many }) => ({
@@ -229,6 +262,7 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
   syncLogs: many(syncLogs),
   products: many(storeProducts),
   storeIntegrations: many(storeIntegrations),
+  notifications: many(notifications),
 }));
 
 export const storeProductsRelations = relations(storeProducts, ({ one }) => ({
@@ -285,6 +319,21 @@ export const storeIntegrationsRelations = relations(
     }),
   }),
 );
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [notifications.tenantId],
+    references: [tenants.id],
+  }),
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+  store: one(stores, {
+    fields: [notifications.storeId],
+    references: [stores.id],
+  }),
+}));
 
 // Insert schemas
 export const insertTenantSchema = createInsertSchema(tenants, {
@@ -502,6 +551,13 @@ export const insertStoreProductSchema = createInsertSchema(storeProducts).omit({
   lastUpdated: true,
 });
 
+export const insertNotificationSchema = createInsertSchema(notifications, {
+  createdAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -511,6 +567,7 @@ export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
 export type InsertStoreIntegration = z.infer<
   typeof insertStoreIntegrationSchema
 >;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -519,3 +576,4 @@ export type StoreProduct = typeof storeProducts.$inferSelect;
 export type SyncLog = typeof syncLogs.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;
 export type StoreIntegration = typeof storeIntegrations.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;

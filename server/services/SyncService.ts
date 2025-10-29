@@ -441,6 +441,33 @@ export class SyncService {
         await storage.updateStore(storeId, {
           lastSyncAt: new Date()
         });
+
+        // Crear notificación para sincronización manual exitosa
+        if (results.success > 0 || results.failed === 0) {
+          const severity = results.failed > 0 ? 'warning' : 'success';
+          const title = results.failed > 0
+            ? 'Sincronización parcialmente exitosa'
+            : 'Sincronización completada';
+          const message = `Se sincronizaron ${results.success} productos exitosamente${results.failed > 0 ? `, ${results.failed} fallaron` : ''}${results.skipped > 0 ? `, ${results.skipped} omitidos` : ''}.`;
+
+          await storage.createNotification({
+            tenantId: store.tenantId,
+            userId: null, // Notification for all users in tenant
+            storeId: store.id,
+            type: 'sync_success',
+            title,
+            message,
+            severity,
+            read: false,
+            data: {
+              syncLogId: syncLog.id,
+              syncType: 'pull',
+              success: results.success,
+              failed: results.failed,
+              skipped: results.skipped,
+            },
+          });
+        }
       }
 
       console.log(`[Sync] ========================================`);
@@ -882,6 +909,34 @@ export class SyncService {
         await storage.updateStore(storeId, {
           lastSyncAt: new Date()
         });
+
+        // Crear notificación para sincronización selectiva manual exitosa
+        if (results.success > 0 || results.failed === 0) {
+          const severity = results.failed > 0 ? 'warning' : 'success';
+          const title = results.failed > 0
+            ? 'Sincronización selectiva parcialmente exitosa'
+            : 'Sincronización selectiva completada';
+          const message = `Se sincronizaron ${results.success} de ${skus.length} productos seleccionados exitosamente${results.failed > 0 ? `, ${results.failed} fallaron` : ''}${results.skipped > 0 ? `, ${results.skipped} omitidos` : ''}.`;
+
+          await storage.createNotification({
+            tenantId: store.tenantId,
+            userId: null, // Notification for all users in tenant
+            storeId: store.id,
+            type: 'sync_success',
+            title,
+            message,
+            severity,
+            read: false,
+            data: {
+              syncLogId: syncLog.id,
+              syncType: 'pull_selective',
+              success: results.success,
+              failed: results.failed,
+              skipped: results.skipped,
+              selectedCount: skus.length,
+            },
+          });
+        }
       }
 
       console.log(`[Sync] ========================================`);

@@ -7,6 +7,7 @@ import {
   integrations,
   storeIntegrations,
   syncLogItems,
+  notifications,
   type User,
   type InsertUser,
   type Tenant,
@@ -18,9 +19,11 @@ import {
   type SyncLog,
   type SyncLogItem,
   type Integration,
-  type InsertIntegration,  
+  type InsertIntegration,
   type StoreIntegration,
   type InsertStoreIntegration,
+  type Notification,
+  type InsertNotification,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -46,6 +49,7 @@ export interface IStorage {
   createUser(user: CreateUserData): Promise<User>;
   updateUserLastLogin(id: number): Promise<void>;
 
+  getAllTenants(): Promise<Tenant[]>;
   getTenant(id: number): Promise<Tenant | undefined>;
   getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
@@ -93,6 +97,14 @@ export interface IStorage {
     linkId: number,
     updates: Partial<InsertStoreIntegration>,
   ): Promise<StoreIntegration>;
+
+  // Notification operations
+  getNotificationsByTenant(tenantId: number, limit?: number): Promise<Notification[]>;
+  getUnreadNotificationsCount(tenantId: number): Promise<number>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationAsRead(id: number): Promise<Notification>;
+  markAllNotificationsAsRead(tenantId: number): Promise<void>;
+  deleteNotification(id: number): Promise<void>;
 
   sessionStore: session.Store;
 }
@@ -146,6 +158,10 @@ export class DatabaseStorage implements IStorage {
       .update(users)
       .set({ lastLoginAt: new Date() })
       .where(eq(users.id, id));
+  }
+
+  async getAllTenants(): Promise<Tenant[]> {
+    return await db.select().from(tenants).orderBy(tenants.createdAt);
   }
 
   async getTenant(id: number): Promise<Tenant | undefined> {
@@ -600,6 +616,67 @@ export class DatabaseStorage implements IStorage {
       .where(eq(storeIntegrations.id, linkId))
       .returning();
     return updated;
+  }
+
+  // Notification operations
+  async getNotificationsByTenant(
+    tenantId: number,
+    limit: number = 50,
+  ): Promise<Notification[]> {
+    return await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.tenantId, tenantId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit);
+  }
+
+  async getUnreadNotificationsCount(tenantId: number): Promise<number> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(
+        and(
+          eq(notifications.tenantId, tenantId),
+          eq(notifications.read, false),
+        ),
+      );
+    return result?.count || 0;
+  }
+
+  async createNotification(
+    notification: InsertNotification,
+  ): Promise<Notification> {
+    const [created] = await db
+      .insert(notifications)
+      .values(notification)
+      .returning();
+    return created;
+  }
+
+  async markNotificationAsRead(id: number): Promise<Notification> {
+    const [updated] = await db
+      .update(notifications)
+      .set({ read: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markAllNotificationsAsRead(tenantId: number): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ read: true })
+      .where(
+        and(
+          eq(notifications.tenantId, tenantId),
+          eq(notifications.read, false),
+        ),
+      );
+  }
+
+  async deleteNotification(id: number): Promise<void> {
+    await db.delete(notifications).where(eq(notifications.id, id));
   }
 }
 
