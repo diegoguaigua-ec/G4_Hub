@@ -224,10 +224,21 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
 
         <Alert>
           <Info className="h-4 w-4" />
-          <AlertDescription>
-            No se encontró una integración de Contífico configurada para esta tienda.
-            Por favor, ve a la sección de <strong>Integraciones</strong> para crear una integración de Contífico
-            con tu API Key y selecciona el ambiente (producción o prueba).
+          <AlertDescription className="space-y-2">
+            <p>
+              No se encontró una integración de Contífico configurada para esta tienda.
+            </p>
+            <p className="font-medium">
+              Para configurar Contífico:
+            </p>
+            <ol className="list-decimal list-inside space-y-1 ml-2 text-sm">
+              <li>Ve a la sección <strong>"Integraciones"</strong> en el menú lateral</li>
+              <li>Haz clic en <strong>"Agregar Integración"</strong></li>
+              <li>Ingresa tu API Key de Contífico</li>
+              <li>Selecciona el ambiente (Producción o Prueba)</li>
+              <li>Elige la bodega principal</li>
+              <li>Luego vincula la integración con esta tienda</li>
+            </ol>
           </AlertDescription>
         </Alert>
       </div>
