@@ -7,13 +7,13 @@ import {
   Check,
   BarChart,
   Settings,
-  Bell,
   Activity,
   Package,
   TrendingUp,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Store as StoreType } from "@shared/schema";
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
 
 interface SyncStats {
   metrics: {
@@ -119,10 +119,7 @@ export default function OverviewSection() {
             Monitorea el rendimiento de tu automatización de e-commerce
           </p>
         </div>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
-        </Button>
+        <NotificationsDropdown />
       </div>
 
       {/* Stats Grid - 4 columnas en una fila */}
