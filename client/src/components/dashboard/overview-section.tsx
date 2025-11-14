@@ -373,7 +373,7 @@ export default function OverviewSection() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setLocation("/dashboard/stores")}
+              onClick={() => setLocation("/dashboard/integrations")}
             >
               Ver Todo
             </Button>

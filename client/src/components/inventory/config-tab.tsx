@@ -56,6 +56,18 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
   const [autoSync, setAutoSync] = useState(false);
   const [interval, setInterval] = useState<'5min' | '30min' | 'hourly' | 'daily' | 'weekly'>("daily");
   const [warehouse, setWarehouse] = useState("");
+  const [, setCurrentTime] = useState(new Date());
+
+  // Update current time every minute to refresh next sync calculation
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+      // Also refresh stats to get updated lastSyncAt
+      queryClient.invalidateQueries({ queryKey: [`/api/stores/${storeId}/sync-stats`] });
+    }, 60000); // Update every minute
+
+    return () => clearInterval(timer);
+  }, [storeId, queryClient]);
 
   // Fetch store integrations (Contífico)
   const { data: integrations = [], isLoading: integrationsLoading } = useQuery<StoreIntegration[]>({

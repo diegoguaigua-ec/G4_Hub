@@ -4,7 +4,7 @@ import { SyncService } from './services/SyncService';
 interface SyncConfig {
   pull?: {
     enabled?: boolean;
-    interval?: 'hourly' | 'daily' | 'weekly';
+    interval?: '5min' | '30min' | 'hourly' | 'daily' | 'weekly';
     warehouse?: string;
   };
   schedule?: {
@@ -21,7 +21,7 @@ export class Scheduler {
   private isRunning = false;
 
   /**
-   * Start the scheduler - runs every hour
+   * Start the scheduler - runs every 5 minutes to support all intervals
    */
   start() {
     if (this.intervalId) {
@@ -29,15 +29,15 @@ export class Scheduler {
       return;
     }
 
-    console.log('[Scheduler] Iniciando scheduler - se ejecutará cada hora');
+    console.log('[Scheduler] Iniciando scheduler - se ejecutará cada 5 minutos');
 
     // Run immediately on start
     this.runScheduledSyncs();
 
-    // Then run every hour
+    // Then run every 5 minutes (to support the smallest interval)
     this.intervalId = setInterval(() => {
       this.runScheduledSyncs();
-    }, 60 * 60 * 1000); // 1 hora en milisegundos
+    }, 5 * 60 * 1000); // 5 minutos en milisegundos
   }
 
   /**
@@ -223,15 +223,19 @@ export class Scheduler {
 
     const lastSync = new Date(store.lastSyncAt);
     const now = new Date();
-    const hoursSinceLastSync = (now.getTime() - lastSync.getTime()) / (1000 * 60 * 60);
+    const minutesSinceLastSync = (now.getTime() - lastSync.getTime()) / (1000 * 60);
 
     switch (syncConfig.pull.interval) {
+      case '5min':
+        return minutesSinceLastSync >= 5;
+      case '30min':
+        return minutesSinceLastSync >= 30;
       case 'hourly':
-        return hoursSinceLastSync >= 1;
+        return minutesSinceLastSync >= 60;
       case 'daily':
-        return hoursSinceLastSync >= 24;
+        return minutesSinceLastSync >= 1440; // 24 * 60
       case 'weekly':
-        return hoursSinceLastSync >= 168; // 7 * 24
+        return minutesSinceLastSync >= 10080; // 7 * 24 * 60
       default:
         return false;
     }
