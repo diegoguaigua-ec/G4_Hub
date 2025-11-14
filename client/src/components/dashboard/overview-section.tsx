@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,13 +8,37 @@ import {
   Check,
   BarChart,
   Settings,
-  Bell,
   Activity,
   Package,
   TrendingUp,
+  AlertCircle,
+  CheckCircle2,
+  Clock,
+  ArrowUpCircle,
+  ArrowDownCircle,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Store as StoreType } from "@shared/schema";
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
+import { useLocation } from "wouter";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
 
 interface SyncStats {
   metrics: {
@@ -24,7 +49,37 @@ interface SyncStats {
   };
 }
 
+interface SyncLog {
+  id: number;
+  storeId: number;
+  syncType: string;
+  status: string;
+  syncedCount: number;
+  errorCount: number;
+  durationMs: number;
+  errorMessage: string | null;
+  createdAt: string;
+  storeName: string;
+  storePlatform: string;
+}
+
+interface SyncLogsResponse {
+  logs: SyncLog[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}
+
 export default function OverviewSection() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [selectedStoreId, setSelectedStoreId] = useState<string>("");
+  const [isSyncing, setIsSyncing] = useState(false);
+
   // Fetch stores data
   const { data: stores = [], isLoading: storesLoading } = useQuery<StoreType[]>(
     {
@@ -35,6 +90,18 @@ export default function OverviewSection() {
   // Fetch sync stats
   const { data: syncStats, isLoading: statsLoading } = useQuery<SyncStats>({
     queryKey: ["/api/sync/stats"],
+  });
+
+  // Fetch recent activity
+  const { data: recentActivity, isLoading: activityLoading } = useQuery<SyncLogsResponse>({
+    queryKey: ["/api/sync/logs", { limit: 10 }],
+    queryFn: async () => {
+      const res = await fetch("/api/sync/logs?limit=10", {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Error al cargar actividad reciente");
+      return res.json();
+    },
   });
 
   const isLoading = storesLoading || statsLoading;
@@ -77,11 +144,64 @@ export default function OverviewSection() {
     },
   ];
 
+  // Quick actions handlers
+  const handleAddStore = () => {
+    setLocation("/dashboard/stores");
+  };
+
+  const handleForceSyncClick = () => {
+    setSyncDialogOpen(true);
+  };
+
+  const handleForceSync = async () => {
+    if (!selectedStoreId) {
+      toast({
+        title: "Selecciona una tienda",
+        description: "Debes seleccionar una tienda para sincronizar",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const res = await apiRequest(
+        "POST",
+        `/api/sync/inventory/${selectedStoreId}/pull`
+      );
+      const result = await res.json();
+
+      toast({
+        title: "Sincronización iniciada",
+        description: `La sincronización se ha iniciado correctamente para ${stores.find(s => s.id === parseInt(selectedStoreId))?.storeName}`,
+      });
+
+      setSyncDialogOpen(false);
+      setSelectedStoreId("");
+    } catch (error: any) {
+      toast({
+        title: "Error al sincronizar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleViewReports = () => {
+    setLocation("/dashboard/stores");
+  };
+
+  const handleSettings = () => {
+    setLocation("/dashboard/integrations");
+  };
+
   const quickActions = [
-    { title: "Agregar Tienda", icon: Store },
-    { title: "Forzar Sincronización", icon: RefreshCw },
-    { title: "Ver Reportes", icon: FileText },
-    { title: "Configuración", icon: Settings },
+    { title: "Agregar Tienda", icon: Store, onClick: handleAddStore },
+    { title: "Forzar Sincronización", icon: RefreshCw, onClick: handleForceSyncClick },
+    { title: "Ver Reportes", icon: FileText, onClick: handleViewReports },
+    { title: "Configuración", icon: Settings, onClick: handleSettings },
   ];
 
   // Helper to format last sync time
@@ -98,6 +218,71 @@ export default function OverviewSection() {
       return `Hace ${diffInHours} hora${diffInHours > 1 ? "s" : ""}`;
     const diffInDays = Math.floor(diffInHours / 24);
     return `Hace ${diffInDays} día${diffInDays > 1 ? "s" : ""}`;
+  };
+
+  // Helper to format activity timestamp
+  const formatActivityTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffInMinutes = Math.floor(
+      (now.getTime() - date.getTime()) / (1000 * 60)
+    );
+
+    if (diffInMinutes < 1) return "Hace un momento";
+    if (diffInMinutes < 60) return `Hace ${diffInMinutes} min`;
+
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `Hace ${diffInHours}h`;
+
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `Hace ${diffInDays}d`;
+
+    // If more than 7 days, show date
+    return date.toLocaleDateString('es-ES', {
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Helper to get sync type label
+  const getSyncTypeLabel = (syncType: string) => {
+    if (syncType === 'pull') return 'Desde Contífico';
+    if (syncType === 'push') return 'A Contífico';
+    return syncType;
+  };
+
+  // Helper to get status icon and color
+  const getStatusInfo = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return {
+          icon: CheckCircle2,
+          color: 'text-green-600',
+          bgColor: 'bg-green-500/10',
+          label: 'Completado'
+        };
+      case 'failed':
+        return {
+          icon: AlertCircle,
+          color: 'text-red-600',
+          bgColor: 'bg-red-500/10',
+          label: 'Fallido'
+        };
+      case 'pending':
+        return {
+          icon: Clock,
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-500/10',
+          label: 'Pendiente'
+        };
+      default:
+        return {
+          icon: Clock,
+          color: 'text-gray-600',
+          bgColor: 'bg-gray-500/10',
+          label: status
+        };
+    }
   };
 
   // Loading state
@@ -119,10 +304,7 @@ export default function OverviewSection() {
             Monitorea el rendimiento de tu automatización de e-commerce
           </p>
         </div>
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-destructive rounded-full"></span>
-        </Button>
+        <NotificationsDropdown />
       </div>
 
       {/* Stats Grid - 4 columnas en una fila */}
@@ -170,7 +352,8 @@ export default function OverviewSection() {
               <Button
                 key={index}
                 variant="outline"
-                className="h-auto py-6 flex flex-col items-center justify-center gap-3"
+                onClick={action.onClick}
+                className="h-auto py-6 flex flex-col items-center justify-center gap-3 hover:bg-primary/5"
               >
                 <Icon className="h-6 w-6" />
                 <span className="text-sm font-medium">{action.title}</span>
@@ -187,18 +370,92 @@ export default function OverviewSection() {
             <h3 className="text-lg font-semibold text-foreground">
               Actividad Reciente
             </h3>
-            <Button variant="ghost" size="sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation("/dashboard/stores")}
+            >
               Ver Todo
             </Button>
           </div>
 
-          <div className="text-center py-8 text-muted-foreground">
-            <p>No hay actividad reciente</p>
-            <p className="text-sm mt-2">
-              La actividad aparecerá cuando las tiendas realicen
-              sincronizaciones
-            </p>
-          </div>
+          {activityLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : recentActivity && recentActivity.logs.length > 0 ? (
+            <div className="space-y-3">
+              {recentActivity.logs.map((log) => {
+                const statusInfo = getStatusInfo(log.status);
+                const StatusIcon = statusInfo.icon;
+                const SyncIcon = log.syncType === 'pull' ? ArrowDownCircle : ArrowUpCircle;
+
+                return (
+                  <div
+                    key={log.id}
+                    className="flex items-start justify-between p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className={`w-10 h-10 rounded-lg ${statusInfo.bgColor} flex items-center justify-center flex-shrink-0`}>
+                        <StatusIcon className={`h-5 w-5 ${statusInfo.color}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {log.storeName}
+                          </p>
+                          <Badge variant="outline" className="text-xs">
+                            {log.storePlatform}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                          <SyncIcon className="h-3 w-3" />
+                          <span>{getSyncTypeLabel(log.syncType)}</span>
+                          <span>•</span>
+                          <span>{formatActivityTime(log.createdAt)}</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                          <span className="text-green-600">
+                            {log.syncedCount} sincronizados
+                          </span>
+                          {log.errorCount > 0 && (
+                            <span className="text-red-600">
+                              {log.errorCount} errores
+                            </span>
+                          )}
+                          {log.durationMs && (
+                            <span className="text-muted-foreground">
+                              {(log.durationMs / 1000).toFixed(1)}s
+                            </span>
+                          )}
+                        </div>
+                        {log.errorMessage && (
+                          <p className="text-xs text-red-600 mt-1 truncate">
+                            {log.errorMessage}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Badge
+                      variant={log.status === 'completed' ? 'default' : 'destructive'}
+                      className="ml-2 flex-shrink-0"
+                    >
+                      {statusInfo.label}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <Activity className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              <p>No hay actividad reciente</p>
+              <p className="text-sm mt-2">
+                La actividad aparecerá cuando las tiendas realicen
+                sincronizaciones
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -254,6 +511,65 @@ export default function OverviewSection() {
           </CardContent>
         </Card>
       )}
+
+      {/* Force Sync Dialog */}
+      <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Forzar Sincronización</DialogTitle>
+            <DialogDescription>
+              Selecciona una tienda para iniciar una sincronización manual desde Contífico
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar tienda" />
+              </SelectTrigger>
+              <SelectContent>
+                {stores.map((store) => (
+                  <SelectItem key={store.id} value={store.id.toString()}>
+                    <div className="flex items-center gap-2">
+                      <Store className="h-4 w-4" />
+                      <span>{store.storeName}</span>
+                      <span className="text-xs text-muted-foreground">
+                        ({store.platform})
+                      </span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setSyncDialogOpen(false)}
+              disabled={isSyncing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleForceSync}
+              disabled={isSyncing || !selectedStoreId}
+            >
+              {isSyncing ? (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                  Sincronizando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Sincronizar
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

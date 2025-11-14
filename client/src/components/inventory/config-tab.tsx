@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -21,11 +21,17 @@ interface ConfigTabProps {
 interface StoreIntegration {
   id: number;
   integrationId: number;
-  integrationName: string;
+  integration?: {
+    id: number;
+    name: string;
+    integrationType: string;
+  };
   syncConfig: {
-    autoSync?: boolean;
-    interval?: string;
-    warehouse?: string;
+    pull?: {
+      enabled?: boolean;
+      interval?: 'hourly' | 'daily' | 'weekly';
+      warehouse?: string;
+    };
   };
   isActive: boolean;
 }
@@ -37,20 +43,16 @@ interface SyncStats {
 }
 
 const SYNC_INTERVALS = [
-  { value: "5", label: "Cada 5 minutos" },
-  { value: "15", label: "Cada 15 minutos" },
-  { value: "30", label: "Cada 30 minutos" },
-  { value: "60", label: "Cada 1 hora" },
-  { value: "360", label: "Cada 6 horas" },
-  { value: "720", label: "Cada 12 horas" },
-  { value: "1440", label: "Cada 24 horas" },
+  { value: "hourly", label: "Cada hora" },
+  { value: "daily", label: "Cada día" },
+  { value: "weekly", label: "Cada semana" },
 ];
 
 export function ConfigTab({ storeId }: ConfigTabProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [autoSync, setAutoSync] = useState(false);
-  const [interval, setInterval] = useState("15");
+  const [interval, setInterval] = useState<'hourly' | 'daily' | 'weekly'>("daily");
   const [warehouse, setWarehouse] = useState("");
 
   // Fetch store integrations (Contífico)
@@ -63,55 +65,57 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
       if (!res.ok) throw new Error("Error al cargar integraciones");
       return res.json();
     },
-    onSuccess: (data) => {
-      // Pre-populate form with existing config
-      const contificoIntegration = data.find((i) =>
-        i.integrationName.toLowerCase().includes("contífico") ||
-        i.integrationName.toLowerCase().includes("contifico")
-      );
-      if (contificoIntegration?.syncConfig) {
-        setAutoSync(contificoIntegration.syncConfig.autoSync || false);
-        setInterval(contificoIntegration.syncConfig.interval || "15");
-        setWarehouse(contificoIntegration.syncConfig.warehouse || "");
-      }
-    },
   });
 
-  // Fetch warehouses (stubbed for now - will be implemented in backend)
-  const { data: warehouses = [] } = useQuery({
-    queryKey: [`/api/integrations/warehouses`],
+  // Find Contífico integration
+  const contificoIntegration = integrations.find((i) =>
+    i.integration?.name?.toLowerCase().includes("contífico") ||
+    i.integration?.name?.toLowerCase().includes("contifico")
+  );
+
+  // Update form state when integrations load
+  useEffect(() => {
+    if (contificoIntegration?.syncConfig?.pull) {
+      setAutoSync(contificoIntegration.syncConfig.pull.enabled || false);
+      setInterval(contificoIntegration.syncConfig.pull.interval || "daily");
+      setWarehouse(contificoIntegration.syncConfig.pull.warehouse || "");
+    }
+  }, [contificoIntegration]);
+
+  // Fetch warehouses from Contífico
+  const { data: warehousesData, isLoading: warehousesLoading, error: warehousesError } = useQuery({
+    queryKey: [`/api/integrations/${contificoIntegration?.integrationId}/warehouses`],
     queryFn: async () => {
-      // TODO: Implement endpoint /api/integrations/:id/warehouses
-      return [
-        { id: "1", name: "Bodega Principal" },
-        { id: "2", name: "Bodega Secundaria" },
-      ];
+      const res = await fetch(
+        `/api/integrations/${contificoIntegration?.integrationId}/warehouses`,
+        { credentials: "include" }
+      );
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: 'Error desconocido' }));
+        throw new Error(error.message || "Error al cargar bodegas");
+      }
+      return res.json();
     },
-    enabled: false, // Disable until backend endpoint exists
+    enabled: !!contificoIntegration?.integrationId,
   });
 
-  // Fetch sync stats (stubbed for now)
+  const warehouses = warehousesData?.warehouses || [];
+
+  // Fetch sync stats
   const { data: stats } = useQuery<SyncStats>({
     queryKey: [`/api/stores/${storeId}/sync-stats`],
     queryFn: async () => {
-      // TODO: Implement endpoint to get sync stats
-      return {
-        lastSyncAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-        totalProducts: 145,
-        successRate: 98.5,
-      };
+      const res = await fetch(`/api/stores/${storeId}/sync-stats`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Error al cargar estadísticas");
+      return res.json();
     },
-    enabled: false, // Disable until backend endpoint exists
   });
 
   // Update configuration mutation
   const updateConfigMutation = useMutation({
-    mutationFn: async (config: any) => {
-      const contificoIntegration = integrations.find((i) =>
-        i.integrationName.toLowerCase().includes("contífico") ||
-        i.integrationName.toLowerCase().includes("contifico")
-      );
-
+    mutationFn: async (config: { pull: { enabled: boolean; interval: string; warehouse: string } }) => {
       if (!contificoIntegration) {
         throw new Error("No se encontró la integración de Contífico");
       }
@@ -151,26 +155,35 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
 
   const handleSave = () => {
     updateConfigMutation.mutate({
-      autoSync,
-      interval,
-      warehouse,
+      pull: {
+        enabled: autoSync,
+        interval,
+        warehouse,
+      },
     });
   };
 
   const calculateNextSync = () => {
     if (!autoSync || !stats?.lastSyncAt) return "N/A";
     const lastSync = new Date(stats.lastSyncAt);
-    const intervalMinutes = parseInt(interval);
-    const nextSync = new Date(lastSync.getTime() + intervalMinutes * 60 * 1000);
+
+    // Calculate interval in hours
+    let intervalHours = 1; // default hourly
+    if (interval === 'daily') intervalHours = 24;
+    if (interval === 'weekly') intervalHours = 168;
+
+    const nextSync = new Date(lastSync.getTime() + intervalHours * 60 * 60 * 1000);
 
     const now = new Date();
     const diff = nextSync.getTime() - now.getTime();
-    const minutesLeft = Math.round(diff / (60 * 1000));
+    const hoursLeft = Math.floor(diff / (60 * 60 * 1000));
+    const minutesLeft = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
 
-    if (minutesLeft < 0) return "Ahora";
-    if (minutesLeft < 60) return `En ${minutesLeft} min`;
-    const hoursLeft = Math.floor(minutesLeft / 60);
-    return `En ${hoursLeft}h ${minutesLeft % 60}min`;
+    if (diff < 0) return "Ahora";
+    if (hoursLeft < 1) return `En ${minutesLeft} min`;
+    if (hoursLeft < 24) return `En ${hoursLeft}h ${minutesLeft}min`;
+    const daysLeft = Math.floor(hoursLeft / 24);
+    return `En ${daysLeft} día${daysLeft > 1 ? 's' : ''}`;
   };
 
   const formatLastSync = (dateString: string | null) => {
@@ -192,6 +205,42 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show message if no Contífico integration exists
+  if (!contificoIntegration) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">
+            Configuración de Sincronización
+          </h2>
+          <p className="text-muted-foreground">
+            Gestiona cómo se sincronizan los productos entre tu tienda y Contífico
+          </p>
+        </div>
+
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription className="space-y-2">
+            <p>
+              No se encontró una integración de Contífico configurada para esta tienda.
+            </p>
+            <p className="font-medium">
+              Para configurar Contífico:
+            </p>
+            <ol className="list-decimal list-inside space-y-1 ml-2 text-sm">
+              <li>Ve a la sección <strong>"Integraciones"</strong> en el menú lateral</li>
+              <li>Haz clic en <strong>"Agregar Integración"</strong></li>
+              <li>Ingresa tu API Key de Contífico</li>
+              <li>Selecciona el ambiente (Producción o Prueba)</li>
+              <li>Elige la bodega principal</li>
+              <li>Luego vincula la integración con esta tienda</li>
+            </ol>
+          </AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -270,18 +319,33 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
             <label className="text-sm font-medium text-foreground">
               Bodega principal
             </label>
-            <Select value={warehouse} onValueChange={setWarehouse}>
+            <Select value={warehouse} onValueChange={setWarehouse} disabled={warehousesLoading}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecciona una bodega" />
+                <SelectValue placeholder={
+                  warehousesLoading ? "Cargando bodegas..." :
+                  warehousesError ? "Error al cargar bodegas" :
+                  "Selecciona una bodega"
+                } />
               </SelectTrigger>
               <SelectContent>
-                {warehouses.map((w: any) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.name}
-                  </SelectItem>
-                ))}
+                {warehouses.length === 0 ? (
+                  <div className="px-2 py-4 text-sm text-muted-foreground text-center">
+                    {warehousesLoading ? "Cargando..." : "No hay bodegas disponibles"}
+                  </div>
+                ) : (
+                  warehouses.map((w: any) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.nombre || w.name}
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
+            {warehousesError && (
+              <p className="text-sm text-destructive">
+                Error: {(warehousesError as Error).message}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
               Los stocks se sincronizarán desde esta bodega
             </p>
@@ -325,10 +389,10 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
       <div className="flex justify-end">
         <Button
           onClick={handleSave}
-          disabled={updateConfigMutation.isLoading}
+          disabled={updateConfigMutation.isPending}
           size="lg"
         >
-          {updateConfigMutation.isLoading ? (
+          {updateConfigMutation.isPending ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Guardando...

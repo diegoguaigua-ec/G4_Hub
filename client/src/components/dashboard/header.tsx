@@ -1,5 +1,4 @@
-import { Button } from "@/components/ui/button";
-import { Bell, Plus } from "lucide-react";
+import { NotificationsDropdown } from "@/components/notifications-dropdown";
 
 interface HeaderProps {
   title: string;
@@ -15,15 +14,7 @@ export default function Header({ title, subtitle }: HeaderProps) {
           <p className="text-muted-foreground">{subtitle}</p>
         </div>
         <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="relative"
-            data-testid="button-notifications"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full"></span>
-          </Button>
+          <NotificationsDropdown />
         </div>
       </div>
     </header>

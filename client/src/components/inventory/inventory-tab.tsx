@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Clock,
   Loader2,
+  MinusCircle,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -35,7 +36,7 @@ interface ProductSyncStatus {
   name: string;
   stockStore: number;
   stockContifico: number | null;
-  status: "pending" | "synced" | "different" | "error";
+  status: "pending" | "synced" | "different" | "not_in_contifico" | "error";
   lastSync: string | null;
   platformProductId: string;
 }
@@ -71,6 +72,25 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     setSelectedProducts(new Set());
   }, [pagination.page]);
 
+  // Fetch store integrations to get Contífico integration ID
+  const { data: integrationsData } = useQuery({
+    queryKey: [`/api/stores/${storeId}/integrations`],
+    queryFn: async () => {
+      const res = await fetch(`/api/stores/${storeId}/integrations`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Error al cargar integraciones");
+      return res.json();
+    },
+  });
+
+  // Find Contífico integration
+  const contificoIntegration = integrationsData?.find(
+    (integration: any) =>
+      integration.integration?.name?.toLowerCase().includes("contífico") ||
+      integration.integration?.name?.toLowerCase().includes("contifico")
+  );
+
   // Fetch product sync status
   const { data, isLoading, refetch } = useQuery<SyncStatusResponse>({
     queryKey: [
@@ -95,21 +115,94 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     },
   });
 
-  // Sync mutation (placeholder - will be implemented with selective sync)
+  // Sync mutation - triggers full pull from Contífico (all products)
   const syncMutation = useMutation({
-    mutationFn: async (skus: string[]) => {
-      // TODO: Implement sync endpoint in backend
-      throw new Error("Sync functionality not implemented yet");
+    mutationFn: async () => {
+      if (!contificoIntegration) {
+        throw new Error("No se encontró integración de Contífico para esta tienda");
+      }
+
+      const res = await fetch(
+        `/api/sync/pull/${storeId}/${contificoIntegration.integrationId}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            dryRun: false,
+            limit: 1000,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al sincronizar");
+      }
+
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({
         queryKey: [`/api/stores/${storeId}/products/sync-status`],
       });
       toast({
         title: "Sincronización completada",
-        description: "Los productos se han sincronizado correctamente",
+        description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
       });
       setSelectedProducts(new Set());
+      refetch(); // Refresh the product list
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error al sincronizar",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Selective sync mutation - only syncs selected products by SKU
+  const syncSelectiveMutation = useMutation({
+    mutationFn: async (skus: string[]) => {
+      if (!contificoIntegration) {
+        throw new Error("No se encontró integración de Contífico para esta tienda");
+      }
+
+      const res = await fetch(
+        `/api/sync/pull-selective/${storeId}/${contificoIntegration.integrationId}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            skus,
+            dryRun: false,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al sincronizar productos seleccionados");
+      }
+
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: [`/api/stores/${storeId}/products/sync-status`],
+      });
+      toast({
+        title: "Sincronización selectiva completada",
+        description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
+      });
+      setSelectedProducts(new Set());
+      refetch(); // Refresh the product list
     },
     onError: (error: Error) => {
       toast({
@@ -147,19 +240,23 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
       });
       return;
     }
-    syncMutation.mutate(Array.from(selectedProducts));
+
+    // Use selective sync mutation with selected SKUs
+    const selectedSkus = Array.from(selectedProducts);
+    syncSelectiveMutation.mutate(selectedSkus);
   };
 
   const handleSyncAll = () => {
-    if (!data?.products || data.products.length === 0) {
+    if (!contificoIntegration) {
       toast({
-        title: "Sin productos",
-        description: "No hay productos para sincronizar",
+        title: "Sin integración",
+        description: "No se encontró integración de Contífico para esta tienda",
         variant: "destructive",
       });
       return;
     }
-    syncMutation.mutate(data.products.map((p) => p.sku));
+
+    syncMutation.mutate();
   };
 
   const getStatusIcon = (status: string) => {
@@ -168,6 +265,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
         return <CheckCircle className="h-4 w-4 text-green-600" />;
       case "different":
         return <AlertCircle className="h-4 w-4 text-amber-600" />;
+      case "not_in_contifico":
+        return <MinusCircle className="h-4 w-4 text-purple-600" />;
       case "error":
         return <XCircle className="h-4 w-4 text-red-600" />;
       case "pending":
@@ -183,6 +282,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
         return "Sincronizado";
       case "different":
         return "Diferente";
+      case "not_in_contifico":
+        return "No en Contífico";
       case "error":
         return "Error";
       case "pending":
@@ -198,6 +299,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
         return "bg-green-100 text-green-700";
       case "different":
         return "bg-amber-100 text-amber-700";
+      case "not_in_contifico":
+        return "bg-purple-100 text-purple-700";
       case "error":
         return "bg-red-100 text-red-700";
       case "pending":
@@ -238,7 +341,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
           </Button>
           <Button
             onClick={handleSyncAll}
-            disabled={syncMutation.isPending || !data?.products || data.products.length === 0}
+            disabled={syncMutation.isPending || !contificoIntegration}
             size="sm"
           >
             {syncMutation.isPending ? (
@@ -283,6 +386,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                   <SelectItem value="all">Todos los estados</SelectItem>
                   <SelectItem value="synced">Sincronizado</SelectItem>
                   <SelectItem value="different">Diferente</SelectItem>
+                  <SelectItem value="not_in_contifico">No en Contífico</SelectItem>
                   <SelectItem value="error">Error</SelectItem>
                   <SelectItem value="pending">Pendiente</SelectItem>
                 </SelectContent>
@@ -321,11 +425,11 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
             {selectedProducts.size > 0 && (
               <Button
                 onClick={handleSyncSelected}
-                disabled={syncMutation.isPending}
+                disabled={syncSelectiveMutation.isPending}
                 size="sm"
                 variant="default"
               >
-                {syncMutation.isPending ? (
+                {syncSelectiveMutation.isPending ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <RefreshCw className="h-4 w-4 mr-2" />

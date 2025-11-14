@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Search,
   Download,
   RefreshCw,
   CheckCircle,
@@ -56,7 +54,6 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
   const [filters, setFilters] = useState({
     storeId: storeId?.toString() as string | undefined,
     status: undefined as string | undefined,
-    search: "",
   });
   const [pagination, setPagination] = useState({
     limit: 20,
@@ -252,24 +249,6 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
                   <SelectItem value="error">Fallido</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-
-            {/* Search */}
-            <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
-                Buscar
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar por SKU..."
-                  value={filters.search}
-                  onChange={(e) =>
-                    setFilters({ ...filters, search: e.target.value })
-                  }
-                  className="pl-10"
-                />
-              </div>
             </div>
           </div>
         </CardContent>
