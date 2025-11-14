@@ -16,6 +16,29 @@ import { ContificoConnector } from './connectors/ContificoConnector';
 import { SyncService } from './services/SyncService';
 import { ZodError } from "zod";
 
+// Helper function to get plan limits
+function getPlanLimits(planType: string) {
+  const plans: Record<string, { stores: number; products: number; syncs: number }> = {
+    starter: {
+      stores: 1,
+      products: 50,
+      syncs: 1000,
+    },
+    professional: {
+      stores: 3,
+      products: 500,
+      syncs: 10000,
+    },
+    enterprise: {
+      stores: Infinity,
+      products: Infinity,
+      syncs: Infinity,
+    },
+  };
+
+  return plans[planType] || plans.starter;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
@@ -105,10 +128,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const user = (req as AuthenticatedRequest).user;
-      
+
+      // Get tenant to check plan limits
+      const tenant = await storage.getTenant(user.tenantId);
+      const planLimits = getPlanLimits(tenant.planType);
+
+      // Check if user has reached store limit
+      const existingStores = await storage.getStoresByTenant(user.tenantId);
+      if (existingStores.length >= planLimits.stores) {
+        return res.status(403).json({
+          message: `Has alcanzado el límite de ${planLimits.stores} ${planLimits.stores === 1 ? 'tienda' : 'tiendas'} de tu plan ${tenant.planType}. Por favor actualiza tu plan para añadir más tiendas.`
+        });
+      }
+
       // Validate input with Zod
       const validatedData = createStoreSchema.parse(req.body);
-      
+
       // Create store with tenant ID and initial status
       const storeData = {
         ...validatedData,
@@ -1214,7 +1249,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
-      
+
+      // Get tenant to check plan limits
+      const tenant = await storage.getTenant(user.tenantId);
+      const planLimits = getPlanLimits(tenant.planType);
+
+      // Check sync limits for this month (if not infinite)
+      if (planLimits.syncs !== Infinity) {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const syncLogs = await storage.getSyncLogsByTenant(user.tenantId);
+        const monthSyncs = syncLogs.filter(log =>
+          log.createdAt >= startOfMonth && log.syncType === 'inventory'
+        );
+
+        if (monthSyncs.length >= planLimits.syncs) {
+          return res.status(403).json({
+            message: `Has alcanzado el límite de ${planLimits.syncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
+          });
+        }
+      }
+
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
         return res.status(404).json({ message: "Store not found" });
@@ -1244,11 +1301,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Perform the sync
         const connector = getConnector(store);
         const productsResult = await connector.getProducts();
-        
+
+        // Check product limits (if not infinite)
+        if (planLimits.products !== Infinity) {
+          const existingProducts = await storage.getProductsByTenant(user.tenantId);
+          const totalProductsAfterSync = existingProducts.length + productsResult.products.length;
+
+          if (totalProductsAfterSync > planLimits.products) {
+            // Update sync log as failed
+            await storage.updateSyncLog(syncLog.id, {
+              status: 'failed',
+              syncedCount: 0,
+              errorCount: 0,
+              durationMs: Date.now() - syncStartTime,
+              errorMessage: `Límite de productos excedido. Tu plan ${tenant.planType} permite ${planLimits.products} productos.`,
+              details: { manual: true, startedAt: new Date(syncStartTime) }
+            });
+
+            return res.status(403).json({
+              message: `Esta sincronización excedería tu límite de ${planLimits.products} productos del plan ${tenant.planType}. Actualmente tienes ${existingProducts.length} productos y esta sincronización añadiría ${productsResult.products.length} más.`
+            });
+          }
+        }
+
         // Update products in database
         let syncedCount = 0;
         let errorCount = 0;
-        
+
         for (const product of productsResult.products) {
           try {
             await storage.upsertProduct({
@@ -1368,6 +1447,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const { storeId, integrationId } = req.params;
       const { dryRun = false, limit = 1000 } = req.body;
+
+      // Get tenant to check plan limits
+      const tenant = await storage.getTenant(user.tenantId);
+      const planLimits = getPlanLimits(tenant.planType);
+
+      // Check sync limits for this month (if not infinite and not a dry run)
+      if (!dryRun && planLimits.syncs !== Infinity) {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const syncLogs = await storage.getSyncLogsByTenant(user.tenantId);
+        const monthSyncs = syncLogs.filter(log =>
+          log.createdAt >= startOfMonth
+        );
+
+        if (monthSyncs.length >= planLimits.syncs) {
+          return res.status(403).json({
+            message: `Has alcanzado el límite de ${planLimits.syncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
+          });
+        }
+      }
 
       // Verificar que la tienda pertenece al tenant del usuario
       const store = await storage.getStore(parseInt(storeId));

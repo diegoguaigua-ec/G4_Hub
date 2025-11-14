@@ -18,36 +18,37 @@ const plans = [
   {
     name: "Starter",
     id: "starter",
-    price: "$0",
+    price: "$15",
+    priceMonthly: "$18",
     description: "Perfecto para empezar",
     features: [
-      "Hasta 2 tiendas conectadas",
-      "1,000 productos sincronizados",
-      "100 sincronizaciones/mes",
+      "1 tienda conectada",
+      "50 productos sincronizados",
+      "1,000 sincronizaciones/mes",
       "Soporte por email",
     ],
     limits: {
-      stores: 2,
-      products: 1000,
-      syncs: 100,
+      stores: 1,
+      products: 50,
+      syncs: 1000,
     },
   },
   {
     name: "Professional",
     id: "professional",
-    price: "$49",
+    price: "$25",
+    priceMonthly: "$35",
     description: "Para negocios en crecimiento",
     features: [
-      "Hasta 10 tiendas conectadas",
-      "10,000 productos sincronizados",
-      "1,000 sincronizaciones/mes",
+      "Hasta 3 tiendas conectadas",
+      "500 productos sincronizados",
+      "10,000 sincronizaciones/mes",
       "Soporte prioritario",
-      "Reportes avanzados",
     ],
     limits: {
-      stores: 10,
-      products: 10000,
-      syncs: 1000,
+      stores: 3,
+      products: 500,
+      syncs: 10000,
     },
     popular: true,
   },
@@ -55,6 +56,7 @@ const plans = [
     name: "Enterprise",
     id: "enterprise",
     price: "Contactar",
+    priceMonthly: "Contactar",
     description: "Para grandes empresas",
     features: [
       "Tiendas ilimitadas",
@@ -137,9 +139,14 @@ export default function BillingSection() {
               <div className="flex items-center gap-2 mb-2">
                 <h3 className="text-3xl font-bold">{currentPlan.price}</h3>
                 {currentPlan.price !== "Contactar" && (
-                  <span className="text-muted-foreground">/mes</span>
+                  <span className="text-muted-foreground">/mes anual</span>
                 )}
               </div>
+              {currentPlan.priceMonthly && currentPlan.price !== "Contactar" && (
+                <p className="text-sm text-muted-foreground mb-2">
+                  {currentPlan.priceMonthly}/mes mensual
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">{currentPlan.description}</p>
             </div>
             <Badge variant={tenant?.status === "active" ? "default" : "secondary"}>
@@ -254,9 +261,14 @@ export default function BillingSection() {
                   <div className="flex items-baseline gap-1">
                     <span className="text-3xl font-bold">{plan.price}</span>
                     {plan.price !== "Contactar" && (
-                      <span className="text-muted-foreground">/mes</span>
+                      <span className="text-muted-foreground text-sm">/mes anual</span>
                     )}
                   </div>
+                  {plan.priceMonthly && plan.price !== "Contactar" && (
+                    <p className="text-sm text-muted-foreground">
+                      {plan.priceMonthly}/mes mensual
+                    </p>
+                  )}
                   <CardDescription>{plan.description}</CardDescription>
                 </CardHeader>
                 <CardContent>

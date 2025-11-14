@@ -29,7 +29,7 @@ interface StoreIntegration {
   syncConfig: {
     pull?: {
       enabled?: boolean;
-      interval?: 'hourly' | 'daily' | 'weekly';
+      interval?: '5min' | '30min' | 'hourly' | 'daily' | 'weekly';
       warehouse?: string;
     };
   };
@@ -43,16 +43,18 @@ interface SyncStats {
 }
 
 const SYNC_INTERVALS = [
-  { value: "hourly", label: "Cada hora" },
-  { value: "daily", label: "Cada día" },
-  { value: "weekly", label: "Cada semana" },
+  { value: "5min", label: "Cada 5 minutos", syncsPerMonth: "~8,640 syncs/mes" },
+  { value: "30min", label: "Cada 30 minutos", syncsPerMonth: "~1,440 syncs/mes" },
+  { value: "hourly", label: "Cada hora", syncsPerMonth: "~720 syncs/mes" },
+  { value: "daily", label: "Cada día", syncsPerMonth: "~30 syncs/mes" },
+  { value: "weekly", label: "Cada semana", syncsPerMonth: "~4 syncs/mes" },
 ];
 
 export function ConfigTab({ storeId }: ConfigTabProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [autoSync, setAutoSync] = useState(false);
-  const [interval, setInterval] = useState<'hourly' | 'daily' | 'weekly'>("daily");
+  const [interval, setInterval] = useState<'5min' | '30min' | 'hourly' | 'daily' | 'weekly'>("daily");
   const [warehouse, setWarehouse] = useState("");
 
   // Fetch store integrations (Contífico)
@@ -167,12 +169,15 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
     if (!autoSync || !stats?.lastSyncAt) return "N/A";
     const lastSync = new Date(stats.lastSyncAt);
 
-    // Calculate interval in hours
-    let intervalHours = 1; // default hourly
-    if (interval === 'daily') intervalHours = 24;
-    if (interval === 'weekly') intervalHours = 168;
+    // Calculate interval in minutes
+    let intervalMinutes = 60; // default hourly
+    if (interval === '5min') intervalMinutes = 5;
+    if (interval === '30min') intervalMinutes = 30;
+    if (interval === 'hourly') intervalMinutes = 60;
+    if (interval === 'daily') intervalMinutes = 1440;
+    if (interval === 'weekly') intervalMinutes = 10080;
 
-    const nextSync = new Date(lastSync.getTime() + intervalHours * 60 * 60 * 1000);
+    const nextSync = new Date(lastSync.getTime() + intervalMinutes * 60 * 1000);
 
     const now = new Date();
     const diff = nextSync.getTime() - now.getTime();
@@ -288,7 +293,10 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
                   <SelectContent>
                     {SYNC_INTERVALS.map((option) => (
                       <SelectItem key={option.value} value={option.value}>
-                        {option.label}
+                        <div className="flex flex-col">
+                          <span>{option.label}</span>
+                          <span className="text-xs text-muted-foreground">{option.syncsPerMonth}</span>
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>

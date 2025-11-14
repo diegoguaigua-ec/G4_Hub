@@ -292,7 +292,7 @@ export default function AccountSection() {
                 className="w-full sm:w-auto bg-black text-white hover:bg-black/90 hover:text-white border-black"
               >
                 <Trash2 className="mr-2 h-4 w-4" />
-                Eliminar Cuenta
+                Eliminar
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
