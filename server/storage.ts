@@ -47,12 +47,16 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: CreateUserData): Promise<User>;
+  updateUser(id: number, updates: Partial<{ name: string; email: string }>): Promise<User>;
+  updateUserPassword(id: number, passwordHash: string): Promise<void>;
   updateUserLastLogin(id: number): Promise<void>;
+  deleteUser(id: number): Promise<void>;
 
   getAllTenants(): Promise<Tenant[]>;
   getTenant(id: number): Promise<Tenant | undefined>;
   getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
+  updateTenant(id: number, updates: Partial<{ name: string }>): Promise<Tenant>;
 
   getStoresByTenant(tenantId: number): Promise<Store[]>;
   getStore(id: number): Promise<Store | undefined>;
@@ -677,6 +681,43 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNotification(id: number): Promise<void> {
     await db.delete(notifications).where(eq(notifications.id, id));
+  }
+
+  // User management operations
+  async updateUser(
+    id: number,
+    updates: Partial<{ name: string; email: string }>,
+  ): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserPassword(id: number, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, id));
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Tenant management operations
+  async updateTenant(
+    id: number,
+    updates: Partial<{ name: string }>,
+  ): Promise<Tenant> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+    return tenant;
   }
 }
 

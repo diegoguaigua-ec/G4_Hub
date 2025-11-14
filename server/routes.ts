@@ -1966,6 +1966,154 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================
+  // USER & TENANT MANAGEMENT (Settings)
+  // ============================================
+
+  // Update user information
+  app.put("/api/user/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { userId } = req.params;
+      const { name, email } = req.body;
+
+      // Only allow users to update their own information
+      if (user.id !== parseInt(userId)) {
+        return res.status(403).json({ message: "No tienes permiso para actualizar este usuario" });
+      }
+
+      // Validate input
+      if (!name && !email) {
+        return res.status(400).json({ message: "Debes proporcionar al menos un campo para actualizar" });
+      }
+
+      const updates: Partial<{ name: string; email: string }> = {};
+      if (name) updates.name = name;
+      if (email) {
+        // Check if email is already taken by another user
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser && existingUser.id !== user.id) {
+          return res.status(400).json({ message: "El correo electrónico ya está en uso" });
+        }
+        updates.email = email;
+      }
+
+      const updatedUser = await storage.updateUser(parseInt(userId), updates);
+      res.json({ user: updatedUser, message: "Usuario actualizado exitosamente" });
+    } catch (error: any) {
+      console.error("Error actualizando usuario:", error);
+      res.status(500).json({ message: "Error al actualizar usuario", error: error.message });
+    }
+  });
+
+  // Change password
+  app.post("/api/user/change-password", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { currentPassword, newPassword } = req.body;
+
+      // Validate input
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Contraseña actual y nueva son requeridas" });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "La nueva contraseña debe tener al menos 8 caracteres" });
+      }
+
+      // Get full user data with password hash
+      const fullUser = await storage.getUser(user.id);
+      if (!fullUser) {
+        return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+
+      // Import password functions from auth
+      const { comparePasswords, hashPassword } = await import('./auth');
+
+      // Verify current password
+      const isValid = await comparePasswords(currentPassword, fullUser.passwordHash);
+      if (!isValid) {
+        return res.status(400).json({ message: "La contraseña actual es incorrecta" });
+      }
+
+      // Hash and update new password
+      const newPasswordHash = await hashPassword(newPassword);
+      await storage.updateUserPassword(user.id, newPasswordHash);
+
+      res.json({ message: "Contraseña actualizada exitosamente" });
+    } catch (error: any) {
+      console.error("Error cambiando contraseña:", error);
+      res.status(500).json({ message: "Error al cambiar contraseña", error: error.message });
+    }
+  });
+
+  // Delete user account
+  app.delete("/api/user/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { userId } = req.params;
+
+      // Only allow users to delete their own account
+      if (user.id !== parseInt(userId)) {
+        return res.status(403).json({ message: "No tienes permiso para eliminar este usuario" });
+      }
+
+      await storage.deleteUser(parseInt(userId));
+
+      // Logout the user after deleting account
+      req.logout((err) => {
+        if (err) {
+          console.error("Error logging out after account deletion:", err);
+        }
+      });
+
+      res.json({ message: "Cuenta eliminada exitosamente" });
+    } catch (error: any) {
+      console.error("Error eliminando usuario:", error);
+      res.status(500).json({ message: "Error al eliminar usuario", error: error.message });
+    }
+  });
+
+  // Update tenant information
+  app.put("/api/tenant/:tenantId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { tenantId } = req.params;
+      const { name } = req.body;
+
+      // Verify tenant belongs to user
+      if (user.tenantId !== parseInt(tenantId)) {
+        return res.status(403).json({ message: "No tienes permiso para actualizar este tenant" });
+      }
+
+      if (!name) {
+        return res.status(400).json({ message: "El nombre de la empresa es requerido" });
+      }
+
+      const updatedTenant = await storage.updateTenant(parseInt(tenantId), { name });
+      res.json({ tenant: updatedTenant, message: "Empresa actualizada exitosamente" });
+    } catch (error: any) {
+      console.error("Error actualizando tenant:", error);
+      res.status(500).json({ message: "Error al actualizar empresa", error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
