@@ -37,7 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      // CRITICAL: Clear all cached data to prevent showing previous user's data
+      queryClient.clear();
       queryClient.setQueryData(["/api/user"], user);
+      // Invalidate all queries to refetch with new user context
+      queryClient.invalidateQueries();
     },
     onError: (error: Error) => {
       toast({
@@ -54,7 +58,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return await res.json();
     },
     onSuccess: (user: SelectUser) => {
+      // CRITICAL: Clear all cached data to prevent showing previous user's data
+      queryClient.clear();
       queryClient.setQueryData(["/api/user"], user);
+      // Invalidate all queries to refetch with new user context
+      queryClient.invalidateQueries();
     },
     onError: (error: Error) => {
       toast({
@@ -70,6 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await apiRequest("POST", "/api/logout");
     },
     onSuccess: () => {
+      // CRITICAL: Clear ALL cached queries to prevent showing logged-out user's data to next user
+      queryClient.clear();
       queryClient.setQueryData(["/api/user"], null);
     },
     onError: (error: Error) => {
