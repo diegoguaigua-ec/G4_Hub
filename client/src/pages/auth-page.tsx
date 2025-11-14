@@ -35,12 +35,12 @@ export default function AuthPage() {
           
           <div className="space-y-6">
             <h1 className="text-5xl font-bold leading-tight">
-              E-commerce Automation
-              <span className="block text-primary">Made Simple</span>
+              Automatización E-commerce
+              <span className="block text-primary">Hecha Simple</span>
             </h1>
             <p className="text-xl text-gray-300 leading-relaxed">
-              Connect your online stores with ERP systems and automate your entire post-sale flow. 
-              Inventory sync, automated invoicing, and logistics management - all in one platform.
+              Conecta tus tiendas en línea con sistemas ERP y automatiza todo tu flujo post-venta.
+              Sincronización de inventario, facturación automatizada y gestión logística - todo en una plataforma.
             </p>
           </div>
 
@@ -51,8 +51,8 @@ export default function AuthPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-white mb-2">Lightning Fast</h3>
-              <p className="text-gray-400 text-sm">Real-time synchronization across all platforms</p>
+              <h3 className="font-semibold text-white mb-2">Súper Rápido</h3>
+              <p className="text-gray-400 text-sm">Sincronización en tiempo real en todas las plataformas</p>
             </div>
             <div className="text-center">
               <div className="w-16 h-16 bg-primary/20 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -60,8 +60,8 @@ export default function AuthPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-white mb-2">Reliable</h3>
-              <p className="text-gray-400 text-sm">99.9% uptime with enterprise-grade security</p>
+              <h3 className="font-semibold text-white mb-2">Confiable</h3>
+              <p className="text-gray-400 text-sm">99.9% de disponibilidad con seguridad empresarial</p>
             </div>
             <div className="text-center">
               <div className="w-16 h-16 bg-primary/20 rounded-xl flex items-center justify-center mx-auto mb-4">
@@ -69,8 +69,8 @@ export default function AuthPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
               </div>
-              <h3 className="font-semibold text-white mb-2">Scalable</h3>
-              <p className="text-gray-400 text-sm">Grows with your business from startup to enterprise</p>
+              <h3 className="font-semibold text-white mb-2">Escalable</h3>
+              <p className="text-gray-400 text-sm">Crece con tu negocio desde startup hasta empresa</p>
             </div>
           </div>
         </div>
@@ -81,20 +81,20 @@ export default function AuthPage() {
             <CardContent className="p-8">
               <Tabs defaultValue="login" className="space-y-6">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="login" data-testid="tab-login">Sign In</TabsTrigger>
-                  <TabsTrigger value="register" data-testid="tab-register">Get Started</TabsTrigger>
+                  <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
+                  <TabsTrigger value="register" data-testid="tab-register">Comenzar</TabsTrigger>
                 </TabsList>
                 <TabsContent value="login" className="space-y-6">
                   <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-bold text-foreground">Welcome back</h2>
-                    <p className="text-muted-foreground">Sign in to your automation platform</p>
+                    <h2 className="text-2xl font-bold text-foreground">Bienvenido de nuevo</h2>
+                    <p className="text-muted-foreground">Inicia sesión en tu plataforma de automatización</p>
                   </div>
                   <LoginForm />
                 </TabsContent>
                 <TabsContent value="register" className="space-y-6">
                   <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-bold text-foreground">Create your account</h2>
-                    <p className="text-muted-foreground">Start automating your e-commerce today</p>
+                    <h2 className="text-2xl font-bold text-foreground">Crea tu cuenta</h2>
+                    <p className="text-muted-foreground">Comienza a automatizar tu e-commerce hoy</p>
                   </div>
                   <RegisterForm />
                 </TabsContent>
