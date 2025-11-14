@@ -7,7 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { AlertCircle, Loader2, Save, Trash2 } from "lucide-react";
+import { Loader2, Save, Trash2 } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,7 +19,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Tenant {
   id: number;
@@ -54,9 +53,10 @@ export default function AccountSection() {
   const updateUserMutation = useMutation({
     mutationFn: async (data: { name: string; email: string }) => {
       const res = await apiRequest("PUT", `/api/user/${user?.id}`, data);
-      return res.json();
+      const result = await res.json();
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Usuario actualizado",
         description: "Tu información personal ha sido actualizada correctamente",
@@ -76,9 +76,10 @@ export default function AccountSection() {
   const updateTenantMutation = useMutation({
     mutationFn: async (data: { name: string }) => {
       const res = await apiRequest("PUT", `/api/tenant/${tenant?.id}`, data);
-      return res.json();
+      const result = await res.json();
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({
         title: "Empresa actualizada",
         description: "La información de tu empresa ha sido actualizada",
@@ -98,7 +99,8 @@ export default function AccountSection() {
   const deleteAccountMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("DELETE", `/api/user/${user?.id}`);
-      return res.json();
+      const result = await res.json();
+      return result;
     },
     onSuccess: () => {
       toast({
@@ -106,7 +108,9 @@ export default function AccountSection() {
         description: "Tu cuenta ha sido eliminada permanentemente",
       });
       // Logout and redirect
-      window.location.href = "/";
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1500);
     },
     onError: (error: Error) => {
       toast({
@@ -273,24 +277,20 @@ export default function AccountSection() {
       </Card>
 
       {/* Delete Account */}
-      <Card className="border-destructive">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-destructive">Zona de Peligro</CardTitle>
+          <CardTitle>Eliminar Cuenta</CardTitle>
           <CardDescription>
-            Acciones irreversibles para tu cuenta
+            Elimina permanentemente tu cuenta y todos tus datos
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              Una vez que elimines tu cuenta, no hay vuelta atrás. Por favor, confirma que estás seguro.
-            </AlertDescription>
-          </Alert>
-
+        <CardContent>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="destructive" className="w-full sm:w-auto">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto bg-black text-white hover:bg-black/90 hover:text-white border-black"
+              >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Eliminar Cuenta
               </Button>
