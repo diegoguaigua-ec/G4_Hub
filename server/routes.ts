@@ -2427,6 +2427,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clear sync locks for a store (admin utility)
+  app.post("/api/stores/:storeId/clear-locks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      await storage.releaseLock(parseInt(storeId));
+
+      res.json({
+        success: true,
+        message: `Locks cleared for store ${storeId}`
+      });
+    } catch (error: any) {
+      console.error("Error clearing locks:", error);
+      res.status(500).json({ message: "Failed to clear locks", error: error.message });
+    }
+  });
+
   // Mark unmapped SKU as resolved
   app.patch("/api/stores/:storeId/unmapped-skus/:skuId/resolve", async (req, res) => {
     if (!req.isAuthenticated()) {
