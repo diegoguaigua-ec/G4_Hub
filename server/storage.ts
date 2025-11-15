@@ -605,11 +605,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Store-Integration relationships
-  async getStoreIntegrations(storeId: number): Promise<StoreIntegration[]> {
-    return await db
+  async getStoreIntegrations(storeId: number): Promise<(StoreIntegration & { integration: Integration | null })[]> {
+    const results = await db
       .select()
       .from(storeIntegrations)
+      .leftJoin(integrations, eq(storeIntegrations.integrationId, integrations.id))
       .where(eq(storeIntegrations.storeId, storeId));
+
+    // Mapear resultados al formato esperado
+    return results.map(row => ({
+      ...row.store_integrations,
+      integration: row.integrations
+    }));
   }
 
   async getIntegrationStores(
