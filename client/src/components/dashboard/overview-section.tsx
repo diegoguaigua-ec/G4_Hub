@@ -167,7 +167,7 @@ export default function OverviewSection() {
     try {
       const res = await apiRequest(
         "POST",
-        `/api/sync/inventory/${selectedStoreId}/pull`
+        `/api/sync/inventory/${selectedStoreId}`
       );
       const result = await res.json();
 
@@ -199,7 +199,7 @@ export default function OverviewSection() {
 
   const quickActions = [
     { title: "Agregar Tienda", icon: Store, onClick: handleAddStore },
-    { title: "Forzar Sincronización", icon: RefreshCw, onClick: handleForceSyncClick },
+    { title: "Sincronización manual", icon: RefreshCw, onClick: handleForceSyncClick },
     { title: "Ver Reportes", icon: FileText, onClick: handleViewReports },
     { title: "Configuración", icon: Settings, onClick: handleSettings },
   ];
@@ -255,13 +255,23 @@ export default function OverviewSection() {
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'completed':
+      case 'success':
         return {
           icon: CheckCircle2,
           color: 'text-green-600',
           bgColor: 'bg-green-500/10',
           label: 'Completado'
         };
+      case 'partial':
+      case 'completed_with_errors':
+        return {
+          icon: AlertCircle,
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-500/10',
+          label: 'Parcial'
+        };
       case 'failed':
+      case 'error':
         return {
           icon: AlertCircle,
           color: 'text-red-600',
@@ -269,11 +279,12 @@ export default function OverviewSection() {
           label: 'Fallido'
         };
       case 'pending':
+      case 'running':
         return {
           icon: Clock,
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-500/10',
-          label: 'Pendiente'
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-500/10',
+          label: 'En progreso'
         };
       default:
         return {
@@ -437,7 +448,13 @@ export default function OverviewSection() {
                       </div>
                     </div>
                     <Badge
-                      variant={log.status === 'completed' ? 'default' : 'destructive'}
+                      variant={
+                        log.status === 'completed' || log.status === 'success'
+                          ? 'default'
+                          : log.status === 'partial' || log.status === 'completed_with_errors'
+                          ? 'secondary'
+                          : 'destructive'
+                      }
                       className="ml-2 flex-shrink-0"
                     >
                       {statusInfo.label}
@@ -516,9 +533,9 @@ export default function OverviewSection() {
       <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Forzar Sincronización</DialogTitle>
+            <DialogTitle>Sincronización manual</DialogTitle>
             <DialogDescription>
-              Selecciona una tienda para iniciar una sincronización manual desde Contífico
+              Selecciona una tienda para iniciar una sincronización manual de inventario
             </DialogDescription>
           </DialogHeader>
 
