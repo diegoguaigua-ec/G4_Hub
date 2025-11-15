@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Store,
   RefreshCw,
-  FileText,
+  Plug,
   Check,
   BarChart,
   Settings,
@@ -240,18 +240,18 @@ export default function OverviewSection() {
     }
   };
 
-  const handleViewReports = () => {
-    setLocation("/dashboard/stores");
+  const handleIntegrations = () => {
+    setLocation("/dashboard/integrations");
   };
 
   const handleSettings = () => {
-    setLocation("/dashboard/integrations");
+    setLocation("/dashboard/settings");
   };
 
   const quickActions = [
     { title: "Agregar Tienda", icon: Store, onClick: handleAddStore },
     { title: "Sincronización manual", icon: RefreshCw, onClick: handleForceSyncClick },
-    { title: "Ver Reportes", icon: FileText, onClick: handleViewReports },
+    { title: "Integraciones", icon: Plug, onClick: handleIntegrations },
     { title: "Configuración", icon: Settings, onClick: handleSettings },
   ];
 
