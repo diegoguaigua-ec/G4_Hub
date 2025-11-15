@@ -2202,6 +2202,396 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========================================
+  // INVENTORY PUSH ENDPOINTS
+  // ========================================
+
+  // Get inventory push statistics
+  app.get("/api/stores/:storeId/inventory-push/stats", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Get all movements for this store
+      const allMovements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+
+      // Calculate stats
+      const now = new Date();
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const pending = allMovements.filter(m => m.status === 'pending').length;
+      const processing = allMovements.filter(m => m.status === 'processing').length;
+      const completed24h = allMovements.filter(
+        m => m.status === 'completed' && m.processedAt && new Date(m.processedAt) >= last24h
+      ).length;
+      const failed24h = allMovements.filter(
+        m => m.status === 'failed' &&
+        m.createdAt && new Date(m.createdAt) >= last24h
+      ).length;
+
+      const totalLast24h = allMovements.filter(
+        m => m.createdAt && new Date(m.createdAt) >= last24h
+      ).length;
+
+      const successRate = totalLast24h > 0
+        ? Math.round((completed24h / totalLast24h) * 100)
+        : 0;
+
+      res.json({
+        pending,
+        processing,
+        completed_24h: completed24h,
+        failed_24h: failed24h,
+        success_rate: successRate,
+      });
+    } catch (error: any) {
+      console.error("Error getting push stats:", error);
+      res.status(500).json({ message: "Failed to get stats", error: error.message });
+    }
+  });
+
+  // Get inventory push movements with filters
+  app.get("/api/stores/:storeId/inventory-push/movements", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const {
+        page = "1",
+        limit = "20",
+        status,
+        type,
+        date_from,
+        date_to
+      } = req.query;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Get all movements for this store
+      let movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+
+      // Apply filters
+      if (status && status !== 'all') {
+        movements = movements.filter(m => m.status === status);
+      }
+
+      if (type && type !== 'all') {
+        movements = movements.filter(m => m.movementType === type);
+      }
+
+      if (date_from) {
+        const from = new Date(date_from as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) >= from);
+      }
+
+      if (date_to) {
+        const to = new Date(date_to as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) <= to);
+      }
+
+      // Pagination
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+      const total = movements.length;
+
+      const paginatedMovements = movements.slice(offset, offset + limitNum);
+
+      res.json({
+        movements: paginatedMovements,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          total_pages: Math.ceil(total / limitNum),
+        },
+      });
+    } catch (error: any) {
+      console.error("Error getting movements:", error);
+      res.status(500).json({ message: "Failed to get movements", error: error.message });
+    }
+  });
+
+  // Get single movement details
+  app.get("/api/stores/:storeId/inventory-push/movements/:movementId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, movementId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+      const movement = movements.find(m => m.id === parseInt(movementId));
+
+      if (!movement) {
+        return res.status(404).json({ message: "Movement not found" });
+      }
+
+      res.json({ movement });
+    } catch (error: any) {
+      console.error("Error getting movement:", error);
+      res.status(500).json({ message: "Failed to get movement", error: error.message });
+    }
+  });
+
+  // Retry a failed movement
+  app.post("/api/stores/:storeId/inventory-push/movements/:movementId/retry", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, movementId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+      const movement = movements.find(m => m.id === parseInt(movementId));
+
+      if (!movement) {
+        return res.status(404).json({ message: "Movement not found" });
+      }
+
+      if (movement.status !== 'failed') {
+        return res.status(400).json({ message: "Only failed movements can be retried" });
+      }
+
+      // Reset movement to pending with next attempt time
+      await storage.updateMovementStatus(parseInt(movementId), 'pending');
+
+      res.json({
+        success: true,
+        message: "Movement queued for retry"
+      });
+    } catch (error: any) {
+      console.error("Error retrying movement:", error);
+      res.status(500).json({ message: "Failed to retry movement", error: error.message });
+    }
+  });
+
+  // Get unmapped SKUs
+  app.get("/api/stores/:storeId/unmapped-skus", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const { resolved = "false" } = req.query;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const unmappedSkus = await storage.getUnmappedSkusByStore(parseInt(storeId), 1000);
+
+      // Filter by resolved status
+      const filteredSkus = resolved === "true"
+        ? unmappedSkus.filter(sku => sku.resolved)
+        : unmappedSkus.filter(sku => !sku.resolved);
+
+      res.json({
+        unmapped_skus: filteredSkus,
+      });
+    } catch (error: any) {
+      console.error("Error getting unmapped SKUs:", error);
+      res.status(500).json({ message: "Failed to get unmapped SKUs", error: error.message });
+    }
+  });
+
+  // Mark unmapped SKU as resolved
+  app.patch("/api/stores/:storeId/unmapped-skus/:skuId/resolve", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, skuId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      await storage.markSkuAsResolved(parseInt(skuId));
+
+      res.json({
+        success: true,
+        message: "SKU marked as resolved"
+      });
+    } catch (error: any) {
+      console.error("Error resolving SKU:", error);
+      res.status(500).json({ message: "Failed to resolve SKU", error: error.message });
+    }
+  });
+
+  // Export movements to Excel
+  app.get("/api/stores/:storeId/inventory-push/movements/export", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const { status, type, date_from, date_to } = req.query;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Get movements with same filters
+      let movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+
+      if (status && status !== 'all') {
+        movements = movements.filter(m => m.status === status);
+      }
+
+      if (type && type !== 'all') {
+        movements = movements.filter(m => m.movementType === type);
+      }
+
+      if (date_from) {
+        const from = new Date(date_from as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) >= from);
+      }
+
+      if (date_to) {
+        const to = new Date(date_to as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) <= to);
+      }
+
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Movimientos');
+
+      // Add headers
+      worksheet.columns = [
+        { header: 'Fecha', key: 'date', width: 20 },
+        { header: 'Orden', key: 'order', width: 15 },
+        { header: 'Tipo', key: 'type', width: 15 },
+        { header: 'SKU', key: 'sku', width: 20 },
+        { header: 'Cantidad', key: 'quantity', width: 10 },
+        { header: 'Estado', key: 'status', width: 15 },
+        { header: 'Intentos', key: 'attempts', width: 10 },
+        { header: 'Error', key: 'error', width: 50 },
+      ];
+
+      // Add data
+      movements.forEach(movement => {
+        worksheet.addRow({
+          date: movement.createdAt ? new Date(movement.createdAt).toLocaleString('es-ES') : '',
+          order: movement.orderId || '',
+          type: movement.movementType === 'egreso' ? 'Egreso' : 'Ingreso',
+          sku: movement.sku,
+          quantity: movement.quantity,
+          status: movement.status,
+          attempts: `${movement.attempts}/${movement.maxAttempts}`,
+          error: movement.errorMessage || '',
+        });
+      });
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+
+      // Generate Excel file
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=movimientos-push-${store.storeName}-${new Date().toISOString().split('T')[0]}.xlsx`);
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Error exporting movements:", error);
+      res.status(500).json({ message: "Failed to export movements", error: error.message });
+    }
+  });
+
+  // Export unmapped SKUs to Excel
+  app.get("/api/stores/:storeId/unmapped-skus/export", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const unmappedSkus = await storage.getUnmappedSkusByStore(parseInt(storeId), 1000);
+
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('SKUs sin Mapear');
+
+      // Add headers
+      worksheet.columns = [
+        { header: 'SKU', key: 'sku', width: 20 },
+        { header: 'Producto', key: 'product', width: 40 },
+        { header: 'Ocurrencias', key: 'occurrences', width: 15 },
+        { header: 'Primera vez', key: 'first_seen', width: 20 },
+        { header: 'Última vez', key: 'last_seen', width: 20 },
+      ];
+
+      // Add data
+      unmappedSkus.forEach(sku => {
+        worksheet.addRow({
+          sku: sku.sku,
+          product: sku.productName || '',
+          occurrences: sku.occurrences,
+          first_seen: sku.createdAt ? new Date(sku.createdAt).toLocaleString('es-ES') : '',
+          last_seen: sku.lastSeenAt ? new Date(sku.lastSeenAt).toLocaleString('es-ES') : '',
+        });
+      });
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+
+      // Generate Excel file
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=skus-sin-mapear-${store.storeName}-${new Date().toISOString().split('T')[0]}.xlsx`);
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Error exporting unmapped SKUs:", error);
+      res.status(500).json({ message: "Failed to export unmapped SKUs", error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
