@@ -116,7 +116,12 @@ router.post("/shopify/:storeId", async (req: Request, res: Response) => {
     const { storeId } = req.params;
     const topic = req.headers["x-shopify-topic"] as string;
 
-    console.log(`[Webhook][Shopify] Recibido evento: ${topic} para tienda ${storeId}`);
+    console.log(`[Webhook][Shopify] 🔔 Recibido evento: ${topic} para tienda ${storeId}`);
+    console.log(`[Webhook][Shopify] Headers:`, {
+      topic: req.headers["x-shopify-topic"],
+      shop: req.headers["x-shopify-shop-domain"],
+      hmac: req.headers["x-shopify-hmac-sha256"] ? "presente" : "ausente"
+    });
 
     // Validar que sea un evento soportado
     const supportedEvents = ["orders/paid", "orders/cancelled", "refunds/create"];
@@ -135,12 +140,17 @@ router.post("/shopify/:storeId", async (req: Request, res: Response) => {
     // Verificar HMAC
     const apiSecret = (store.apiCredentials as any)?.api_secret;
     if (!apiSecret) {
-      console.error(`[Webhook][Shopify] API Secret no configurado para tienda ${storeId}`);
-      return res.status(400).json({ error: "API Secret not configured" });
+      console.error(`[Webhook][Shopify] ⚠️ API Secret no configurado para tienda ${storeId}`);
+      console.error(`[Webhook][Shopify] ⚠️ Credenciales actuales:`, Object.keys(store.apiCredentials || {}));
+      console.error(`[Webhook][Shopify] ⚠️ Se requiere api_secret para validar webhooks de Shopify`);
+      return res.status(400).json({
+        error: "API Secret not configured",
+        hint: "Add api_secret to store credentials"
+      });
     }
 
     if (!verifyShopifyHMAC(req, apiSecret)) {
-      console.error(`[Webhook][Shopify] HMAC inválido para tienda ${storeId}`);
+      console.error(`[Webhook][Shopify] ❌ HMAC inválido para tienda ${storeId}`);
       return res.status(401).json({ error: "Invalid HMAC signature" });
     }
 

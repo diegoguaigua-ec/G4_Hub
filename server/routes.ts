@@ -557,6 +557,60 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update store API secret (for Shopify webhooks)
+  app.patch("/api/stores/:storeId/api-secret", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const { api_secret } = req.body;
+
+      if (!api_secret) {
+        return res.status(400).json({
+          message: "api_secret is required"
+        });
+      }
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "API secret is only needed for Shopify stores"
+        });
+      }
+
+      // Actualizar credenciales agregando api_secret
+      const updatedCredentials = {
+        ...store.apiCredentials,
+        api_secret: api_secret
+      };
+
+      await storage.updateStore(parseInt(storeId), {
+        apiCredentials: updatedCredentials
+      });
+
+      console.log(`[Store] API Secret actualizado para tienda ${storeId}`);
+
+      res.json({
+        success: true,
+        message: "API Secret updated successfully",
+        credentials: Object.keys(updatedCredentials)
+      });
+    } catch (error: any) {
+      console.error("Error updating API secret:", error);
+      res.status(500).json({
+        message: "Failed to update API secret",
+        error: error.message
+      });
+    }
+  });
+
   // ============================================
   // INTEGRATION ENDPOINTS
   // ============================================
