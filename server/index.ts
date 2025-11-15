@@ -5,6 +5,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { scheduler } from "./scheduler";
+import { inventoryPushWorker } from "./workers/inventoryPushWorker";
 import { runMigrations } from "./migrate";
 
 // Validate critical environment variables before starting the app
@@ -44,6 +45,17 @@ function validateEnv() {
 validateEnv();
 
 const app = express();
+
+// Capture raw body for webhook signature validation
+app.use(
+  "/api/webhooks",
+  express.json({
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  }),
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -115,5 +127,9 @@ app.use((req, res, next) => {
     // Start scheduler for automated syncs
     scheduler.start();
     log('Scheduler started for automated syncs');
+
+    // Start inventory push worker
+    inventoryPushWorker.start();
+    log('Inventory push worker started');
   });
 })();

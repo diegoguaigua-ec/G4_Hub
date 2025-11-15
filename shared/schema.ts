@@ -237,6 +237,90 @@ export const notifications = pgTable(
   ],
 );
 
+// Inventory Movements Queue - for push inventory (stores → Contífico)
+export const inventoryMovementsQueue = pgTable(
+  "inventory_movements_queue",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: integer("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    storeId: integer("store_id")
+      .references(() => stores.id, { onDelete: "cascade" })
+      .notNull(),
+    integrationId: integer("integration_id")
+      .references(() => integrations.id, { onDelete: "cascade" })
+      .notNull(),
+    movementType: varchar("movement_type", { length: 20 }).notNull(), // 'egreso' | 'ingreso'
+    sku: varchar("sku", { length: 255 }).notNull(),
+    quantity: integer("quantity").notNull(),
+    orderId: varchar("order_id", { length: 255 }), // Store order ID for reference
+    eventType: varchar("event_type", { length: 50 }).notNull(), // 'order_paid', 'order_cancelled', etc.
+    status: varchar("status", { length: 20 }).notNull().default("pending"), // 'pending', 'processing', 'completed', 'failed'
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    lastAttemptAt: timestamp("last_attempt_at"),
+    nextAttemptAt: timestamp("next_attempt_at"),
+    errorMessage: text("error_message"),
+    metadata: jsonb("metadata").default({}), // Store webhook payload, line items, etc.
+    createdAt: timestamp("created_at").defaultNow(),
+    processedAt: timestamp("processed_at"),
+  },
+  (table) => [
+    index("idx_inventory_movements_tenant").on(table.tenantId),
+    index("idx_inventory_movements_store").on(table.storeId),
+    index("idx_inventory_movements_status").on(table.status),
+    index("idx_inventory_movements_next_attempt").on(table.nextAttemptAt),
+    index("idx_inventory_movements_created").on(table.createdAt),
+  ],
+);
+
+// Unmapped SKUs - products that exist in stores but not in Contífico
+export const unmappedSkus = pgTable(
+  "unmapped_skus",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: integer("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    storeId: integer("store_id")
+      .references(() => stores.id, { onDelete: "cascade" })
+      .notNull(),
+    sku: varchar("sku", { length: 255 }).notNull(),
+    productName: varchar("product_name", { length: 500 }),
+    lastSeenAt: timestamp("last_seen_at").defaultNow(),
+    occurrences: integer("occurrences").notNull().default(1),
+    resolved: boolean("resolved").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_unmapped_skus_tenant").on(table.tenantId),
+    index("idx_unmapped_skus_store").on(table.storeId),
+    index("idx_unmapped_skus_resolved").on(table.resolved),
+    unique("uq_unmapped_skus_store_sku").on(table.storeId, table.sku),
+  ],
+);
+
+// Sync Locks - prevent concurrent sync operations
+export const syncLocks = pgTable(
+  "sync_locks",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    storeId: integer("store_id")
+      .references(() => stores.id, { onDelete: "cascade" })
+      .notNull()
+      .unique(),
+    lockType: varchar("lock_type", { length: 20 }).notNull(), // 'pull', 'push'
+    lockedAt: timestamp("locked_at").defaultNow(),
+    expiresAt: timestamp("expires_at").notNull(),
+    processId: varchar("process_id", { length: 100 }), // For debugging which process holds the lock
+  },
+  (table) => [
+    index("idx_sync_locks_store").on(table.storeId),
+    index("idx_sync_locks_expires").on(table.expiresAt),
+  ],
+);
+
 // Relations
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
@@ -331,6 +415,42 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
   store: one(stores, {
     fields: [notifications.storeId],
+    references: [stores.id],
+  }),
+}));
+
+export const inventoryMovementsQueueRelations = relations(
+  inventoryMovementsQueue,
+  ({ one }) => ({
+    tenant: one(tenants, {
+      fields: [inventoryMovementsQueue.tenantId],
+      references: [tenants.id],
+    }),
+    store: one(stores, {
+      fields: [inventoryMovementsQueue.storeId],
+      references: [stores.id],
+    }),
+    integration: one(integrations, {
+      fields: [inventoryMovementsQueue.integrationId],
+      references: [integrations.id],
+    }),
+  }),
+);
+
+export const unmappedSkusRelations = relations(unmappedSkus, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [unmappedSkus.tenantId],
+    references: [tenants.id],
+  }),
+  store: one(stores, {
+    fields: [unmappedSkus.storeId],
+    references: [stores.id],
+  }),
+}));
+
+export const syncLocksRelations = relations(syncLocks, ({ one }) => ({
+  store: one(stores, {
+    fields: [syncLocks.storeId],
     references: [stores.id],
   }),
 }));
@@ -558,6 +678,34 @@ export const insertNotificationSchema = createInsertSchema(notifications, {
   createdAt: true,
 });
 
+export const insertInventoryMovementSchema = createInsertSchema(
+  inventoryMovementsQueue,
+  {
+    createdAt: () => z.date().optional(),
+    lastAttemptAt: () => z.date().optional(),
+    nextAttemptAt: () => z.date().optional(),
+    processedAt: () => z.date().optional(),
+  },
+).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertUnmappedSkuSchema = createInsertSchema(unmappedSkus, {
+  createdAt: () => z.date().optional(),
+  lastSeenAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertSyncLockSchema = createInsertSchema(syncLocks, {
+  lockedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  lockedAt: true,
+});
+
 // Types
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -568,6 +716,11 @@ export type InsertStoreIntegration = z.infer<
   typeof insertStoreIntegrationSchema
 >;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type InsertInventoryMovement = z.infer<
+  typeof insertInventoryMovementSchema
+>;
+export type InsertUnmappedSku = z.infer<typeof insertUnmappedSkuSchema>;
+export type InsertSyncLock = z.infer<typeof insertSyncLockSchema>;
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -577,3 +730,6 @@ export type SyncLog = typeof syncLogs.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;
 export type StoreIntegration = typeof storeIntegrations.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
+export type InventoryMovement = typeof inventoryMovementsQueue.$inferSelect;
+export type UnmappedSku = typeof unmappedSkus.$inferSelect;
+export type SyncLock = typeof syncLocks.$inferSelect;

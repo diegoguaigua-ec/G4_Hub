@@ -59,8 +59,22 @@ export class SyncService {
     // ✅ Array para almacenar items a guardar
     const itemsToSave: Array<any> = [];
     let syncLogId: number | null = null;
+    let lockAcquired = false;
 
     try {
+      // 0. Adquirir lock para prevenir conflictos con Push operations
+      const lockDuration = 5 * 60 * 1000; // 5 minutos
+      const processId = `pull-sync-${storeId}-${Date.now()}`;
+
+      const lock = await storage.acquireLock(storeId, 'pull', processId, lockDuration);
+
+      if (!lock) {
+        throw new Error(`No se pudo adquirir lock para tienda ${storeId}. Otra operación de sincronización está en progreso.`);
+      }
+
+      lockAcquired = true;
+      console.log(`[Sync] ✅ Lock adquirido para tienda ${storeId}`);
+
       // 1. Obtener la tienda y verificar que existe
       const store = await storage.getStore(storeId);
       if (!store) {
@@ -526,6 +540,16 @@ export class SyncService {
       }
 
       throw error;
+    } finally {
+      // Liberar lock si fue adquirido
+      if (lockAcquired) {
+        try {
+          await storage.releaseLock(storeId);
+          console.log(`[Sync] ✅ Lock liberado para tienda ${storeId}`);
+        } catch (unlockError) {
+          console.error(`[Sync] Error liberando lock:`, unlockError);
+        }
+      }
     }
   }
 

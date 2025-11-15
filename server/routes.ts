@@ -15,6 +15,7 @@ import { ShopifyConnector } from "./connectors/ShopifyConnector";
 import { ContificoConnector } from './connectors/ContificoConnector';
 import { SyncService } from './services/SyncService';
 import { ZodError } from "zod";
+import webhookRoutes from "./routes/webhooks";
 
 // Helper function to get plan limits
 function getPlanLimits(planType: string) {
@@ -42,6 +43,9 @@ function getPlanLimits(planType: string) {
 export async function registerRoutes(app: Express): Promise<Server> {
   // Sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
+
+  // Register webhook routes (before authentication middleware)
+  app.use("/api/webhooks", webhookRoutes);
 
   // Tenant registration endpoint
   app.post("/api/register-tenant", async (req, res) => {
