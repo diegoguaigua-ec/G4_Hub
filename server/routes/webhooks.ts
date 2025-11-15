@@ -355,4 +355,106 @@ router.get("/health", (req: Request, res: Response) => {
   });
 });
 
+/**
+ * Endpoint de prueba para Shopify (SOLO DESARROLLO - sin validación HMAC)
+ * Permite probar el flujo de webhooks sin configurar Shopify
+ */
+router.post("/shopify/:storeId/test", async (req: Request, res: Response) => {
+  try {
+    const { storeId } = req.params;
+    const topic = "orders/paid"; // Siempre simula orden pagada
+
+    console.log(`[Webhook][Test] 🧪 Prueba de webhook para tienda ${storeId}`);
+
+    // Obtener la tienda
+    const store = await storage.getStore(parseInt(storeId));
+    if (!store) {
+      console.error(`[Webhook][Test] Tienda ${storeId} no encontrada`);
+      return res.status(404).json({ error: "Store not found" });
+    }
+
+    // Obtener integración de Contífico
+    const storeIntegrations = await storage.getStoreIntegrations(store.id);
+    const contificoIntegration = storeIntegrations.find(
+      (si) => si.integration?.integrationType === "contifico",
+    );
+
+    if (!contificoIntegration) {
+      console.error(
+        `[Webhook][Test] No se encontró integración de Contífico para tienda ${storeId}`,
+      );
+      return res
+        .status(400)
+        .json({ error: "Contífico integration not configured" });
+    }
+
+    // Usar payload del request o usar uno por defecto
+    const payload = req.body.line_items
+      ? req.body
+      : {
+          id: Date.now(),
+          order_number: 9999,
+          name: "#TEST-9999",
+          email: "test@example.com",
+          line_items: [
+            {
+              id: 111111,
+              variant_id: 222222,
+              sku: "TEST-SKU",
+              name: "Producto de Prueba",
+              title: "Producto de Prueba",
+              quantity: 1,
+            },
+          ],
+        };
+
+    const orderId = payload.id?.toString();
+
+    // Extraer line items
+    const lineItems = extractShopifyLineItems(payload);
+
+    if (lineItems.length === 0) {
+      console.log(`[Webhook][Test] No se encontraron items con SKU`);
+      return res
+        .status(200)
+        .json({ message: "No items with SKU found, ignored" });
+    }
+
+    // Crear datos del evento
+    const eventData: WebhookEventData = {
+      storeId: store.id,
+      integrationId: contificoIntegration.integrationId,
+      tenantId: store.tenantId,
+      orderId,
+      eventType: topic,
+      lineItems,
+      metadata: {
+        shopifyOrderNumber: payload.order_number,
+        shopifyOrderName: payload.name,
+        customerEmail: payload.email,
+        testMode: true,
+      },
+    };
+
+    // Encolar movimientos
+    const queuedCount =
+      await InventoryPushService.queueMovementsFromWebhook(eventData);
+
+    console.log(
+      `[Webhook][Test] ✅ ${queuedCount} movimientos encolados para orden de prueba ${orderId}`,
+    );
+
+    return res.status(200).json({
+      success: true,
+      queued: queuedCount,
+      orderId,
+      message: "Test webhook processed successfully",
+      lineItems,
+    });
+  } catch (error: any) {
+    console.error(`[Webhook][Test] Error procesando webhook de prueba:`, error.message);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
