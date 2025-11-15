@@ -41,6 +41,25 @@ function getPlanLimits(planType: string) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint - responds immediately for deployment health checks
+  // Must be before authentication middleware but should not interfere with SPA root
+  app.get("/health", (req, res) => {
+    res.status(200).json({ 
+      status: "healthy", 
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString() 
+    });
+  });
+
+  // API health check endpoint (alternative path for monitoring)
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ 
+      status: "ok", 
+      service: "G4 Hub API",
+      timestamp: new Date().toISOString() 
+    });
+  });
+
   // Sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
 
