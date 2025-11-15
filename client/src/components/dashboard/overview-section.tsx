@@ -17,7 +17,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Store as StoreType } from "@shared/schema";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { useLocation } from "wouter";
@@ -36,7 +36,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -76,6 +75,7 @@ interface SyncLogsResponse {
 export default function OverviewSection() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -85,6 +85,27 @@ export default function OverviewSection() {
     {
       queryKey: ["/api/stores"],
     },
+  );
+
+  // Fetch store integrations when a store is selected
+  const { data: integrationsData } = useQuery({
+    queryKey: [`/api/stores/${selectedStoreId}/integrations`],
+    queryFn: async () => {
+      if (!selectedStoreId) return null;
+      const res = await fetch(`/api/stores/${selectedStoreId}/integrations`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Error al cargar integraciones");
+      return res.json();
+    },
+    enabled: !!selectedStoreId,
+  });
+
+  // Find Contífico integration
+  const contificoIntegration = integrationsData?.find(
+    (integration: any) =>
+      integration.integration?.name?.toLowerCase().includes("contífico") ||
+      integration.integration?.name?.toLowerCase().includes("contifico")
   );
 
   // Fetch sync stats
@@ -163,17 +184,47 @@ export default function OverviewSection() {
       return;
     }
 
+    if (!contificoIntegration) {
+      toast({
+        title: "Sin integración",
+        description: "No se encontró integración de Contífico para esta tienda",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSyncing(true);
     try {
-      const res = await apiRequest(
-        "POST",
-        `/api/sync/inventory/${selectedStoreId}`
+      const res = await fetch(
+        `/api/sync/pull/${selectedStoreId}/${contificoIntegration.integrationId}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            dryRun: false,
+            limit: 1000,
+          }),
+        }
       );
-      const result = await res.json();
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al sincronizar");
+      }
+
+      const data = await res.json();
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/sync/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sync/logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
 
       toast({
-        title: "Sincronización iniciada",
-        description: `La sincronización se ha iniciado correctamente para ${stores.find(s => s.id === parseInt(selectedStoreId))?.storeName}`,
+        title: "Sincronización completada",
+        description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
       });
 
       setSyncDialogOpen(false);
