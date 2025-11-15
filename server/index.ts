@@ -124,12 +124,22 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
 
-    // Start scheduler for automated syncs
-    scheduler.start();
-    log('Scheduler started for automated syncs');
+    // Background workers are only compatible with Reserved VM deployments
+    // For Autoscale deployments, set ENABLE_BACKGROUND_WORKERS=false or remove the env var
+    // For Reserved VM deployments, set ENABLE_BACKGROUND_WORKERS=true
+    const enableBackgroundWorkers = process.env.NODE_ENV === 'development' 
+      || process.env.ENABLE_BACKGROUND_WORKERS === 'true';
 
-    // Start inventory push worker
-    inventoryPushWorker.start();
-    log('Inventory push worker started');
+    if (enableBackgroundWorkers) {
+      // Start scheduler for automated syncs
+      scheduler.start();
+      log('Scheduler started for automated syncs');
+
+      // Start inventory push worker
+      inventoryPushWorker.start();
+      log('Inventory push worker started');
+    } else {
+      log('Background workers disabled (Autoscale mode). Set ENABLE_BACKGROUND_WORKERS=true for Reserved VM deployments.');
+    }
   });
 })();

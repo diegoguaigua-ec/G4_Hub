@@ -133,6 +133,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "Unauthorized: No tenant associated with user" });
+      }
+
       // Get tenant to check plan limits
       const tenant = await storage.getTenant(user.tenantId);
       const planLimits = getPlanLimits(tenant.planType);
@@ -1529,6 +1533,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "Unauthorized: No tenant associated with user" });
+      }
+
       // Get tenant to check plan limits
       const tenant = await storage.getTenant(user.tenantId);
       const planLimits = getPlanLimits(tenant.planType);
@@ -1708,6 +1716,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { storeId, integrationId } = req.params;
       const { dryRun = false, limit = 1000 } = req.body;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       // Get tenant to check plan limits
       const tenant = await storage.getTenant(user.tenantId);
       const planLimits = getPlanLimits(tenant.planType);
@@ -1842,6 +1854,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         offset = '0' 
       } = req.query;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       console.log('[API] Obteniendo logs de sincronización', { 
         tenantId: user.tenantId, 
         storeId, 
@@ -1969,6 +1985,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { days = '7' } = req.query;
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
 
       console.log('[API] Obteniendo estadísticas de sincronización', { 
         tenantId: user.tenantId,
@@ -2222,6 +2242,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const limit = parseInt(req.query.limit as string) || 50;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       const notifications = await storage.getNotificationsByTenant(
         user.tenantId,
         limit
@@ -2254,6 +2278,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const { id } = req.params;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       // Verify notification belongs to tenant before updating
       const notifications = await storage.getNotificationsByTenant(
         user.tenantId,
@@ -2284,6 +2312,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const user = (req as AuthenticatedRequest).user;
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       await storage.markAllNotificationsAsRead(user.tenantId);
       res.json({ message: "Todas las notificaciones marcadas como leídas" });
     } catch (error: any) {
@@ -2304,6 +2337,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { id } = req.params;
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
 
       // Verify notification belongs to tenant before deleting
       const notifications = await storage.getNotificationsByTenant(
