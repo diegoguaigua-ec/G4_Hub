@@ -970,9 +970,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stockContifico = null;
           } else if (syncItem.status === 'success' || syncItem.status === 'skipped') {
             // Sync was successful or skipped (no changes)
-            stockContifico = syncItem.stockAfter;
+            stockContifico = Math.floor(Number(syncItem.stockAfter) || 0);
 
-            if (storeProduct.stockQuantity === syncItem.stockAfter) {
+            // Compare as integers to avoid float comparison issues
+            const storeStock = Math.floor(Number(storeProduct.stockQuantity) || 0);
+            if (storeStock === stockContifico) {
               syncStatus = 'synced';
             } else {
               syncStatus = 'different';
@@ -983,7 +985,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           sku: storeProduct.sku,
           name: storeProduct.name,
-          stockStore: storeProduct.stockQuantity,
+          stockStore: Math.floor(Number(storeProduct.stockQuantity) || 0),
           stockContifico: stockContifico,
           status: syncStatus,
           lastSync: lastSync,
