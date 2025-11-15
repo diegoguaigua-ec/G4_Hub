@@ -981,6 +981,7 @@ export class ShopifyConnector extends BaseConnector {
           }
 
           // Crear nuevo webhook
+          console.log(`[Shopify] Creando webhook ${topic} en ${this.apiUrl}/webhooks.json`);
           const response = await axios.post(
             `${this.apiUrl}/webhooks.json`,
             {
@@ -993,6 +994,8 @@ export class ShopifyConnector extends BaseConnector {
             { headers: this.headers }
           );
 
+          console.log(`[Shopify] Status: ${response.status}, Data:`, JSON.stringify(response.data, null, 2));
+
           if (response.data.webhook) {
             console.log(`[Shopify] ✅ Webhook creado: ${topic} → ID ${response.data.webhook.id}`);
             createdWebhooks.push({
@@ -1000,11 +1003,17 @@ export class ShopifyConnector extends BaseConnector {
               topic: topic,
               address: callbackUrl
             });
+          } else {
+            console.error(`[Shopify] ⚠️ Respuesta sin webhook para ${topic}. Respuesta completa:`, response.data);
+            errors.push({
+              topic: topic,
+              error: 'No webhook object in response'
+            });
           }
 
         } catch (error: any) {
-          const errorMsg = error.response?.data?.errors || error.message;
-          console.error(`[Shopify] ❌ Error creando webhook ${topic}:`, errorMsg);
+          const errorMsg = error.response?.data?.errors || error.response?.data || error.message;
+          console.error(`[Shopify] ❌ Error creando webhook ${topic}:`, JSON.stringify(errorMsg, null, 2));
           errors.push({
             topic: topic,
             error: errorMsg
