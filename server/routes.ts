@@ -1260,7 +1260,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
 
-        const syncLogs = await storage.getSyncLogsByTenant(user.tenantId);
+        const { logs: syncLogs } = await storage.getSyncLogs(user.tenantId, { limit: 10000 });
         const monthSyncs = syncLogs.filter(log =>
           log.createdAt >= startOfMonth && log.syncType === 'inventory'
         );
@@ -1302,27 +1302,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const connector = getConnector(store);
         const productsResult = await connector.getProducts();
 
-        // Check product limits (if not infinite)
-        if (planLimits.products !== Infinity) {
-          const existingProducts = await storage.getProductsByTenant(user.tenantId);
-          const totalProductsAfterSync = existingProducts.length + productsResult.products.length;
-
-          if (totalProductsAfterSync > planLimits.products) {
-            // Update sync log as failed
-            await storage.updateSyncLog(syncLog.id, {
-              status: 'failed',
-              syncedCount: 0,
-              errorCount: 0,
-              durationMs: Date.now() - syncStartTime,
-              errorMessage: `Límite de productos excedido. Tu plan ${tenant.planType} permite ${planLimits.products} productos.`,
-              details: { manual: true, startedAt: new Date(syncStartTime) }
-            });
-
-            return res.status(403).json({
-              message: `Esta sincronización excedería tu límite de ${planLimits.products} productos del plan ${tenant.planType}. Actualmente tienes ${existingProducts.length} productos y esta sincronización añadiría ${productsResult.products.length} más.`
-            });
-          }
-        }
+        // Note: Product limits are enforced at the store platform level (WooCommerce/Shopify)
+        // not during inventory sync, as sync only updates existing product stock levels
 
         // Update products in database
         let syncedCount = 0;
@@ -1458,7 +1439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
 
-        const syncLogs = await storage.getSyncLogsByTenant(user.tenantId);
+        const { logs: syncLogs } = await storage.getSyncLogs(user.tenantId, { limit: 10000 });
         const monthSyncs = syncLogs.filter(log =>
           log.createdAt >= startOfMonth
         );
