@@ -385,6 +385,9 @@ router.post("/shopify/:storeId/test", async (req: Request, res: Response) => {
 
     // Obtener integración de Contífico
     const storeIntegrations = await storage.getStoreIntegrations(store.id);
+    console.log(`[Webhook][Test] Integraciones encontradas:`, storeIntegrations.length);
+    console.log(`[Webhook][Test] Estructura:`, JSON.stringify(storeIntegrations, null, 2));
+
     const contificoIntegration = storeIntegrations.find(
       (si) => si.integration?.integrationType === "contifico",
     );
@@ -393,6 +396,12 @@ router.post("/shopify/:storeId/test", async (req: Request, res: Response) => {
       console.error(
         `[Webhook][Test] No se encontró integración de Contífico para tienda ${storeId}`,
       );
+      console.error(`[Webhook][Test] Integraciones disponibles:`, storeIntegrations.map(si => ({
+        id: si.id,
+        integrationId: si.integrationId,
+        integrationType: si.integration?.integrationType,
+        hasIntegration: !!si.integration
+      })));
       return res
         .status(400)
         .json({ error: "Contífico integration not configured" });
