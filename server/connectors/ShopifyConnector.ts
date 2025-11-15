@@ -907,4 +907,170 @@ export class ShopifyConnector extends BaseConnector {
       return 0;
     }
   }
+
+  /**
+   * Registra webhooks automáticamente en Shopify
+   * @param callbackUrl - URL pública donde Shopify enviará los webhooks
+   * @returns Array de webhooks creados con sus IDs
+   */
+  async registerWebhooks(callbackUrl: string): Promise<{
+    success: boolean;
+    webhooks: Array<{ id: number; topic: string; address: string }>;
+    errors: Array<{ topic: string; error: string }>;
+  }> {
+    const webhookTopics = [
+      'orders/paid',
+      'orders/cancelled',
+      'refunds/create'
+    ];
+
+    const createdWebhooks: Array<{ id: number; topic: string; address: string }> = [];
+    const errors: Array<{ topic: string; error: string }> = [];
+
+    console.log(`[Shopify] Registrando webhooks para ${this.shopDomain}`);
+    console.log(`[Shopify] URL de callback: ${callbackUrl}`);
+
+    try {
+      // Primero, obtener webhooks existentes para evitar duplicados
+      const existingWebhooksResponse = await axios.get(
+        `${this.apiUrl}/webhooks.json`,
+        { headers: this.headers }
+      );
+
+      const existingWebhooks = existingWebhooksResponse.data.webhooks || [];
+      console.log(`[Shopify] Webhooks existentes: ${existingWebhooks.length}`);
+
+      for (const topic of webhookTopics) {
+        try {
+          // Verificar si ya existe un webhook para este topic y URL
+          const existingWebhook = existingWebhooks.find(
+            (wh: any) => wh.topic === topic && wh.address === callbackUrl
+          );
+
+          if (existingWebhook) {
+            console.log(`[Shopify] ✓ Webhook ya existe: ${topic} → ID ${existingWebhook.id}`);
+            createdWebhooks.push({
+              id: existingWebhook.id,
+              topic: topic,
+              address: callbackUrl
+            });
+            continue;
+          }
+
+          // Crear nuevo webhook
+          const response = await axios.post(
+            `${this.apiUrl}/webhooks.json`,
+            {
+              webhook: {
+                topic: topic,
+                address: callbackUrl,
+                format: 'json'
+              }
+            },
+            { headers: this.headers }
+          );
+
+          if (response.data.webhook) {
+            console.log(`[Shopify] ✅ Webhook creado: ${topic} → ID ${response.data.webhook.id}`);
+            createdWebhooks.push({
+              id: response.data.webhook.id,
+              topic: topic,
+              address: callbackUrl
+            });
+          }
+
+        } catch (error: any) {
+          const errorMsg = error.response?.data?.errors || error.message;
+          console.error(`[Shopify] ❌ Error creando webhook ${topic}:`, errorMsg);
+          errors.push({
+            topic: topic,
+            error: errorMsg
+          });
+        }
+      }
+
+      const success = createdWebhooks.length > 0 && errors.length === 0;
+      console.log(`[Shopify] Resultado: ${createdWebhooks.length} webhooks configurados, ${errors.length} errores`);
+
+      return {
+        success,
+        webhooks: createdWebhooks,
+        errors
+      };
+
+    } catch (error: any) {
+      console.error(`[Shopify] Error al registrar webhooks:`, error.message);
+      return {
+        success: false,
+        webhooks: [],
+        errors: [{ topic: 'general', error: error.message }]
+      };
+    }
+  }
+
+  /**
+   * Elimina webhooks de Shopify
+   * @param webhookIds - Array de IDs de webhooks a eliminar
+   * @returns Cantidad de webhooks eliminados exitosamente
+   */
+  async deleteWebhooks(webhookIds: number[]): Promise<{
+    success: boolean;
+    deleted: number;
+    errors: Array<{ id: number; error: string }>;
+  }> {
+    const errors: Array<{ id: number; error: string }> = [];
+    let deleted = 0;
+
+    console.log(`[Shopify] Eliminando ${webhookIds.length} webhooks`);
+
+    for (const webhookId of webhookIds) {
+      try {
+        await axios.delete(
+          `${this.apiUrl}/webhooks/${webhookId}.json`,
+          { headers: this.headers }
+        );
+        deleted++;
+        console.log(`[Shopify] ✅ Webhook ${webhookId} eliminado`);
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.errors || error.message;
+        console.error(`[Shopify] ❌ Error eliminando webhook ${webhookId}:`, errorMsg);
+        errors.push({ id: webhookId, error: errorMsg });
+      }
+    }
+
+    return {
+      success: deleted > 0 && errors.length === 0,
+      deleted,
+      errors
+    };
+  }
+
+  /**
+   * Obtiene todos los webhooks configurados en Shopify
+   * @returns Lista de webhooks con su información
+   */
+  async getWebhooks(): Promise<Array<{
+    id: number;
+    topic: string;
+    address: string;
+    createdAt: string;
+  }>> {
+    try {
+      const response = await axios.get(
+        `${this.apiUrl}/webhooks.json`,
+        { headers: this.headers }
+      );
+
+      const webhooks = response.data.webhooks || [];
+      return webhooks.map((wh: any) => ({
+        id: wh.id,
+        topic: wh.topic,
+        address: wh.address,
+        createdAt: wh.created_at
+      }));
+    } catch (error: any) {
+      console.error(`[Shopify] Error obteniendo webhooks:`, error.message);
+      return [];
+    }
+  }
 }

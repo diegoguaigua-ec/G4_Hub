@@ -178,10 +178,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
             productsCount: connectionResult.products_count || 0
           });
-          
+
+          // Configurar webhooks automáticamente para Shopify
+          let webhookResult = null;
+          if (store.platform === 'shopify') {
+            try {
+              const shopifyConnector = connector as any; // ShopifyConnector
+              const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
+                ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+                : req.protocol + '://' + req.get('host');
+
+              const webhookUrl = `${publicUrl}/api/webhooks/shopify/${store.id}`;
+
+              console.log(`[Store] Configurando webhooks automáticamente para tienda ${store.id}`);
+              webhookResult = await shopifyConnector.registerWebhooks(webhookUrl);
+
+              if (webhookResult.success) {
+                // Guardar webhook IDs en storeInfo
+                await storage.updateStore(store.id, {
+                  storeInfo: {
+                    ...updatedStore.storeInfo,
+                    webhooks: webhookResult.webhooks,
+                    webhooks_configured_at: new Date().toISOString()
+                  }
+                });
+                console.log(`[Store] ✅ Webhooks configurados exitosamente para tienda ${store.id}`);
+              } else {
+                console.log(`[Store] ⚠️ Webhooks configurados parcialmente: ${webhookResult.errors.length} errores`);
+              }
+            } catch (webhookError: any) {
+              console.error(`[Store] Error configurando webhooks:`, webhookError.message);
+              // No fallar la creación de tienda si los webhooks fallan
+            }
+          }
+
           res.status(201).json({
             store: updatedStore,
             connection: connectionResult,
+            webhooks: webhookResult,
             message: "Store connected successfully"
           });
         } else {
@@ -323,18 +357,203 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
-      
+
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
         return res.status(404).json({ message: "Store not found" });
       }
 
+      // Si es Shopify, eliminar webhooks primero
+      if (store.platform === 'shopify' && store.storeInfo?.webhooks) {
+        try {
+          const connector = getConnector(store);
+          const shopifyConnector = connector as any;
+          const webhookIds = (store.storeInfo.webhooks as any[]).map(wh => wh.id);
+
+          console.log(`[Store] Eliminando webhooks de tienda ${storeId}`);
+          await shopifyConnector.deleteWebhooks(webhookIds);
+        } catch (webhookError: any) {
+          console.error(`[Store] Error eliminando webhooks:`, webhookError.message);
+          // Continuar con la eliminación de la tienda aunque falle la eliminación de webhooks
+        }
+      }
+
       await storage.deleteStore(parseInt(storeId));
-      
+
       res.json({ message: "Store deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting store:", error);
       res.status(500).json({ message: "Failed to delete store", error: error.message });
+    }
+  });
+
+  // Configure webhooks for a Shopify store (manual)
+  app.post("/api/stores/:storeId/configure-webhooks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "Webhooks auto-configuration is only available for Shopify stores"
+        });
+      }
+
+      if (store.connectionStatus !== 'connected') {
+        return res.status(400).json({
+          message: "Store must be connected before configuring webhooks"
+        });
+      }
+
+      // Obtener URL pública
+      const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+        : req.protocol + '://' + req.get('host');
+
+      const webhookUrl = `${publicUrl}/api/webhooks/shopify/${storeId}`;
+
+      const connector = getConnector(store);
+      const shopifyConnector = connector as any;
+
+      console.log(`[Store] Configurando webhooks para tienda ${storeId}`);
+      const result = await shopifyConnector.registerWebhooks(webhookUrl);
+
+      if (result.success) {
+        // Guardar webhook IDs en storeInfo
+        await storage.updateStore(store.id, {
+          storeInfo: {
+            ...store.storeInfo,
+            webhooks: result.webhooks,
+            webhooks_configured_at: new Date().toISOString()
+          }
+        });
+
+        res.json({
+          success: true,
+          webhooks: result.webhooks,
+          message: `${result.webhooks.length} webhooks configured successfully`
+        });
+      } else {
+        res.status(207).json({
+          success: false,
+          webhooks: result.webhooks,
+          errors: result.errors,
+          message: `Webhooks configured with ${result.errors.length} errors`
+        });
+      }
+    } catch (error: any) {
+      console.error("Error configuring webhooks:", error);
+      res.status(500).json({
+        message: "Failed to configure webhooks",
+        error: error.message
+      });
+    }
+  });
+
+  // Get configured webhooks for a store
+  app.get("/api/stores/:storeId/webhooks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "Webhook information is only available for Shopify stores"
+        });
+      }
+
+      const connector = getConnector(store);
+      const shopifyConnector = connector as any;
+
+      const webhooks = await shopifyConnector.getWebhooks();
+
+      res.json({
+        webhooks,
+        configured: store.storeInfo?.webhooks || [],
+        configured_at: store.storeInfo?.webhooks_configured_at || null
+      });
+    } catch (error: any) {
+      console.error("Error getting webhooks:", error);
+      res.status(500).json({
+        message: "Failed to get webhooks",
+        error: error.message
+      });
+    }
+  });
+
+  // Delete webhooks for a store
+  app.delete("/api/stores/:storeId/webhooks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "Webhook deletion is only available for Shopify stores"
+        });
+      }
+
+      if (!store.storeInfo?.webhooks || (store.storeInfo.webhooks as any[]).length === 0) {
+        return res.status(404).json({
+          message: "No webhooks configured for this store"
+        });
+      }
+
+      const connector = getConnector(store);
+      const shopifyConnector = connector as any;
+      const webhookIds = (store.storeInfo.webhooks as any[]).map(wh => wh.id);
+
+      console.log(`[Store] Eliminando ${webhookIds.length} webhooks de tienda ${storeId}`);
+      const result = await shopifyConnector.deleteWebhooks(webhookIds);
+
+      // Limpiar webhooks de storeInfo
+      await storage.updateStore(store.id, {
+        storeInfo: {
+          ...store.storeInfo,
+          webhooks: [],
+          webhooks_deleted_at: new Date().toISOString()
+        }
+      });
+
+      res.json({
+        success: result.success,
+        deleted: result.deleted,
+        errors: result.errors,
+        message: `${result.deleted} webhooks deleted successfully`
+      });
+    } catch (error: any) {
+      console.error("Error deleting webhooks:", error);
+      res.status(500).json({
+        message: "Failed to delete webhooks",
+        error: error.message
+      });
     }
   });
 
