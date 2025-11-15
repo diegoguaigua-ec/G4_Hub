@@ -7,7 +7,7 @@ import {
   StoreInfoResult,
   StandardProduct,
 } from "./BaseConnector";
-import { AxiosRequestConfig } from "axios";
+import axios, { AxiosRequestConfig } from "axios";
 import { Store } from "@shared/schema";
 
 interface ShopifyCredentials {
@@ -154,12 +154,35 @@ interface ShopifyShop {
 export class ShopifyConnector extends BaseConnector {
   private shopifyCredentials: ShopifyCredentials;
   private apiVersion: string;
+  private shopDomain: string;
 
   constructor(store: Store) {
     super(store);
     this.validateShopifyCredentials();
     this.shopifyCredentials = store.apiCredentials as ShopifyCredentials;
     this.apiVersion = this.shopifyCredentials.api_version || "2024-10";
+
+    // Extraer shop domain del storeUrl (ej: "https://myshop.myshopify.com" → "myshop.myshopify.com")
+    try {
+      const url = new URL(this.baseUrl);
+      this.shopDomain = url.hostname;
+    } catch (error) {
+      console.warn(`[Shopify] Error parsing storeUrl: ${this.baseUrl}`);
+      this.shopDomain = this.baseUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    }
+  }
+
+  // Getter para apiUrl usado en métodos de webhooks
+  private get apiUrl(): string {
+    return `${this.baseUrl}/admin/api/${this.apiVersion}`;
+  }
+
+  // Getter para headers usado en métodos de webhooks
+  private get headers(): Record<string, string> {
+    return {
+      'X-Shopify-Access-Token': this.shopifyCredentials.access_token,
+      'Content-Type': 'application/json'
+    };
   }
 
   protected authenticateRequest(
