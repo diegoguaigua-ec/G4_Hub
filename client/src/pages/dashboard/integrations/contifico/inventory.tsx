@@ -15,6 +15,7 @@ import { useQuery } from "@tanstack/react-query";
 import { InventoryTab } from "@/components/inventory/inventory-tab";
 import { SyncTab } from "@/components/inventory/sync-tab";
 import { ConfigTab } from "@/components/inventory/config-tab";
+import { MovementsTab } from "@/components/inventory/push/movements-tab";
 
 interface Store {
   id: number;
@@ -143,9 +144,10 @@ export default function ContificoInventoryPage() {
         ) : (
           // Tabs Content
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <TabsList className="grid w-full grid-cols-3 lg:w-[500px]">
+            <TabsList className="grid w-full grid-cols-4 lg:w-[700px]">
               <TabsTrigger value="inventory">Inventario</TabsTrigger>
               <TabsTrigger value="syncs">Sincronizaciones</TabsTrigger>
+              <TabsTrigger value="movements">Movimientos</TabsTrigger>
               <TabsTrigger value="config">Configuración</TabsTrigger>
             </TabsList>
 
@@ -155,6 +157,13 @@ export default function ContificoInventoryPage() {
 
             <TabsContent value="syncs" className="space-y-4">
               <SyncTab storeId={parseInt(selectedStoreId)} />
+            </TabsContent>
+
+            <TabsContent value="movements" className="space-y-4">
+              <MovementsTab
+                storeId={parseInt(selectedStoreId)}
+                storeName={selectedStore?.storeName || ''}
+              />
             </TabsContent>
 
             <TabsContent value="config" className="space-y-4">
