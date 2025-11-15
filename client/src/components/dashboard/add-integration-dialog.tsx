@@ -107,7 +107,8 @@ export function AddIntegrationDialog({ open, onOpenChange }: AddIntegrationDialo
 
       // Crear integración
       const createRes = await apiRequest("POST", "/api/integrations", payload);
-      const integration = await createRes.json();
+      const createResult = await createRes.json();
+      const integration = createResult.integration;
 
       // Probar conexión
       const testRes = await apiRequest(
