@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Store,
   RefreshCw,
-  FileText,
+  Plug,
   Check,
   BarChart,
   Settings,
@@ -17,7 +17,7 @@ import {
   ArrowUpCircle,
   ArrowDownCircle,
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Store as StoreType } from "@shared/schema";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { useLocation } from "wouter";
@@ -36,7 +36,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
@@ -76,6 +75,7 @@ interface SyncLogsResponse {
 export default function OverviewSection() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState<string>("");
   const [isSyncing, setIsSyncing] = useState(false);
@@ -85,6 +85,27 @@ export default function OverviewSection() {
     {
       queryKey: ["/api/stores"],
     },
+  );
+
+  // Fetch store integrations when a store is selected
+  const { data: integrationsData } = useQuery({
+    queryKey: [`/api/stores/${selectedStoreId}/integrations`],
+    queryFn: async () => {
+      if (!selectedStoreId) return null;
+      const res = await fetch(`/api/stores/${selectedStoreId}/integrations`, {
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Error al cargar integraciones");
+      return res.json();
+    },
+    enabled: !!selectedStoreId,
+  });
+
+  // Find Contífico integration
+  const contificoIntegration = integrationsData?.find(
+    (integration: any) =>
+      integration.integration?.name?.toLowerCase().includes("contífico") ||
+      integration.integration?.name?.toLowerCase().includes("contifico")
   );
 
   // Fetch sync stats
@@ -163,17 +184,47 @@ export default function OverviewSection() {
       return;
     }
 
+    if (!contificoIntegration) {
+      toast({
+        title: "Sin integración",
+        description: "No se encontró integración de Contífico para esta tienda",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSyncing(true);
     try {
-      const res = await apiRequest(
-        "POST",
-        `/api/sync/inventory/${selectedStoreId}/pull`
+      const res = await fetch(
+        `/api/sync/pull/${selectedStoreId}/${contificoIntegration.integrationId}`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            dryRun: false,
+            limit: 1000,
+          }),
+        }
       );
-      const result = await res.json();
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Error al sincronizar");
+      }
+
+      const data = await res.json();
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/sync/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sync/logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
 
       toast({
-        title: "Sincronización iniciada",
-        description: `La sincronización se ha iniciado correctamente para ${stores.find(s => s.id === parseInt(selectedStoreId))?.storeName}`,
+        title: "Sincronización completada",
+        description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
       });
 
       setSyncDialogOpen(false);
@@ -189,18 +240,18 @@ export default function OverviewSection() {
     }
   };
 
-  const handleViewReports = () => {
-    setLocation("/dashboard/stores");
+  const handleIntegrations = () => {
+    setLocation("/dashboard/integrations");
   };
 
   const handleSettings = () => {
-    setLocation("/dashboard/integrations");
+    setLocation("/dashboard/settings");
   };
 
   const quickActions = [
     { title: "Agregar Tienda", icon: Store, onClick: handleAddStore },
-    { title: "Forzar Sincronización", icon: RefreshCw, onClick: handleForceSyncClick },
-    { title: "Ver Reportes", icon: FileText, onClick: handleViewReports },
+    { title: "Sincronización manual", icon: RefreshCw, onClick: handleForceSyncClick },
+    { title: "Integraciones", icon: Plug, onClick: handleIntegrations },
     { title: "Configuración", icon: Settings, onClick: handleSettings },
   ];
 
@@ -255,13 +306,23 @@ export default function OverviewSection() {
   const getStatusInfo = (status: string) => {
     switch (status) {
       case 'completed':
+      case 'success':
         return {
           icon: CheckCircle2,
           color: 'text-green-600',
           bgColor: 'bg-green-500/10',
           label: 'Completado'
         };
+      case 'partial':
+      case 'completed_with_errors':
+        return {
+          icon: AlertCircle,
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-500/10',
+          label: 'Parcial'
+        };
       case 'failed':
+      case 'error':
         return {
           icon: AlertCircle,
           color: 'text-red-600',
@@ -269,11 +330,12 @@ export default function OverviewSection() {
           label: 'Fallido'
         };
       case 'pending':
+      case 'running':
         return {
           icon: Clock,
-          color: 'text-yellow-600',
-          bgColor: 'bg-yellow-500/10',
-          label: 'Pendiente'
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-500/10',
+          label: 'En progreso'
         };
       default:
         return {
@@ -373,7 +435,7 @@ export default function OverviewSection() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setLocation("/dashboard/stores")}
+              onClick={() => setLocation("/dashboard/integrations")}
             >
               Ver Todo
             </Button>
@@ -437,7 +499,13 @@ export default function OverviewSection() {
                       </div>
                     </div>
                     <Badge
-                      variant={log.status === 'completed' ? 'default' : 'destructive'}
+                      variant={
+                        log.status === 'completed' || log.status === 'success'
+                          ? 'default'
+                          : log.status === 'partial' || log.status === 'completed_with_errors'
+                          ? 'secondary'
+                          : 'destructive'
+                      }
                       className="ml-2 flex-shrink-0"
                     >
                       {statusInfo.label}
@@ -516,9 +584,9 @@ export default function OverviewSection() {
       <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Forzar Sincronización</DialogTitle>
+            <DialogTitle>Sincronización manual</DialogTitle>
             <DialogDescription>
-              Selecciona una tienda para iniciar una sincronización manual desde Contífico
+              Selecciona una tienda para iniciar una sincronización manual de inventario
             </DialogDescription>
           </DialogHeader>
 

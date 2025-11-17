@@ -18,14 +18,15 @@ export default function Sidebar() {
   const menuItems = [
     { path: "/dashboard", label: "Resumen", icon: BarChart },
     { path: "/dashboard/stores", label: "Tiendas", icon: Store },
-    {
-      path: "/dashboard/automation",
-      label: "Automatización",
-      icon: Zap,
-      badge: "Beta",
-    },
+    // Temporalmente ocultas mientras se desarrollan
+    // {
+    //   path: "/dashboard/automation",
+    //   label: "Automatización",
+    //   icon: Zap,
+    //   badge: "Beta",
+    // },
     { path: "/dashboard/integrations", label: "Integraciones", icon: Plug },
-    { path: "/dashboard/analytics", label: "Analítica", icon: TrendingUp },
+    // { path: "/dashboard/analytics", label: "Analítica", icon: TrendingUp },
     { path: "/dashboard/settings", label: "Configuración", icon: Settings },
   ];
 

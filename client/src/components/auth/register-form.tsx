@@ -9,17 +9,17 @@ import { Loader2 } from "lucide-react";
 import { insertUserSchema } from "@shared/schema";
 
 const registerSchema = z.object({
-  tenantName: z.string().min(2, "Company name must be at least 2 characters"),
+  tenantName: z.string().min(2, "El nombre de la empresa debe tener al menos 2 caracteres"),
   subdomain: z.string()
-    .min(3, "Subdomain must be at least 3 characters")
-    .max(20, "Subdomain must be less than 20 characters")
-    .regex(/^[a-z0-9-]+$/, "Subdomain can only contain lowercase letters, numbers, and hyphens"),
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-  confirmPassword: z.string().min(8, "Password must be at least 8 characters"),
+    .min(3, "El subdominio debe tener al menos 3 caracteres")
+    .max(20, "El subdominio debe tener menos de 20 caracteres")
+    .regex(/^[a-z0-9-]+$/, "El subdominio solo puede contener letras minúsculas, números y guiones"),
+  name: z.string().min(2, "El nombre debe tener al menos 2 caracteres"),
+  email: z.string().email("Por favor ingresa un correo electrónico válido"),
+  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
+  confirmPassword: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),
 }).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
+  message: "Las contraseñas no coinciden",
   path: ["confirmPassword"],
 });
 
@@ -58,10 +58,10 @@ export default function RegisterForm() {
           name="tenantName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Company Name</FormLabel>
+              <FormLabel>Nombre de la Empresa</FormLabel>
               <FormControl>
                 <Input
-                  placeholder="Your Company Name"
+                  placeholder="Nombre de tu Empresa"
                   className="h-12"
                   data-testid="input-company-name"
                   {...field}
@@ -77,11 +77,11 @@ export default function RegisterForm() {
           name="subdomain"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Subdomain</FormLabel>
+              <FormLabel>Subdominio</FormLabel>
               <FormControl>
                 <div className="relative">
                   <Input
-                    placeholder="your-company"
+                    placeholder="tu-empresa"
                     className="h-12 pr-32"
                     data-testid="input-subdomain"
                     {...field}
@@ -102,10 +102,10 @@ export default function RegisterForm() {
             name="name"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Full Name</FormLabel>
+                <FormLabel>Nombre Completo</FormLabel>
                 <FormControl>
                   <Input
-                    placeholder="John Doe"
+                    placeholder="Juan Pérez"
                     className="h-12"
                     data-testid="input-name"
                     {...field}
@@ -121,11 +121,11 @@ export default function RegisterForm() {
             name="email"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Email</FormLabel>
+                <FormLabel>Correo Electrónico</FormLabel>
                 <FormControl>
                   <Input
                     type="email"
-                    placeholder="john@company.com"
+                    placeholder="juan@empresa.com"
                     className="h-12"
                     data-testid="input-email"
                     {...field}
@@ -143,7 +143,7 @@ export default function RegisterForm() {
             name="password"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Password</FormLabel>
+                <FormLabel>Contraseña</FormLabel>
                 <FormControl>
                   <Input
                     type="password"
@@ -163,7 +163,7 @@ export default function RegisterForm() {
             name="confirmPassword"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Confirm Password</FormLabel>
+                <FormLabel>Confirmar Contraseña</FormLabel>
                 <FormControl>
                   <Input
                     type="password"
@@ -188,21 +188,21 @@ export default function RegisterForm() {
           {registerMutation.isPending ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Creating account...
+              Creando cuenta...
             </>
           ) : (
-            "Create Account"
+            "Crear Cuenta"
           )}
         </Button>
 
         <p className="text-xs text-muted-foreground text-center">
-          By creating an account, you agree to our{" "}
+          Al crear una cuenta, aceptas nuestros{" "}
           <Button variant="link" className="p-0 h-auto text-xs text-primary">
-            Terms of Service
+            Términos de Servicio
           </Button>{" "}
-          and{" "}
+          y{" "}
           <Button variant="link" className="p-0 h-auto text-xs text-primary">
-            Privacy Policy
+            Política de Privacidad
           </Button>
         </p>
       </form>

@@ -15,10 +15,56 @@ import { ShopifyConnector } from "./connectors/ShopifyConnector";
 import { ContificoConnector } from './connectors/ContificoConnector';
 import { SyncService } from './services/SyncService';
 import { ZodError } from "zod";
+import webhookRoutes from "./routes/webhooks";
+
+// Helper function to get plan limits
+function getPlanLimits(planType: string) {
+  const plans: Record<string, { stores: number; products: number; syncs: number }> = {
+    starter: {
+      stores: 1,
+      products: 50,
+      syncs: 1000,
+    },
+    professional: {
+      stores: 3,
+      products: 500,
+      syncs: 10000,
+    },
+    enterprise: {
+      stores: Infinity,
+      products: Infinity,
+      syncs: Infinity,
+    },
+  };
+
+  return plans[planType] || plans.starter;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint - responds immediately for deployment health checks
+  // Must be before authentication middleware but should not interfere with SPA root
+  app.get("/health", (req, res) => {
+    res.status(200).json({ 
+      status: "healthy", 
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString() 
+    });
+  });
+
+  // API health check endpoint (alternative path for monitoring)
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ 
+      status: "ok", 
+      service: "G4 Hub API",
+      timestamp: new Date().toISOString() 
+    });
+  });
+
   // Sets up /api/register, /api/login, /api/logout, /api/user
   setupAuth(app);
+
+  // Register webhook routes (before authentication middleware)
+  app.use("/api/webhooks", webhookRoutes);
 
   // Tenant registration endpoint
   app.post("/api/register-tenant", async (req, res) => {
@@ -105,10 +151,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const user = (req as AuthenticatedRequest).user;
-      
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "Unauthorized: No tenant associated with user" });
+      }
+
+      // Get tenant to check plan limits
+      const tenant = await storage.getTenant(user.tenantId);
+      const planLimits = getPlanLimits(tenant.planType);
+
+      // Check if user has reached store limit
+      const existingStores = await storage.getStoresByTenant(user.tenantId);
+      if (existingStores.length >= planLimits.stores) {
+        return res.status(403).json({
+          message: `Has alcanzado el límite de ${planLimits.stores} ${planLimits.stores === 1 ? 'tienda' : 'tiendas'} de tu plan ${tenant.planType}. Por favor actualiza tu plan para añadir más tiendas.`
+        });
+      }
+
       // Validate input with Zod
       const validatedData = createStoreSchema.parse(req.body);
-      
+
       // Create store with tenant ID and initial status
       const storeData = {
         ...validatedData,
@@ -139,10 +201,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
             productsCount: connectionResult.products_count || 0
           });
-          
+
+          // Configurar webhooks automáticamente para Shopify
+          let webhookResult = null;
+          if (store.platform === 'shopify') {
+            try {
+              const shopifyConnector = connector as any; // ShopifyConnector
+              const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
+                ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+                : req.protocol + '://' + req.get('host');
+
+              const webhookUrl = `${publicUrl}/api/webhooks/shopify/${store.id}`;
+
+              console.log(`[Store] Configurando webhooks automáticamente para tienda ${store.id}`);
+              webhookResult = await shopifyConnector.registerWebhooks(webhookUrl);
+
+              if (webhookResult.success) {
+                // Guardar webhook IDs en storeInfo
+                await storage.updateStore(store.id, {
+                  storeInfo: {
+                    ...updatedStore.storeInfo,
+                    webhooks: webhookResult.webhooks,
+                    webhooks_configured_at: new Date().toISOString()
+                  }
+                });
+                console.log(`[Store] ✅ Webhooks configurados exitosamente para tienda ${store.id}`);
+              } else {
+                console.log(`[Store] ⚠️ Webhooks configurados parcialmente: ${webhookResult.errors.length} errores`);
+              }
+            } catch (webhookError: any) {
+              console.error(`[Store] Error configurando webhooks:`, webhookError.message);
+              // No fallar la creación de tienda si los webhooks fallan
+            }
+          }
+
           res.status(201).json({
             store: updatedStore,
             connection: connectionResult,
+            webhooks: webhookResult,
             message: "Store connected successfully"
           });
         } else {
@@ -284,18 +380,257 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
-      
+
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
         return res.status(404).json({ message: "Store not found" });
       }
 
+      // Si es Shopify, eliminar webhooks primero
+      if (store.platform === 'shopify' && store.storeInfo?.webhooks) {
+        try {
+          const connector = getConnector(store);
+          const shopifyConnector = connector as any;
+          const webhookIds = (store.storeInfo.webhooks as any[]).map(wh => wh.id);
+
+          console.log(`[Store] Eliminando webhooks de tienda ${storeId}`);
+          await shopifyConnector.deleteWebhooks(webhookIds);
+        } catch (webhookError: any) {
+          console.error(`[Store] Error eliminando webhooks:`, webhookError.message);
+          // Continuar con la eliminación de la tienda aunque falle la eliminación de webhooks
+        }
+      }
+
       await storage.deleteStore(parseInt(storeId));
-      
+
       res.json({ message: "Store deleted successfully" });
     } catch (error: any) {
       console.error("Error deleting store:", error);
       res.status(500).json({ message: "Failed to delete store", error: error.message });
+    }
+  });
+
+  // Configure webhooks for a Shopify store (manual)
+  app.post("/api/stores/:storeId/configure-webhooks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "Webhooks auto-configuration is only available for Shopify stores"
+        });
+      }
+
+      if (store.connectionStatus !== 'connected') {
+        return res.status(400).json({
+          message: "Store must be connected before configuring webhooks"
+        });
+      }
+
+      // Obtener URL pública
+      const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
+        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+        : req.protocol + '://' + req.get('host');
+
+      const webhookUrl = `${publicUrl}/api/webhooks/shopify/${storeId}`;
+
+      const connector = getConnector(store);
+      const shopifyConnector = connector as any;
+
+      console.log(`[Store] Configurando webhooks para tienda ${storeId}`);
+      const result = await shopifyConnector.registerWebhooks(webhookUrl);
+
+      if (result.success) {
+        // Guardar webhook IDs en storeInfo
+        await storage.updateStore(store.id, {
+          storeInfo: {
+            ...store.storeInfo,
+            webhooks: result.webhooks,
+            webhooks_configured_at: new Date().toISOString()
+          }
+        });
+
+        res.json({
+          success: true,
+          webhooks: result.webhooks,
+          message: `${result.webhooks.length} webhooks configured successfully`
+        });
+      } else {
+        res.status(207).json({
+          success: false,
+          webhooks: result.webhooks,
+          errors: result.errors,
+          message: `Webhooks configured with ${result.errors.length} errors`
+        });
+      }
+    } catch (error: any) {
+      console.error("Error configuring webhooks:", error);
+      res.status(500).json({
+        message: "Failed to configure webhooks",
+        error: error.message
+      });
+    }
+  });
+
+  // Get configured webhooks for a store
+  app.get("/api/stores/:storeId/webhooks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "Webhook information is only available for Shopify stores"
+        });
+      }
+
+      const connector = getConnector(store);
+      const shopifyConnector = connector as any;
+
+      const webhooks = await shopifyConnector.getWebhooks();
+
+      res.json({
+        webhooks,
+        configured: store.storeInfo?.webhooks || [],
+        configured_at: store.storeInfo?.webhooks_configured_at || null
+      });
+    } catch (error: any) {
+      console.error("Error getting webhooks:", error);
+      res.status(500).json({
+        message: "Failed to get webhooks",
+        error: error.message
+      });
+    }
+  });
+
+  // Delete webhooks for a store
+  app.delete("/api/stores/:storeId/webhooks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "Webhook deletion is only available for Shopify stores"
+        });
+      }
+
+      if (!store.storeInfo?.webhooks || (store.storeInfo.webhooks as any[]).length === 0) {
+        return res.status(404).json({
+          message: "No webhooks configured for this store"
+        });
+      }
+
+      const connector = getConnector(store);
+      const shopifyConnector = connector as any;
+      const webhookIds = (store.storeInfo.webhooks as any[]).map(wh => wh.id);
+
+      console.log(`[Store] Eliminando ${webhookIds.length} webhooks de tienda ${storeId}`);
+      const result = await shopifyConnector.deleteWebhooks(webhookIds);
+
+      // Limpiar webhooks de storeInfo
+      await storage.updateStore(store.id, {
+        storeInfo: {
+          ...store.storeInfo,
+          webhooks: [],
+          webhooks_deleted_at: new Date().toISOString()
+        }
+      });
+
+      res.json({
+        success: result.success,
+        deleted: result.deleted,
+        errors: result.errors,
+        message: `${result.deleted} webhooks deleted successfully`
+      });
+    } catch (error: any) {
+      console.error("Error deleting webhooks:", error);
+      res.status(500).json({
+        message: "Failed to delete webhooks",
+        error: error.message
+      });
+    }
+  });
+
+  // Update store API secret (for Shopify webhooks)
+  app.patch("/api/stores/:storeId/api-secret", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const { api_secret } = req.body;
+
+      if (!api_secret) {
+        return res.status(400).json({
+          message: "api_secret is required"
+        });
+      }
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      if (store.platform !== 'shopify') {
+        return res.status(400).json({
+          message: "API secret is only needed for Shopify stores"
+        });
+      }
+
+      // Actualizar credenciales agregando api_secret
+      const updatedCredentials = {
+        ...store.apiCredentials,
+        api_secret: api_secret
+      };
+
+      await storage.updateStore(parseInt(storeId), {
+        apiCredentials: updatedCredentials
+      });
+
+      console.log(`[Store] API Secret actualizado para tienda ${storeId}`);
+
+      res.json({
+        success: true,
+        message: "API Secret updated successfully",
+        credentials: Object.keys(updatedCredentials)
+      });
+    } catch (error: any) {
+      console.error("Error updating API secret:", error);
+      res.status(500).json({
+        message: "Failed to update API secret",
+        error: error.message
+      });
     }
   });
 
@@ -935,9 +1270,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             stockContifico = null;
           } else if (syncItem.status === 'success' || syncItem.status === 'skipped') {
             // Sync was successful or skipped (no changes)
-            stockContifico = syncItem.stockAfter;
+            stockContifico = Math.floor(Number(syncItem.stockAfter) || 0);
 
-            if (storeProduct.stockQuantity === syncItem.stockAfter) {
+            // Compare as integers to avoid float comparison issues
+            const storeStock = Math.floor(Number(storeProduct.stockQuantity) || 0);
+            if (storeStock === stockContifico) {
               syncStatus = 'synced';
             } else {
               syncStatus = 'different';
@@ -948,7 +1285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return {
           sku: storeProduct.sku,
           name: storeProduct.name,
-          stockStore: storeProduct.stockQuantity,
+          stockStore: Math.floor(Number(storeProduct.stockQuantity) || 0),
           stockContifico: stockContifico,
           status: syncStatus,
           lastSync: lastSync,
@@ -1214,7 +1551,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
-      
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "Unauthorized: No tenant associated with user" });
+      }
+
+      // Get tenant to check plan limits
+      const tenant = await storage.getTenant(user.tenantId);
+      const planLimits = getPlanLimits(tenant.planType);
+
+      // Check sync limits for this month (if not infinite)
+      if (planLimits.syncs !== Infinity) {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const { logs: syncLogs } = await storage.getSyncLogs(user.tenantId, { limit: 10000 });
+        const monthSyncs = syncLogs.filter(log =>
+          log.createdAt >= startOfMonth && log.syncType === 'inventory'
+        );
+
+        if (monthSyncs.length >= planLimits.syncs) {
+          return res.status(403).json({
+            message: `Has alcanzado el límite de ${planLimits.syncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
+          });
+        }
+      }
+
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
         return res.status(404).json({ message: "Store not found" });
@@ -1244,11 +1607,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Perform the sync
         const connector = getConnector(store);
         const productsResult = await connector.getProducts();
-        
+
+        // Note: Product limits are enforced at the store platform level (WooCommerce/Shopify)
+        // not during inventory sync, as sync only updates existing product stock levels
+
         // Update products in database
         let syncedCount = 0;
         let errorCount = 0;
-        
+
         for (const product of productsResult.products) {
           try {
             await storage.upsertProduct({
@@ -1369,6 +1735,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { storeId, integrationId } = req.params;
       const { dryRun = false, limit = 1000 } = req.body;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
+      // Get tenant to check plan limits
+      const tenant = await storage.getTenant(user.tenantId);
+      const planLimits = getPlanLimits(tenant.planType);
+
+      // Check sync limits for this month (if not infinite and not a dry run)
+      if (!dryRun && planLimits.syncs !== Infinity) {
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const { logs: syncLogs } = await storage.getSyncLogs(user.tenantId, { limit: 10000 });
+        const monthSyncs = syncLogs.filter(log =>
+          log.createdAt >= startOfMonth
+        );
+
+        if (monthSyncs.length >= planLimits.syncs) {
+          return res.status(403).json({
+            message: `Has alcanzado el límite de ${planLimits.syncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
+          });
+        }
+      }
+
       // Verificar que la tienda pertenece al tenant del usuario
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
@@ -1480,6 +1872,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         limit = '20', 
         offset = '0' 
       } = req.query;
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
 
       console.log('[API] Obteniendo logs de sincronización', { 
         tenantId: user.tenantId, 
@@ -1608,6 +2004,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { days = '7' } = req.query;
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
 
       console.log('[API] Obteniendo estadísticas de sincronización', { 
         tenantId: user.tenantId,
@@ -1861,6 +2261,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const limit = parseInt(req.query.limit as string) || 50;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       const notifications = await storage.getNotificationsByTenant(
         user.tenantId,
         limit
@@ -1893,6 +2297,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const { id } = req.params;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       // Verify notification belongs to tenant before updating
       const notifications = await storage.getNotificationsByTenant(
         user.tenantId,
@@ -1923,6 +2331,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     try {
       const user = (req as AuthenticatedRequest).user;
+
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       await storage.markAllNotificationsAsRead(user.tenantId);
       res.json({ message: "Todas las notificaciones marcadas como leídas" });
     } catch (error: any) {
@@ -1944,6 +2357,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const { id } = req.params;
 
+      if (!user.tenantId) {
+        return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
+      }
+
       // Verify notification belongs to tenant before deleting
       const notifications = await storage.getNotificationsByTenant(
         user.tenantId,
@@ -1963,6 +2380,571 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Error al eliminar notificación",
         error: error.message,
       });
+    }
+  });
+
+  // ============================================
+  // USER & TENANT MANAGEMENT (Settings)
+  // ============================================
+
+  // Update user information
+  app.put("/api/user/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { userId } = req.params;
+      const { name, email } = req.body;
+
+      // Only allow users to update their own information
+      if (user.id !== parseInt(userId)) {
+        return res.status(403).json({ message: "No tienes permiso para actualizar este usuario" });
+      }
+
+      // Validate input
+      if (!name && !email) {
+        return res.status(400).json({ message: "Debes proporcionar al menos un campo para actualizar" });
+      }
+
+      const updates: Partial<{ name: string; email: string }> = {};
+      if (name) updates.name = name;
+      if (email) {
+        // Check if email is already taken by another user
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser && existingUser.id !== user.id) {
+          return res.status(400).json({ message: "El correo electrónico ya está en uso" });
+        }
+        updates.email = email;
+      }
+
+      const updatedUser = await storage.updateUser(parseInt(userId), updates);
+      res.json({ user: updatedUser, message: "Usuario actualizado exitosamente" });
+    } catch (error: any) {
+      console.error("Error actualizando usuario:", error);
+      res.status(500).json({ message: "Error al actualizar usuario", error: error.message });
+    }
+  });
+
+  // Change password
+  app.post("/api/user/change-password", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { currentPassword, newPassword } = req.body;
+
+      // Validate input
+      if (!currentPassword || !newPassword) {
+        return res.status(400).json({ message: "Contraseña actual y nueva son requeridas" });
+      }
+
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: "La nueva contraseña debe tener al menos 8 caracteres" });
+      }
+
+      // Get full user data with password hash
+      const fullUser = await storage.getUser(user.id);
+      if (!fullUser) {
+        return res.status(404).json({ message: "Usuario no encontrado" });
+      }
+
+      // Import password functions from auth
+      const { comparePasswords, hashPassword } = await import('./auth');
+
+      // Verify current password
+      const isValid = await comparePasswords(currentPassword, fullUser.passwordHash);
+      if (!isValid) {
+        return res.status(400).json({ message: "La contraseña actual es incorrecta" });
+      }
+
+      // Hash and update new password
+      const newPasswordHash = await hashPassword(newPassword);
+      await storage.updateUserPassword(user.id, newPasswordHash);
+
+      res.json({ message: "Contraseña actualizada exitosamente" });
+    } catch (error: any) {
+      console.error("Error cambiando contraseña:", error);
+      res.status(500).json({ message: "Error al cambiar contraseña", error: error.message });
+    }
+  });
+
+  // Delete user account
+  app.delete("/api/user/:userId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { userId } = req.params;
+
+      // Only allow users to delete their own account
+      if (user.id !== parseInt(userId)) {
+        return res.status(403).json({ message: "No tienes permiso para eliminar este usuario" });
+      }
+
+      await storage.deleteUser(parseInt(userId));
+
+      // Logout the user after deleting account
+      req.logout((err) => {
+        if (err) {
+          console.error("Error logging out after account deletion:", err);
+        }
+      });
+
+      res.json({ message: "Cuenta eliminada exitosamente" });
+    } catch (error: any) {
+      console.error("Error eliminando usuario:", error);
+      res.status(500).json({ message: "Error al eliminar usuario", error: error.message });
+    }
+  });
+
+  // Update tenant information
+  app.put("/api/tenant/:tenantId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "No autorizado" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { tenantId } = req.params;
+      const { name } = req.body;
+
+      // Verify tenant belongs to user
+      if (user.tenantId !== parseInt(tenantId)) {
+        return res.status(403).json({ message: "No tienes permiso para actualizar este tenant" });
+      }
+
+      if (!name) {
+        return res.status(400).json({ message: "El nombre de la empresa es requerido" });
+      }
+
+      const updatedTenant = await storage.updateTenant(parseInt(tenantId), { name });
+      res.json({ tenant: updatedTenant, message: "Empresa actualizada exitosamente" });
+    } catch (error: any) {
+      console.error("Error actualizando tenant:", error);
+      res.status(500).json({ message: "Error al actualizar empresa", error: error.message });
+    }
+  });
+
+  // ========================================
+  // INVENTORY PUSH ENDPOINTS
+  // ========================================
+
+  // Get inventory push statistics
+  app.get("/api/stores/:storeId/inventory-push/stats", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Get all movements for this store
+      const allMovements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+
+      // Calculate stats
+      const now = new Date();
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      const pending = allMovements.filter(m => m.status === 'pending').length;
+      const processing = allMovements.filter(m => m.status === 'processing').length;
+      const completed24h = allMovements.filter(
+        m => m.status === 'completed' && m.processedAt && new Date(m.processedAt) >= last24h
+      ).length;
+      const failed24h = allMovements.filter(
+        m => m.status === 'failed' &&
+        m.createdAt && new Date(m.createdAt) >= last24h
+      ).length;
+
+      const totalLast24h = allMovements.filter(
+        m => m.createdAt && new Date(m.createdAt) >= last24h
+      ).length;
+
+      const successRate = totalLast24h > 0
+        ? Math.round((completed24h / totalLast24h) * 100)
+        : 0;
+
+      res.json({
+        pending,
+        processing,
+        completed_24h: completed24h,
+        failed_24h: failed24h,
+        success_rate: successRate,
+      });
+    } catch (error: any) {
+      console.error("Error getting push stats:", error);
+      res.status(500).json({ message: "Failed to get stats", error: error.message });
+    }
+  });
+
+  // Get inventory push movements with filters
+  app.get("/api/stores/:storeId/inventory-push/movements", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const {
+        page = "1",
+        limit = "20",
+        status,
+        type,
+        date_from,
+        date_to
+      } = req.query;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Get all movements for this store
+      let movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+
+      // Apply filters
+      if (status && status !== 'all') {
+        movements = movements.filter(m => m.status === status);
+      }
+
+      if (type && type !== 'all') {
+        movements = movements.filter(m => m.movementType === type);
+      }
+
+      if (date_from) {
+        const from = new Date(date_from as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) >= from);
+      }
+
+      if (date_to) {
+        const to = new Date(date_to as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) <= to);
+      }
+
+      // Pagination
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+      const total = movements.length;
+
+      const paginatedMovements = movements.slice(offset, offset + limitNum);
+
+      res.json({
+        movements: paginatedMovements,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          total_pages: Math.ceil(total / limitNum),
+        },
+      });
+    } catch (error: any) {
+      console.error("Error getting movements:", error);
+      res.status(500).json({ message: "Failed to get movements", error: error.message });
+    }
+  });
+
+  // Get single movement details
+  app.get("/api/stores/:storeId/inventory-push/movements/:movementId", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, movementId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+      const movement = movements.find(m => m.id === parseInt(movementId));
+
+      if (!movement) {
+        return res.status(404).json({ message: "Movement not found" });
+      }
+
+      res.json({ movement });
+    } catch (error: any) {
+      console.error("Error getting movement:", error);
+      res.status(500).json({ message: "Failed to get movement", error: error.message });
+    }
+  });
+
+  // Retry a failed movement
+  app.post("/api/stores/:storeId/inventory-push/movements/:movementId/retry", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, movementId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+      const movement = movements.find(m => m.id === parseInt(movementId));
+
+      if (!movement) {
+        return res.status(404).json({ message: "Movement not found" });
+      }
+
+      if (movement.status !== 'failed') {
+        return res.status(400).json({ message: "Only failed movements can be retried" });
+      }
+
+      // Reset movement to pending with next attempt time
+      await storage.updateMovementStatus(parseInt(movementId), 'pending');
+
+      res.json({
+        success: true,
+        message: "Movement queued for retry"
+      });
+    } catch (error: any) {
+      console.error("Error retrying movement:", error);
+      res.status(500).json({ message: "Failed to retry movement", error: error.message });
+    }
+  });
+
+  // Get unmapped SKUs
+  app.get("/api/stores/:storeId/unmapped-skus", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const { resolved = "false" } = req.query;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const unmappedSkus = await storage.getUnmappedSkusByStore(parseInt(storeId), 1000);
+
+      // Filter by resolved status
+      const filteredSkus = resolved === "true"
+        ? unmappedSkus.filter(sku => sku.resolved)
+        : unmappedSkus.filter(sku => !sku.resolved);
+
+      res.json({
+        unmapped_skus: filteredSkus,
+      });
+    } catch (error: any) {
+      console.error("Error getting unmapped SKUs:", error);
+      res.status(500).json({ message: "Failed to get unmapped SKUs", error: error.message });
+    }
+  });
+
+  // Clear sync locks for a store (admin utility)
+  app.post("/api/stores/:storeId/clear-locks", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      await storage.releaseLock(parseInt(storeId));
+
+      res.json({
+        success: true,
+        message: `Locks cleared for store ${storeId}`
+      });
+    } catch (error: any) {
+      console.error("Error clearing locks:", error);
+      res.status(500).json({ message: "Failed to clear locks", error: error.message });
+    }
+  });
+
+  // Mark unmapped SKU as resolved
+  app.patch("/api/stores/:storeId/unmapped-skus/:skuId/resolve", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId, skuId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      await storage.markSkuAsResolved(parseInt(skuId));
+
+      res.json({
+        success: true,
+        message: "SKU marked as resolved"
+      });
+    } catch (error: any) {
+      console.error("Error resolving SKU:", error);
+      res.status(500).json({ message: "Failed to resolve SKU", error: error.message });
+    }
+  });
+
+  // Export movements to Excel
+  app.get("/api/stores/:storeId/inventory-push/movements/export", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const { status, type, date_from, date_to } = req.query;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      // Get movements with same filters
+      let movements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+
+      if (status && status !== 'all') {
+        movements = movements.filter(m => m.status === status);
+      }
+
+      if (type && type !== 'all') {
+        movements = movements.filter(m => m.movementType === type);
+      }
+
+      if (date_from) {
+        const from = new Date(date_from as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) >= from);
+      }
+
+      if (date_to) {
+        const to = new Date(date_to as string);
+        movements = movements.filter(m => m.createdAt && new Date(m.createdAt) <= to);
+      }
+
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Movimientos');
+
+      // Add headers
+      worksheet.columns = [
+        { header: 'Fecha', key: 'date', width: 20 },
+        { header: 'Orden', key: 'order', width: 15 },
+        { header: 'Tipo', key: 'type', width: 15 },
+        { header: 'SKU', key: 'sku', width: 20 },
+        { header: 'Cantidad', key: 'quantity', width: 10 },
+        { header: 'Estado', key: 'status', width: 15 },
+        { header: 'Intentos', key: 'attempts', width: 10 },
+        { header: 'Error', key: 'error', width: 50 },
+      ];
+
+      // Add data
+      movements.forEach(movement => {
+        worksheet.addRow({
+          date: movement.createdAt ? new Date(movement.createdAt).toLocaleString('es-ES') : '',
+          order: movement.orderId || '',
+          type: movement.movementType === 'egreso' ? 'Egreso' : 'Ingreso',
+          sku: movement.sku,
+          quantity: movement.quantity,
+          status: movement.status,
+          attempts: `${movement.attempts}/${movement.maxAttempts}`,
+          error: movement.errorMessage || '',
+        });
+      });
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+
+      // Generate Excel file
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=movimientos-push-${store.storeName}-${new Date().toISOString().split('T')[0]}.xlsx`);
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Error exporting movements:", error);
+      res.status(500).json({ message: "Failed to export movements", error: error.message });
+    }
+  });
+
+  // Export unmapped SKUs to Excel
+  app.get("/api/stores/:storeId/unmapped-skus/export", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      const unmappedSkus = await storage.getUnmappedSkusByStore(parseInt(storeId), 1000);
+
+      // Create Excel workbook
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('SKUs sin Mapear');
+
+      // Add headers
+      worksheet.columns = [
+        { header: 'SKU', key: 'sku', width: 20 },
+        { header: 'Producto', key: 'product', width: 40 },
+        { header: 'Ocurrencias', key: 'occurrences', width: 15 },
+        { header: 'Primera vez', key: 'first_seen', width: 20 },
+        { header: 'Última vez', key: 'last_seen', width: 20 },
+      ];
+
+      // Add data
+      unmappedSkus.forEach(sku => {
+        worksheet.addRow({
+          sku: sku.sku,
+          product: sku.productName || '',
+          occurrences: sku.occurrences,
+          first_seen: sku.createdAt ? new Date(sku.createdAt).toLocaleString('es-ES') : '',
+          last_seen: sku.lastSeenAt ? new Date(sku.lastSeenAt).toLocaleString('es-ES') : '',
+        });
+      });
+
+      // Style headers
+      worksheet.getRow(1).font = { bold: true };
+
+      // Generate Excel file
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename=skus-sin-mapear-${store.storeName}-${new Date().toISOString().split('T')[0]}.xlsx`);
+      res.send(buffer);
+    } catch (error: any) {
+      console.error("Error exporting unmapped SKUs:", error);
+      res.status(500).json({ message: "Failed to export unmapped SKUs", error: error.message });
     }
   });
 

@@ -59,8 +59,22 @@ export class SyncService {
     // ✅ Array para almacenar items a guardar
     const itemsToSave: Array<any> = [];
     let syncLogId: number | null = null;
+    let lockAcquired = false;
 
     try {
+      // 0. Adquirir lock para prevenir conflictos con Push operations
+      const lockDuration = 5 * 60 * 1000; // 5 minutos
+      const processId = `pull-sync-${storeId}-${Date.now()}`;
+
+      const lock = await storage.acquireLock(storeId, 'pull', processId, lockDuration);
+
+      if (!lock) {
+        throw new Error(`No se pudo adquirir lock para tienda ${storeId}. Otra operación de sincronización está en progreso.`);
+      }
+
+      lockAcquired = true;
+      console.log(`[Sync] ✅ Lock adquirido para tienda ${storeId}`);
+
       // 1. Obtener la tienda y verificar que existe
       const store = await storage.getStore(storeId);
       if (!store) {
@@ -148,13 +162,16 @@ export class SyncService {
             };
 
             try {
-              const { 
-                sku, 
-                variant_id, 
-                inventory_quantity: currentStock, 
-                title, 
-                inventory_item_id 
+              const {
+                sku,
+                variant_id,
+                inventory_quantity: rawCurrentStock,
+                title,
+                inventory_item_id
               } = storeProduct;
+
+              // Convert to integer to avoid float comparison issues
+              const currentStock = Math.floor(Number(rawCurrentStock) || 0);
 
               console.log(`[Sync] Procesando: ${sku} - ${title}`);
 
@@ -226,18 +243,19 @@ export class SyncService {
                 console.log(`[Sync] Consultando stock de bodega ${settings.warehouse_primary} para ${sku}`);
 
                 try {
-                  contificoStock = await contificoConnector.getProductStock(
+                  const rawStock = await contificoConnector.getProductStock(
                     contificoProduct.id,
                     sku
                   );
+                  contificoStock = Math.floor(Number(rawStock) || 0);
                   console.log(`[Sync] Stock en bodega ${settings.warehouse_primary}: ${contificoStock}`);
                 } catch (error: any) {
                   console.warn(`[Sync] Error obteniendo stock de bodega para ${sku}, usando stock global`);
-                  contificoStock = contificoProduct.stock_quantity || 0;
+                  contificoStock = Math.floor(Number(contificoProduct.stock_quantity) || 0);
                 }
               } else {
                 // SIN bodega: usar stock global
-                contificoStock = contificoProduct.stock_quantity || 0;
+                contificoStock = Math.floor(Number(contificoProduct.stock_quantity) || 0);
                 console.log(`[Sync] Stock global: ${contificoStock}`);
               }
 
@@ -280,13 +298,13 @@ export class SyncService {
                     await (storeConnector as ShopifyConnector).updateVariantStock!(
                       variant_id,
                       inventory_item_id,
-                      Math.floor(contificoStock)
+                      contificoStock
                     );
                   } else if (store.platform === 'woocommerce') {
                     // WooCommerce: Actualizar usando product_id
                     await (storeConnector as WooCommerceConnector).updateProductStock!(
                       variant_id,
-                      Math.floor(contificoStock)
+                      contificoStock
                     );
                   } else {
                     throw new Error(`Plataforma ${store.platform} no soportada para actualización de stock`);
@@ -301,7 +319,7 @@ export class SyncService {
                     platformProductId: variant_id.toString(),
                     sku: sku,
                     name: title,
-                    stockQuantity: Math.floor(contificoStock),
+                    stockQuantity: contificoStock,
                     manageStock: true,
                     price: null,
                     data: storeProduct
@@ -312,7 +330,7 @@ export class SyncService {
 
                   // ✅ Guardar item exitoso
                   itemRecord.status = 'success';
-                  itemRecord.stockAfter = Math.floor(contificoStock);
+                  itemRecord.stockAfter = contificoStock;
                   itemsToSave.push(itemRecord);
 
                 } catch (updateError: any) {
@@ -348,7 +366,7 @@ export class SyncService {
 
                 // ✅ En dry-run también guardamos como éxito
                 itemRecord.status = 'success';
-                itemRecord.stockAfter = Math.floor(contificoStock);
+                itemRecord.stockAfter = contificoStock;
                 itemsToSave.push(itemRecord);
               }
 
@@ -522,6 +540,16 @@ export class SyncService {
       }
 
       throw error;
+    } finally {
+      // Liberar lock si fue adquirido
+      if (lockAcquired) {
+        try {
+          await storage.releaseLock(storeId);
+          console.log(`[Sync] ✅ Lock liberado para tienda ${storeId}`);
+        } catch (unlockError) {
+          console.error(`[Sync] Error liberando lock:`, unlockError);
+        }
+      }
     }
   }
 
@@ -645,10 +673,13 @@ export class SyncService {
               const {
                 sku,
                 variant_id,
-                inventory_quantity: currentStock,
+                inventory_quantity: rawCurrentStock,
                 title,
                 inventory_item_id
               } = storeProduct;
+
+              // Convert to integer to avoid float comparison issues
+              const currentStock = Math.floor(Number(rawCurrentStock) || 0);
 
               console.log(`[Sync] Procesando: ${sku} - ${title}`);
 
@@ -713,15 +744,16 @@ export class SyncService {
 
               if (settings.warehouse_primary) {
                 try {
-                  contificoStock = await contificoConnector.getProductStock(
+                  const rawStock = await contificoConnector.getProductStock(
                     contificoProduct.id,
                     sku
                   );
+                  contificoStock = Math.floor(Number(rawStock) || 0);
                 } catch (error: any) {
-                  contificoStock = contificoProduct.stock_quantity || 0;
+                  contificoStock = Math.floor(Number(contificoProduct.stock_quantity) || 0);
                 }
               } else {
-                contificoStock = contificoProduct.stock_quantity || 0;
+                contificoStock = Math.floor(Number(contificoProduct.stock_quantity) || 0);
               }
 
               // Comparar stocks
@@ -760,12 +792,12 @@ export class SyncService {
                     await (storeConnector as ShopifyConnector).updateVariantStock!(
                       variant_id,
                       inventory_item_id,
-                      Math.floor(contificoStock)
+                      contificoStock
                     );
                   } else if (store.platform === 'woocommerce') {
                     await (storeConnector as WooCommerceConnector).updateProductStock!(
                       variant_id,
-                      Math.floor(contificoStock)
+                      contificoStock
                     );
                   } else {
                     throw new Error(`Plataforma ${store.platform} no soportada`);
@@ -779,7 +811,7 @@ export class SyncService {
                     platformProductId: variant_id.toString(),
                     sku: sku,
                     name: title,
-                    stockQuantity: Math.floor(contificoStock),
+                    stockQuantity: contificoStock,
                     manageStock: true,
                     price: null,
                     data: storeProduct
@@ -788,7 +820,7 @@ export class SyncService {
                   results.success++;
 
                   itemRecord.status = 'success';
-                  itemRecord.stockAfter = Math.floor(contificoStock);
+                  itemRecord.stockAfter = contificoStock;
                   itemsToSave.push(itemRecord);
 
                 } catch (updateError: any) {
@@ -821,7 +853,7 @@ export class SyncService {
                 results.success++;
 
                 itemRecord.status = 'success';
-                itemRecord.stockAfter = Math.floor(contificoStock);
+                itemRecord.stockAfter = contificoStock;
                 itemsToSave.push(itemRecord);
               }
 

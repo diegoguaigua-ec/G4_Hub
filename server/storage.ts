@@ -8,6 +8,9 @@ import {
   storeIntegrations,
   syncLogItems,
   notifications,
+  inventoryMovementsQueue,
+  unmappedSkus,
+  syncLocks,
   type User,
   type InsertUser,
   type Tenant,
@@ -24,6 +27,12 @@ import {
   type InsertStoreIntegration,
   type Notification,
   type InsertNotification,
+  type InventoryMovement,
+  type InsertInventoryMovement,
+  type UnmappedSku,
+  type InsertUnmappedSku,
+  type SyncLock,
+  type InsertSyncLock,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -47,12 +56,16 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: CreateUserData): Promise<User>;
+  updateUser(id: number, updates: Partial<{ name: string; email: string }>): Promise<User>;
+  updateUserPassword(id: number, passwordHash: string): Promise<void>;
   updateUserLastLogin(id: number): Promise<void>;
+  deleteUser(id: number): Promise<void>;
 
   getAllTenants(): Promise<Tenant[]>;
   getTenant(id: number): Promise<Tenant | undefined>;
   getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
+  updateTenant(id: number, updates: Partial<{ name: string }>): Promise<Tenant>;
 
   getStoresByTenant(tenantId: number): Promise<Store[]>;
   getStore(id: number): Promise<Store | undefined>;
@@ -105,6 +118,32 @@ export interface IStorage {
   markNotificationAsRead(id: number): Promise<Notification>;
   markAllNotificationsAsRead(tenantId: number): Promise<void>;
   deleteNotification(id: number): Promise<void>;
+
+  // Inventory movements queue operations
+  queueInventoryMovement(movement: InsertInventoryMovement): Promise<InventoryMovement>;
+  getPendingMovements(limit?: number): Promise<InventoryMovement[]>;
+  getMovementsByStore(storeId: number, limit?: number): Promise<InventoryMovement[]>;
+  updateMovementStatus(
+    id: number,
+    status: string,
+    errorMessage?: string,
+  ): Promise<InventoryMovement>;
+  incrementMovementAttempts(id: number, nextAttemptAt: Date): Promise<InventoryMovement>;
+  markMovementAsProcessed(id: number): Promise<InventoryMovement>;
+  deleteOldMovements(beforeDate: Date): Promise<void>;
+
+  // Unmapped SKUs operations
+  trackUnmappedSku(data: InsertUnmappedSku): Promise<UnmappedSku>;
+  getUnmappedSkusByStore(storeId: number, limit?: number): Promise<UnmappedSku[]>;
+  getUnmappedSkusByTenant(tenantId: number, limit?: number): Promise<UnmappedSku[]>;
+  markSkuAsResolved(id: number): Promise<UnmappedSku>;
+  deleteUnmappedSku(id: number): Promise<void>;
+
+  // Sync lock operations
+  acquireLock(storeId: number, lockType: 'pull' | 'push', processId: string, durationMs: number): Promise<SyncLock | null>;
+  releaseLock(storeId: number): Promise<void>;
+  hasActiveLock(storeId: number): Promise<boolean>;
+  cleanExpiredLocks(): Promise<void>;
 
   sessionStore: session.Store;
 }
@@ -566,11 +605,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Store-Integration relationships
-  async getStoreIntegrations(storeId: number): Promise<StoreIntegration[]> {
-    return await db
+  async getStoreIntegrations(storeId: number): Promise<(StoreIntegration & { integration: Integration | null })[]> {
+    const results = await db
       .select()
       .from(storeIntegrations)
+      .leftJoin(integrations, eq(storeIntegrations.integrationId, integrations.id))
       .where(eq(storeIntegrations.storeId, storeId));
+
+    // Mapear resultados al formato esperado
+    return results.map(row => ({
+      ...row.store_integrations,
+      integration: row.integrations
+    }));
   }
 
   async getIntegrationStores(
@@ -677,6 +723,269 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNotification(id: number): Promise<void> {
     await db.delete(notifications).where(eq(notifications.id, id));
+  }
+
+  // User management operations
+  async updateUser(
+    id: number,
+    updates: Partial<{ name: string; email: string }>,
+  ): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return user;
+  }
+
+  async updateUserPassword(id: number, passwordHash: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(eq(users.id, id));
+  }
+
+  async deleteUser(id: number): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  // Tenant management operations
+  async updateTenant(
+    id: number,
+    updates: Partial<{ name: string }>,
+  ): Promise<Tenant> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+    return tenant;
+  }
+
+  // Inventory movements queue operations
+  async queueInventoryMovement(
+    movement: InsertInventoryMovement,
+  ): Promise<InventoryMovement> {
+    const [queued] = await db
+      .insert(inventoryMovementsQueue)
+      .values(movement)
+      .returning();
+    return queued;
+  }
+
+  async getPendingMovements(limit: number = 50): Promise<InventoryMovement[]> {
+    return await db
+      .select()
+      .from(inventoryMovementsQueue)
+      .where(
+        and(
+          eq(inventoryMovementsQueue.status, "pending"),
+          sql`${inventoryMovementsQueue.nextAttemptAt} IS NULL OR ${inventoryMovementsQueue.nextAttemptAt} <= NOW()`,
+        ),
+      )
+      .orderBy(inventoryMovementsQueue.createdAt)
+      .limit(limit);
+  }
+
+  async getMovementsByStore(
+    storeId: number,
+    limit: number = 100,
+  ): Promise<InventoryMovement[]> {
+    return await db
+      .select()
+      .from(inventoryMovementsQueue)
+      .where(eq(inventoryMovementsQueue.storeId, storeId))
+      .orderBy(desc(inventoryMovementsQueue.createdAt))
+      .limit(limit);
+  }
+
+  async updateMovementStatus(
+    id: number,
+    status: string,
+    errorMessage?: string,
+  ): Promise<InventoryMovement> {
+    const [updated] = await db
+      .update(inventoryMovementsQueue)
+      .set({
+        status,
+        errorMessage: errorMessage || null,
+        lastAttemptAt: new Date(),
+      })
+      .where(eq(inventoryMovementsQueue.id, id))
+      .returning();
+    return updated;
+  }
+
+  async incrementMovementAttempts(
+    id: number,
+    nextAttemptAt: Date,
+  ): Promise<InventoryMovement> {
+    const [updated] = await db
+      .update(inventoryMovementsQueue)
+      .set({
+        attempts: sql`${inventoryMovementsQueue.attempts} + 1`,
+        lastAttemptAt: new Date(),
+        nextAttemptAt,
+      })
+      .where(eq(inventoryMovementsQueue.id, id))
+      .returning();
+    return updated;
+  }
+
+  async markMovementAsProcessed(id: number): Promise<InventoryMovement> {
+    const [updated] = await db
+      .update(inventoryMovementsQueue)
+      .set({
+        status: "completed",
+        processedAt: new Date(),
+      })
+      .where(eq(inventoryMovementsQueue.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteOldMovements(beforeDate: Date): Promise<void> {
+    await db
+      .delete(inventoryMovementsQueue)
+      .where(
+        and(
+          sql`${inventoryMovementsQueue.createdAt} < ${beforeDate}`,
+          sql`${inventoryMovementsQueue.status} IN ('completed', 'failed')`,
+        ),
+      );
+  }
+
+  // Unmapped SKUs operations
+  async trackUnmappedSku(data: InsertUnmappedSku): Promise<UnmappedSku> {
+    // Try to upsert - if SKU already exists for this store, increment occurrences
+    const existing = await db
+      .select()
+      .from(unmappedSkus)
+      .where(
+        and(
+          eq(unmappedSkus.storeId, data.storeId),
+          eq(unmappedSkus.sku, data.sku),
+        ),
+      )
+      .limit(1);
+
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(unmappedSkus)
+        .set({
+          occurrences: sql`${unmappedSkus.occurrences} + 1`,
+          lastSeenAt: new Date(),
+          productName: data.productName || existing[0].productName,
+        })
+        .where(eq(unmappedSkus.id, existing[0].id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(unmappedSkus)
+        .values(data)
+        .returning();
+      return created;
+    }
+  }
+
+  async getUnmappedSkusByStore(
+    storeId: number,
+    limit: number = 100,
+  ): Promise<UnmappedSku[]> {
+    return await db
+      .select()
+      .from(unmappedSkus)
+      .where(
+        and(
+          eq(unmappedSkus.storeId, storeId),
+          eq(unmappedSkus.resolved, false),
+        ),
+      )
+      .orderBy(desc(unmappedSkus.lastSeenAt))
+      .limit(limit);
+  }
+
+  async getUnmappedSkusByTenant(
+    tenantId: number,
+    limit: number = 100,
+  ): Promise<UnmappedSku[]> {
+    return await db
+      .select()
+      .from(unmappedSkus)
+      .where(
+        and(
+          eq(unmappedSkus.tenantId, tenantId),
+          eq(unmappedSkus.resolved, false),
+        ),
+      )
+      .orderBy(desc(unmappedSkus.lastSeenAt))
+      .limit(limit);
+  }
+
+  async markSkuAsResolved(id: number): Promise<UnmappedSku> {
+    const [updated] = await db
+      .update(unmappedSkus)
+      .set({ resolved: true })
+      .where(eq(unmappedSkus.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUnmappedSku(id: number): Promise<void> {
+    await db.delete(unmappedSkus).where(eq(unmappedSkus.id, id));
+  }
+
+  // Sync lock operations
+  async acquireLock(
+    storeId: number,
+    lockType: "pull" | "push",
+    processId: string,
+    durationMs: number,
+  ): Promise<SyncLock | null> {
+    try {
+      // First, clean expired locks
+      await this.cleanExpiredLocks();
+
+      // Try to insert a new lock
+      const expiresAt = new Date(Date.now() + durationMs);
+      const [lock] = await db
+        .insert(syncLocks)
+        .values({
+          storeId,
+          lockType,
+          processId,
+          expiresAt,
+        })
+        .returning();
+      return lock;
+    } catch (error: any) {
+      // If lock already exists (unique constraint violation), return null
+      if (error.code === "23505") {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async releaseLock(storeId: number): Promise<void> {
+    await db.delete(syncLocks).where(eq(syncLocks.storeId, storeId));
+  }
+
+  async hasActiveLock(storeId: number): Promise<boolean> {
+    await this.cleanExpiredLocks();
+    const locks = await db
+      .select()
+      .from(syncLocks)
+      .where(eq(syncLocks.storeId, storeId))
+      .limit(1);
+    return locks.length > 0;
+  }
+
+  async cleanExpiredLocks(): Promise<void> {
+    await db
+      .delete(syncLocks)
+      .where(sql`${syncLocks.expiresAt} < NOW()`);
   }
 }
 

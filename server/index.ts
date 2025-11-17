@@ -5,6 +5,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { scheduler } from "./scheduler";
+import { inventoryPushWorker } from "./workers/inventoryPushWorker";
 import { runMigrations } from "./migrate";
 
 // Validate critical environment variables before starting the app
@@ -44,6 +45,17 @@ function validateEnv() {
 validateEnv();
 
 const app = express();
+
+// Capture raw body for webhook signature validation
+app.use(
+  "/api/webhooks",
+  express.json({
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  }),
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -78,9 +90,6 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Run migrations before starting the server
-  await runMigrations();
-
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
@@ -109,11 +118,38 @@ app.use((req, res, next) => {
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
+  }, async () => {
+    log(`✓ Server is ready and listening on port ${port}`);
+    log(`✓ Health check available at http://0.0.0.0:${port}/health`);
 
-    // Start scheduler for automated syncs
-    scheduler.start();
-    log('Scheduler started for automated syncs');
+    // Run migrations AFTER server starts to avoid blocking health checks
+    // This ensures the server responds to health checks immediately
+    log('Running database migrations...');
+    try {
+      await runMigrations();
+      log('✓ Database migrations completed successfully');
+    } catch (error) {
+      console.error('❌ Error running migrations:', error);
+      // Don't exit - allow the server to continue running
+      // Some endpoints may still work even if migrations fail
+    }
+
+    // Background workers are only compatible with Reserved VM deployments
+    // For Autoscale deployments, set ENABLE_BACKGROUND_WORKERS=false or remove the env var
+    // For Reserved VM deployments, set ENABLE_BACKGROUND_WORKERS=true
+    const enableBackgroundWorkers = process.env.NODE_ENV === 'development' 
+      || process.env.ENABLE_BACKGROUND_WORKERS === 'true';
+
+    if (enableBackgroundWorkers) {
+      // Start scheduler for automated syncs
+      scheduler.start();
+      log('✓ Scheduler started for automated syncs');
+
+      // Start inventory push worker
+      inventoryPushWorker.start();
+      log('✓ Inventory push worker started');
+    } else {
+      log('✓ Background workers disabled (Autoscale mode). Set ENABLE_BACKGROUND_WORKERS=true for Reserved VM deployments.');
+    }
   });
 })();

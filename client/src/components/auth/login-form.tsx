@@ -11,8 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Loader2 } from "lucide-react";
 
 const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(1, "Password is required"),
+  email: z.string().email("Por favor ingresa un correo electrónico válido"),
+  password: z.string().min(1, "La contraseña es requerida"),
   rememberMe: z.boolean().default(false),
 });
 
@@ -45,11 +45,11 @@ export default function LoginForm() {
           name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>Correo Electrónico</FormLabel>
               <FormControl>
                 <Input
                   type="email"
-                  placeholder="your@email.com"
+                  placeholder="tu@correo.com"
                   className="h-12"
                   data-testid="input-email"
                   {...field}
@@ -65,7 +65,7 @@ export default function LoginForm() {
           name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <FormLabel>Contraseña</FormLabel>
               <FormControl>
                 <Input
                   type="password"
@@ -95,14 +95,14 @@ export default function LoginForm() {
                 </FormControl>
                 <div className="space-y-1 leading-none">
                   <FormLabel className="text-sm font-normal">
-                    Remember me
+                    Recordarme
                   </FormLabel>
                 </div>
               </FormItem>
             )}
           />
           <Button variant="link" className="px-0 text-primary hover:text-primary/80">
-            Forgot password?
+            ¿Olvidaste tu contraseña?
           </Button>
         </div>
 
@@ -115,10 +115,10 @@ export default function LoginForm() {
           {loginMutation.isPending ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Signing in...
+              Iniciando sesión...
             </>
           ) : (
-            "Sign in"
+            "Iniciar sesión"
           )}
         </Button>
       </form>
