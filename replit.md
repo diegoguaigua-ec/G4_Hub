@@ -70,3 +70,46 @@ The system implements row-level multi-tenancy where:
 - **Hookform Resolvers**: Integration between React Hook Form and Zod validation
 
 The architecture prioritizes type safety, scalability, and developer experience while maintaining clear separation of concerns between frontend and backend systems.
+
+# Recent Changes
+
+## Phase 1: Shopify Push System - COMPLETED (November 18, 2025)
+
+Successfully implemented the complete Shopify Push system for synchronizing inventory movements to external ERP systems (Contifico).
+
+### Key Features Implemented:
+
+1. **Automatic Webhook Configuration**
+   - Auto-registration of Shopify webhooks when stores are created (POST /api/stores)
+   - Auto-verification/recreation of webhooks when store credentials are updated (PUT /api/stores/:storeId)
+   - Webhook metadata preservation during re-configuration (fixed regression bug)
+
+2. **Webhook Reception System**
+   - HMAC signature validation for all Shopify webhooks
+   - Support for orders/paid, orders/updated, and orders/cancelled events
+   - Automatic queuing of inventory movements in `inventory_movements_queue` table
+
+3. **Background Processing Worker**
+   - InventoryPushWorker runs automatically every 120 seconds in development
+   - Processes pending inventory movements with distributed locking mechanism
+   - Automatic retry logic with exponential backoff for failed movements
+   - Comprehensive error handling and logging
+
+4. **End-to-End Flow**
+   - Complete flow: Shopify webhook → Queue → Worker → Contifico API
+   - Tested and validated with real webhook simulation
+   - Proper status tracking (pending → processing → completed/failed)
+
+### Technical Implementation:
+
+- **Files Modified**: `server/routes.ts` (webhook auto-configuration on store update)
+- **Critical Fix**: Fixed bug where webhook re-registration was overwriting fresh connection metadata with stale data
+- **Worker Status**: Runs conditionally (development environment or ENABLE_BACKGROUND_WORKERS=true)
+
+### Next Steps:
+
+Phase 2 would include:
+- Implement missing `getProductBySku()` method in ContificoConnector
+- Add UI for monitoring queue status and failed movements
+- Implement retry mechanism for failed movements
+- Add comprehensive logging and alerting system
