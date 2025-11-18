@@ -1,0 +1,835 @@
+ OBJETIVO DE FASE 1
+Completar el sistema Push para Shopify únicamente, permitiendo que cuando ocurra una venta/cancelación/reembolso en Shopify, se envíe automáticamente el movimiento de inventario a Contífico.
+⏰ DEADLINE: Viernes (cliente en producción esperando)
+🎯 SCOPE: Solo Shopify (WooCommerce es Fase 2)
+
+📝 TAREAS ESPECÍFICAS
+1️⃣ SHOPIFY WEBHOOK AUTO-REGISTRATION
+Objetivo: Crear webhooks automáticamente en Shopify cuando se conecta/actualiza una tienda.
+Requerimientos:
+A. Implementar métodos de webhook management en ShopifyConnector:
+Crear los siguientes métodos en server/connectors/ShopifyConnector.ts:
+typescript// Método para crear webhooks en Shopify
+async createWebhooks(storeId: number, webhookBaseUrl: string): Promise<WebhookCreationResult>
+
+// Método para verificar webhooks existentes
+async listWebhooks(): Promise<ShopifyWebhook[]>
+
+// Método para eliminar webhooks
+async deleteWebhook(webhookId: string): Promise<boolean>
+
+// Método para verificar y recrear webhooks faltantes
+async ensureWebhooksExist(storeId: number, webhookBaseUrl: string): Promise<WebhookVerificationResult>
+B. Topics de webhooks a registrar:
+javascriptconst WEBHOOK_TOPICS = {
+  'orders/paid': 'egreso',      // Genera salida de inventario
+  'orders/cancelled': 'ingreso', // Genera entrada de inventario
+  'refunds/create': 'ingreso'    // Genera entrada de inventario
+};
+C. Formato de webhook URL:
+https://[repl-url]/api/webhooks/shopify/:storeId
+Ejemplo: https://g4hub-diego.repl.co/api/webhooks/shopify/8
+D. Seguridad - Validación HMAC:
+
+Los webhooks de Shopify incluyen header X-Shopify-Hmac-Sha256
+Implementar validación HMAC en el receiver (ya existe en server/routes/webhooks.ts, asegurar que funciona)
+Rechazar webhooks con HMAC inválido
+
+E. Persistencia de webhook IDs:
+
+Guardar los webhook IDs devueltos por Shopify en la base de datos
+Opciones:
+
+Agregar campo webhooks (JSONB) a tabla stores
+O crear tabla store_webhooks si es necesario
+
+
+Formato sugerido en stores.webhooks:
+
+json{
+  "shopify": {
+    "orders/paid": "webhook_id_123",
+    "orders/cancelled": "webhook_id_456",
+    "refunds/create": "webhook_id_789"
+  }
+}
+F. Flujo de creación:
+
+Usuario conecta/actualiza tienda Shopify en el dashboard
+Sistema llama a createWebhooks() automáticamente
+Webhooks se crean en Shopify via Admin API
+IDs se guardan en base de datos
+Si hay error, loggear y notificar al usuario
+
+G. Flujo de verificación:
+
+Al editar tienda, llamar ensureWebhooksExist()
+Verificar si webhooks existen en Shopify
+Si faltan, recrear automáticamente
+Actualizar IDs en base de datos
+
+H. Flujo de eliminación:
+
+Al desconectar tienda, llamar deleteWebhook() para cada webhook
+Limpiar IDs de base de datos
+
+Archivos a modificar:
+
+✏️ server/connectors/ShopifyConnector.ts (agregar métodos de webhook)
+✏️ server/storage.ts (agregar métodos para guardar/leer webhook IDs si es necesario)
+✏️ server/routes.ts (agregar/modificar endpoints de store management para trigger webhook creation)
+✅ server/routes/webhooks.ts (receivers ya existen, solo asegurar HMAC validation funciona)
+
+Referencias:
+
+Shopify Admin API Webhooks: https://shopify.dev/docs/api/admin-rest/2024-01/resources/webhook
+Webhook Topics: https://shopify.dev/docs/api/admin-rest/2024-01/resources/webhook#event-topics
+HMAC Validation: https://shopify.dev/docs/apps/build/webhooks/subscribe/https#step-5-verify-the-webhook
+
+
+2️⃣ MOVEMENT QUEUE WORKER
+Objetivo: Procesar movimientos pendientes de la cola y enviarlos a Contífico automáticamente.
+Requerimientos:
+A. Crear worker principal:
+Archivo nuevo: server/workers/inventoryPushWorker.ts
+typescript/**
+ * Worker que procesa la cola de movimientos de inventario
+ * y los envía a Contífico
+ */
+export class InventoryPushWorker {
+  /**
+   * Ejecuta una iteración del worker
+   * - Fetch movimientos pendientes
+   * - Procesa en batch
+   * - Actualiza estados
+   */
+  static async run(): Promise<WorkerResult>
+  
+  /**
+   * Procesa un batch de movimientos
+   */
+  private static async processBatch(movements: InventoryMovement[]): Promise<void>
+  
+  /**
+   * Procesa un movimiento individual
+   */
+  private static async processMovement(movement: InventoryMovement): Promise<ProcessResult>
+  
+  /**
+   * Inicia el worker en modo continuo (scheduled)
+   */
+  static start(intervalMs: number = 120000): void // 2 minutos default
+  
+  /**
+   * Detiene el worker
+   */
+  static stop(): void
+}
+B. Lógica de procesamiento:
+Query de movimientos pendientes:
+typescript// Fetch movements WHERE:
+// - status = 'pending'
+// - attempts < maxAttempts
+// - tenantId = current tenant
+// ORDER BY createdAt ASC
+// LIMIT 20-30
+Agrupación:
+
+Agrupar por storeId + integrationId para procesar juntos
+Esto minimiza cambios de contexto y permite usar misma API key
+
+Procesamiento async:
+
+Procesar múltiples movimientos en paralelo (concurrency: 3-5)
+No bloquear todo el worker por un movimiento lento
+Usar Promise.allSettled() para manejar errores individuales
+
+C. Para cada movimiento:
+Paso 1: Actualizar status a 'processing'
+typescriptawait storage.updateInventoryMovement(movement.id, {
+  status: 'processing',
+  attempts: movement.attempts + 1
+});
+Paso 2: Lookup producto en Contífico por SKU
+typescript// GET /sistema/api/v1/producto/?codigo={SKU}
+const product = await contificoConnector.getProductBySku(movement.sku);
+
+if (!product) {
+  // SKU no existe en Contífico
+  await storage.updateInventoryMovement(movement.id, {
+    status: 'failed',
+    errorMessage: `Producto con SKU ${movement.sku} no encontrado en Contífico`,
+    processedAt: new Date()
+  });
+  
+  // Crear notificación para usuario
+  await storage.createNotification({
+    tenantId: movement.tenantId,
+    type: 'push_error',
+    severity: 'error',
+    title: 'Producto no encontrado',
+    message: `El producto con SKU ${movement.sku} no existe en Contífico`
+  });
+  
+  return; // No retry para data errors
+}
+Paso 3: Obtener configuración de integración
+typescriptconst integration = await storage.getIntegration(movement.integrationId);
+const settings = integration.settings;
+const apiKey = settings.api_keys[settings.env]; // test o prod
+const warehouseId = settings.warehouse_primary;
+Paso 4: Construir payload para Contífico
+typescriptconst movementPayload = {
+  tipo: movement.movementType === 'egreso' ? 'EGR' : 'ING',
+  bodega_id: warehouseId,
+  fecha: new Date().toISOString().split('T')[0], // YYYY-MM-DD
+  items: [
+    {
+      producto_id: product.id, // ID obtenido del lookup
+      cantidad: movement.quantity,
+      observacion: `Orden #${movement.orderId} - Shopify`
+    }
+  ]
+};
+Paso 5: Enviar a Contífico
+typescripttry {
+  const result = await ContificoMovementsAPI.createMovement(
+    apiKey,
+    settings.env,
+    movementPayload,
+    { timeout: 45000 } // 45 segundos
+  );
+  
+  // Success
+  await storage.updateInventoryMovement(movement.id, {
+    status: 'completed',
+    processedAt: new Date(),
+    metadata: {
+      ...movement.metadata,
+      contificoResponse: result
+    }
+  });
+  
+  console.log(`[InventoryPush] ✅ Movimiento ${movement.id} completado`);
+  
+} catch (error) {
+  await handleMovementError(movement, error);
+}
+D. Manejo de errores:
+typescriptasync function handleMovementError(movement: InventoryMovement, error: any) {
+  const isRetryable = isRetryableError(error);
+  const maxAttemptsReached = movement.attempts >= movement.maxAttempts;
+  
+  if (!isRetryable || maxAttemptsReached) {
+    // Marcar como failed
+    await storage.updateInventoryMovement(movement.id, {
+      status: 'failed',
+      errorMessage: error.message.substring(0, 500),
+      processedAt: new Date()
+    });
+    
+    // Notificar usuario
+    await storage.createNotification({
+      tenantId: movement.tenantId,
+      type: 'push_error',
+      severity: 'error',
+      title: 'Error en sincronización Push',
+      message: `Movimiento ${movement.id} falló después de ${movement.attempts} intentos`
+    });
+    
+  } else {
+    // Retry - volver a pending con backoff
+    const nextRetryAt = calculateNextRetry(movement.attempts);
+    
+    await storage.updateInventoryMovement(movement.id, {
+      status: 'pending',
+      errorMessage: error.message.substring(0, 500),
+      metadata: {
+        ...movement.metadata,
+        lastError: error.message,
+        nextRetryAt: nextRetryAt
+      }
+    });
+    
+    console.log(`[InventoryPush] ⚠️ Movimiento ${movement.id} reintentará en ${nextRetryAt}`);
+  }
+}
+
+function isRetryableError(error: any): boolean {
+  // Retry para errores de red, timeouts
+  if (error.code === 'ETIMEDOUT') return true;
+  if (error.code === 'ECONNREFUSED') return true;
+  if (error.message?.includes('timeout')) return true;
+  if (error.response?.status >= 500) return true; // Server errors
+  
+  // No retry para auth errors o client errors
+  if (error.response?.status === 401) return false;
+  if (error.response?.status === 403) return false;
+  if (error.response?.status >= 400 && error.response?.status < 500) return false;
+  
+  return true; // Default: retry
+}
+
+function calculateNextRetry(attempts: number): Date {
+  // Exponential backoff: 1min, 5min, 15min
+  const delays = [60000, 300000, 900000]; // milisegundos
+  const delay = delays[Math.min(attempts, delays.length - 1)];
+  return new Date(Date.now() + delay);
+}
+E. Retry Logic:
+Política:
+
+Max 3 intentos (maxAttempts = 3)
+Exponential backoff:
+
+Intento 1 → Esperar 1 minuto
+Intento 2 → Esperar 5 minutos
+Intento 3 → Esperar 15 minutos
+
+
+Después de 3 intentos fallidos → status = 'failed', notificar usuario
+
+Tipos de error:
+
+Data errors (SKU no encontrado): NO retry, fail inmediatamente
+Auth errors (API key inválido): NO retry, fail inmediatamente, alertar usuario
+Network errors (timeout, connection refused): SÍ retry con backoff
+Server errors (5xx): SÍ retry con backoff
+
+F. Timeout handling:
+typescript// Contífico puede tardar 30+ segundos
+const CONTIFICO_TIMEOUT = 45000; // 45 segundos
+
+// Implementar timeout en las requests
+const result = await Promise.race([
+  ContificoMovementsAPI.createMovement(apiKey, env, payload),
+  new Promise((_, reject) => 
+    setTimeout(() => reject(new Error('Contífico API timeout')), CONTIFICO_TIMEOUT)
+  )
+]);
+G. Scheduling del worker:
+Opción 1: setInterval (simple)
+typescript// En server/index.ts o similar
+import { InventoryPushWorker } from './workers/inventoryPushWorker';
+
+// Iniciar worker al arrancar servidor
+InventoryPushWorker.start(120000); // Cada 2 minutos
+Opción 2: Endpoint manual (para testing)
+typescript// En server/routes.ts
+app.post('/api/workers/push/run', async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: 'No autorizado' });
+  }
+  
+  try {
+    const result = await InventoryPushWorker.run();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+Recomendación: Implementar ambas - setInterval para producción + endpoint manual para testing/debugging.
+H. Logging:
+Agregar logs detallados con prefijo [InventoryPush]:
+typescriptconsole.log(`[InventoryPush] 🚀 Worker iniciado, procesando cada ${intervalMs}ms`);
+console.log(`[InventoryPush] 📋 Encontrados ${movements.length} movimientos pendientes`);
+console.log(`[InventoryPush] 🔄 Procesando movimiento ${movement.id} (SKU: ${movement.sku})`);
+console.log(`[InventoryPush] ✅ Movimiento ${movement.id} completado exitosamente`);
+console.log(`[InventoryPush] ❌ Movimiento ${movement.id} falló: ${error.message}`);
+console.log(`[InventoryPush] ⚠️ Movimiento ${movement.id} reintentará en ${nextRetry}`);
+Archivos a crear:
+
+📄 server/workers/inventoryPushWorker.ts (worker principal - NUEVO)
+
+Archivos a modificar/usar:
+
+✏️ server/services/inventoryPushService.ts (ya existe parcialmente, completar si es necesario)
+✅ server/services/contificoMovementsAPI.ts (wrapper de API ya existe)
+✏️ server/storage.ts (agregar métodos para query/update inventory_movements si faltan)
+✏️ server/index.ts (iniciar worker al arrancar servidor)
+
+
+3️⃣ TESTING END-TO-END
+Objetivo: Validar que el flujo completo funciona correctamente.
+Escenario de prueba principal:
+Paso 1: Conectar tienda Shopify de test
+1. Login al dashboard G4 Hub
+2. Agregar nueva tienda Shopify
+3. Ingresar credenciales de test
+4. Click "Guardar y Conectar"
+5. Verificar que no hay errores
+Paso 2: Verificar webhooks creados
+1. Ir a Shopify Admin > Settings > Notifications > Webhooks
+2. Verificar que existen 3 webhooks:
+   - orders/paid
+   - orders/cancelled
+   - refunds/create
+3. Verificar que URL apunta a: https://[repl-url]/api/webhooks/shopify/[storeId]
+4. Verificar que están activos (status: enabled)
+Paso 3: Crear orden de prueba en Shopify
+1. Ir a Shopify Admin > Orders > Create order
+2. Agregar producto con SKU que existe en Contífico
+3. Cantidad: 2 unidades
+4. Mark as paid
+5. Verificar que orden se creó exitosamente
+Paso 4: Verificar webhook recibido
+1. Revisar logs de Replit
+2. Buscar: [Webhook][Shopify] 🔔 Recibido evento: orders/paid
+3. Verificar que no hay errores de HMAC validation
+4. Verificar que payload fue procesado
+Paso 5: Verificar movimiento encolado
+1. Query a base de datos:
+   SELECT * FROM inventory_movements 
+   WHERE order_id = 'orden_shopify_id' 
+   ORDER BY created_at DESC;
+
+2. Verificar:
+   - Existe registro
+   - movementType = 'egreso'
+   - sku correcto
+   - quantity = 2
+   - status = 'pending'
+   - attempts = 0
+Paso 6: Ejecutar worker
+Opción A (automático): Esperar 2-3 minutos
+Opción B (manual): POST /api/workers/push/run
+
+Verificar logs:
+- [InventoryPush] 📋 Encontrados X movimientos pendientes
+- [InventoryPush] 🔄 Procesando movimiento...
+- [InventoryPush] ✅ Movimiento completado
+Paso 7: Verificar movimiento completado
+1. Query nuevamente:
+   SELECT * FROM inventory_movements WHERE id = [movement_id];
+
+2. Verificar:
+   - status = 'completed'
+   - processed_at tiene timestamp
+   - attempts = 1
+   - errorMessage = null
+Paso 8: Verificar en Contífico
+1. Login a Contífico (test environment)
+2. Ir a Inventario > Movimientos
+3. Buscar movimiento reciente
+4. Verificar:
+   - Tipo: EGRESO
+   - Producto correcto
+   - Cantidad: 2
+   - Observación contiene orden ID
+Casos de error a probar:
+Test 1: SKU no existe en Contífico
+1. Crear orden con producto SKU-FAKE-123
+2. Verificar que:
+   - Movimiento se encola
+   - Worker procesa
+   - Status = 'failed' inmediatamente (sin retries)
+   - errorMessage = "Producto con SKU SKU-FAKE-123 no encontrado..."
+   - Se crea notificación para usuario
+Test 2: Timeout de Contífico (simulado)
+1. Temporalmente reducir timeout a 1 segundo
+2. Crear orden válida
+3. Verificar que:
+   - Movimiento falla por timeout
+   - Status vuelve a 'pending'
+   - attempts incrementa
+   - Se reintenta después del backoff
+Test 3: Orden sin SKUs
+1. Crear orden Shopify con producto sin SKU
+2. Verificar que:
+   - Webhook se recibe correctamente
+   - NO se crea movimiento (skip silencioso)
+   - Log indica: "No se encontraron items con SKU"
+Test 4: Múltiples productos en orden
+1. Crear orden con 3 productos diferentes (SKU-A, SKU-B, SKU-C)
+2. Verificar que:
+   - Se crean 3 movimientos separados
+   - Cada uno con su SKU y cantidad
+   - Todos se procesan correctamente
+Verificaciones de integración:
+No romper sistema Pull:
+1. Mientras worker Push está corriendo
+2. Ejecutar sincronización Pull manual
+3. Verificar que:
+   - Pull funciona normalmente
+   - No hay conflictos
+   - Locks se respetan si están implementados
+
+4️⃣ INTEGRACIÓN CON SISTEMA EXISTENTE
+Objetivo: Asegurar que el sistema Push no rompe el sistema Pull que ya funciona.
+A. Sistema de Locks (si aplica):
+Revisar tabla sync_locks:
+typescript// Si existe sistema de locks en Pull
+// El worker Push debe:
+1. Verificar si hay lock activo para la tienda
+2. Si hay lock de Pull → esperar o skip ese batch
+3. Opcionalmente crear lock de Push mientras procesa
+Implementación sugerida:
+typescript// En InventoryPushWorker.processBatch()
+for (const movement of batch) {
+  // Verificar lock
+  const existingLock = await storage.getLock(movement.storeId, 'pull');
+  
+  if (existingLock) {
+    console.log(`[InventoryPush] ⏸️ Skip movimiento ${movement.id} - Pull lock activo`);
+    continue; // Skip este movimiento por ahora
+  }
+  
+  // Procesar normalmente
+  await processMovement(movement);
+}
+B. Referencias al código Pull:
+Estudiar estos archivos como referencia:
+
+✅ server/services/SyncService.ts - Lógica de Pull, manejo de errores, estructura
+✅ server/connectors/ContificoConnector.ts - Cómo hacer requests a Contífico
+✅ server/storage.ts - Métodos de base de datos, patrón de queries
+✅ server/routes.ts - Estructura de endpoints, autenticación
+
+Patrones a seguir:
+
+Misma estructura de try-catch
+Mismo estilo de logging
+Misma forma de crear notificaciones
+Misma forma de actualizar timestamps
+
+C. Variables de entorno y configuración:
+Verificar que uses las mismas credenciales:
+typescript// El worker debe usar los mismos settings que Pull
+const integration = await storage.getIntegration(integrationId);
+const apiKey = integration.settings.api_keys[integration.settings.env];
+const warehouse = integration.settings.warehouse_primary;
+NO hardcodear:
+
+API keys
+Warehouse IDs
+URLs base
+Timeouts (hacer configurables)
+
+
+📚 ESPECIFICACIONES TÉCNICAS
+Webhook URL Structure
+Pattern: https://[repl-url]/api/webhooks/shopify/:storeId
+Example: https://g4hub-diego.repl.co/api/webhooks/shopify/8
+
+Routing:
+- :storeId se extrae de URL params
+- Store lookup → obtener tenantId
+- No usar headers/query params para tenant routing
+Movement Types
+typescript// Tipos de movimiento
+type MovementType = 'egreso' | 'ingreso';
+
+// Mapeo de eventos
+const EVENT_TO_MOVEMENT_TYPE = {
+  'orders/paid': 'egreso',       // Venta → sale inventory out
+  'orders/cancelled': 'ingreso',  // Cancel → restore inventory in
+  'refunds/create': 'ingreso'     // Refund → restore inventory in
+};
+Database Schema
+typescript// Tabla: inventory_movements (ya existe)
+interface InventoryMovement {
+  id: number;
+  tenantId: number;
+  storeId: number;
+  integrationId: number;
+  movementType: 'egreso' | 'ingreso';
+  sku: string;
+  quantity: number;
+  orderId: string;
+  eventType: string; // 'orders/paid', 'orders/cancelled', etc.
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  attempts: number;
+  maxAttempts: number; // default: 3
+  errorMessage: string | null;
+  metadata: any; // JSONB
+  createdAt: Date;
+  processedAt: Date | null;
+}
+
+// Índices importantes (verificar que existan):
+// - (status, attempts) para query eficiente de pendientes
+// - (storeId, integrationId) para agrupación
+// - (tenantId) para multi-tenancy
+Contífico API Details
+Base URL:
+https://api.contifico.com
+Authentication:
+typescriptheaders: {
+  'Authorization': apiKey, // Directo, sin "Bearer"
+  'Content-Type': 'application/json'
+}
+Endpoints:
+1. Get Product by SKU:
+GET /sistema/api/v1/producto/?codigo={SKU}
+
+Response:
+{
+  "id": "123",
+  "codigo": "SKU-ABC",
+  "nombre": "Producto ejemplo",
+  "activo": true,
+  ...
+}
+2. Create Movement:
+POST /sistema/api/v1/movimiento-inventario/
+
+Request Body:
+{
+  "tipo": "EGR" | "ING",
+  "bodega_id": "BOD001",
+  "fecha": "2024-11-19",
+  "items": [
+    {
+      "producto_id": "123",
+      "cantidad": 2,
+      "observacion": "Orden #1234 - Shopify"
+    }
+  ]
+}
+
+Response (success):
+{
+  "id": "MOV-789",
+  "tipo": "EGR",
+  "estado": "procesado",
+  ...
+}
+Important Notes:
+
+API puede tardar 30+ segundos (implementar timeout adecuado)
+Usar API key del entorno correcto (test/prod según integration settings)
+Warehouse ID debe venir de integration.settings.warehouse_primary
+Producto lookup por SKU es case-sensitive
+
+Documentation:
+https://contifico.github.io/
+Error Handling Priority
+Categorías de errores:
+1. Data Errors (fail fast, no retry):
+
+SKU not found in Contífico
+Invalid product ID
+Missing required fields
+
+2. Auth Errors (fail fast, no retry, notify user):
+
+Invalid API key (401)
+Forbidden access (403)
+Expired credentials
+
+3. Transient Errors (retry with backoff):
+
+Network timeout (ETIMEDOUT)
+Connection refused (ECONNREFUSED)
+Server errors (5xx)
+Rate limiting (429)
+
+4. Unknown Errors (log, retry once, then fail):
+
+Any unexpected error
+Log full stack trace
+Include in error notification
+
+Logging Standards
+Usar prefijo consistente:
+typescriptconsole.log(`[InventoryPush] message`);
+console.error(`[InventoryPush] error`);
+console.warn(`[InventoryPush] warning`);
+Emojis para claridad visual:
+typescript🚀 - Worker started
+📋 - Found pending movements
+🔄 - Processing movement
+✅ - Success
+❌ - Error/Failed
+⚠️ - Warning/Retry
+⏸️ - Skipped
+🔒 - Lock acquired/released
+Información a loggear:
+
+Movement ID en cada operación
+SKU being processed
+Timestamps para performance tracking
+Error messages completos (con stack trace)
+Retry attempts y next retry time
+
+
+✅ OUTPUTS ESPERADOS
+Al completar esta fase, el sistema debe:
+Funcionalidad Core:
+✅ Usuario conecta tienda Shopify → Webhooks se crean automáticamente en Shopify
+✅ Cliente compra en Shopify → Webhook llega a G4 Hub
+✅ Sistema extrae line items y encola movimientos en DB (status: pending)
+✅ Worker procesa cola cada 2-3 minutos automáticamente
+✅ Worker lookup productos en Contífico por SKU
+✅ Worker envía movimientos a Contífico API
+✅ Status actualiza a completed o failed según resultado
+✅ En caso de error transient, retry automático con backoff
+✅ Después de 3 intentos fallidos, marcar como failed y notificar usuario
+Casos de error manejados:
+✅ Productos sin SKU → Ignorar silenciosamente
+✅ SKU no existe en Contífico → Fail inmediato, no retry, notificar
+✅ Timeout de Contífico → Retry con backoff
+✅ Credenciales inválidas → Fail inmediato, notificar usuario
+✅ Órdenes con múltiples productos → Crear movimiento por cada line item
+Integración con sistema existente:
+✅ Sistema Pull sigue funcionando normalmente
+✅ No hay conflictos entre Pull y Push
+✅ Locks respetados (si aplican)
+✅ Mismo patrón de código y estructura
+Testing:
+✅ Test end-to-end exitoso con tienda Shopify real
+✅ Movimiento visible en Contífico después de procesarse
+✅ Casos de error probados y funcionando
+✅ Logs claros y útiles para debugging
+
+🚨 INSTRUCCIONES CRÍTICAS PARA EL AGENTE
+Proceso de trabajo:
+1. PRIMERO - Análisis:
+
+Lee TODOS los archivos mencionados en este documento
+Entiende la estructura actual del proyecto
+Identifica qué código ya existe vs qué falta
+Revisa el sistema Pull como referencia de patrones
+
+2. SEGUNDO - Planificación:
+
+Lista exactamente qué archivos vas a crear
+Lista exactamente qué archivos vas a modificar
+Identifica dependencias entre tareas
+Pregunta si algo no está claro ANTES de codear
+
+3. TERCERO - Implementación:
+
+Sigue los patrones del código existente (especialmente Pull)
+Agrega logs detallados en cada paso importante
+Maneja errores explícitamente (no dejar catches vacíos)
+Comenta código complejo
+Usa TypeScript types correctamente
+
+4. CUARTO - Testing:
+
+Prueba el flujo end-to-end completo
+Verifica casos de error
+Asegura que Pull sigue funcionando
+Verifica logs son útiles para debugging
+
+5. QUINTO - Documentación:
+
+Comenta funciones públicas
+Documenta decisiones no-obvias
+Actualiza README si es necesario
+
+Prioridades:
+🔴 CRÍTICO (debe funcionar para viernes):
+
+Shopify webhook auto-registration
+Worker básico que procesa cola
+Envío a Contífico funcionando
+Retry logic básico
+Testing end-to-end exitoso
+
+🟡 IMPORTANTE (debe estar pero puede tener rough edges):
+
+Manejo de todos los tipos de error
+Logging completo
+Notificaciones a usuario
+
+🟢 NICE TO HAVE (puede quedar para Fase 2):
+
+Optimizaciones de performance
+UI de monitoreo
+Configuraciones avanzadas
+Estadísticas detalladas
+
+NO hacer en Fase 1:
+❌ WooCommerce (eso es Fase 2)
+❌ UI de monitoreo fancy (puede ser básico)
+❌ Optimizaciones prematuras
+❌ Features no solicitadas
+Standards de código:
+TypeScript:
+typescript// ✅ GOOD - tipos explícitos
+async function processMovement(movement: InventoryMovement): Promise<ProcessResult> {
+  // ...
+}
+
+// ❌ BAD - any everywhere
+async function processMovement(movement: any): Promise<any> {
+  // ...
+}
+Error handling:
+typescript// ✅ GOOD - manejo específico
+try {
+  await sendToContifico(movement);
+} catch (error) {
+  if (error.code === 'ETIMEDOUT') {
+    return await retryWithBackoff(movement);
+  } else if (error.response?.status === 401) {
+    return await handleAuthError(movement);
+  } else {
+    console.error('[InventoryPush] Unexpected error:', error);
+    throw error;
+  }
+}
+
+// ❌ BAD - catch silencioso
+try {
+  await sendToContifico(movement);
+} catch (error) {
+  // ignore
+}
+Logging:
+typescript// ✅ GOOD - informativo
+console.log(`[InventoryPush] 🔄 Procesando movimiento ${movement.id} (SKU: ${movement.sku}, Qty: ${movement.quantity})`);
+
+// ❌ BAD - inútil
+console.log('processing...');
+
+❓ PREGUNTAS PARA ACLARAR
+Si encuentras ambigüedades o problemas, pregunta específicamente:
+Sobre webhooks:
+
+¿Dónde exactamente debo guardar los webhook IDs? (¿campo en stores o tabla nueva?)
+¿En qué endpoint específico debo triggear la creación de webhooks?
+¿Existe algún flujo de "reconnect" de tienda que deba considerar?
+
+Sobre worker:
+
+¿Existe algún sistema de scheduling ya implementado que deba usar?
+¿Debo implementar locks para prevenir múltiples workers corriendo simultáneamente?
+¿El campo metadata en inventory_movements tiene estructura específica esperada?
+
+Sobre base de datos:
+
+¿Existen migrations pendientes que deba ejecutar?
+¿Debo crear índices adicionales en inventory_movements?
+¿Hay algún método de storage que falte y deba implementar?
+
+Sobre integración:
+
+¿Cómo se activa/desactiva el sistema Push por tenant?
+¿Hay alguna configuración a nivel tenant que deba respetar?
+¿El worker debe correr para todos los tenants o filtrar de alguna forma?
+
+
+🎯 CRITERIO DE ÉXITO
+La Fase 1 está completa cuando:
+
+✅ Un usuario puede conectar una tienda Shopify real
+✅ Los webhooks se crean automáticamente en Shopify al conectar
+✅ Una compra en Shopify dispara el webhook hacia G4 Hub
+✅ El webhook se recibe correctamente y crea movimiento(s) en la cola
+✅ El worker procesa automáticamente la cola cada 2-3 minutos
+✅ El movimiento se envía exitosamente a Contífico
+✅ El movimiento aparece en Contífico con los datos correctos
+✅ Los errores se manejan apropiadamente (SKU no found, timeouts, etc.)
+✅ El sistema Pull sigue funcionando sin problemas
+✅ Los logs permiten debuggear problemas fácilmente
+
+Test final:
+Cliente real hace una compra en su tienda Shopify el viernes
+→ Webhook llega a G4 Hub
+→ Movimiento se procesa automáticamente
+→ Inventario se actualiza en Contífico
+→ Todo funciona sin intervención manual
+→ ¡ÉXITO! 🎉
