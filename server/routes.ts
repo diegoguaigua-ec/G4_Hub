@@ -327,10 +327,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
             productsCount: connectionResult.products_count || 0
           });
           
+          // Si es Shopify y la conexión fue exitosa, verificar/recrear webhooks automáticamente
+          let webhookResult = null;
+          if (updatedStore.platform === 'shopify' && connectionResult.success) {
+            try {
+              const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
+                ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
+                : req.protocol + '://' + req.get('host');
+              
+              const webhookUrl = `${publicUrl}/api/webhooks/shopify/${updatedStore.id}`;
+              const shopifyConnector = connector as any;
+              
+              console.log(`[Store] Verificando webhooks para tienda ${storeId} después de actualización`);
+              webhookResult = await shopifyConnector.registerWebhooks(webhookUrl);
+              
+              if (webhookResult.success) {
+                // Obtener el store con metadatos de conexión frescos ANTES de actualizar webhooks
+                const storeWithFreshConnection = await storage.getStore(updatedStore.id);
+                
+                await storage.updateStore(updatedStore.id, {
+                  storeInfo: {
+                    ...storeWithFreshConnection?.storeInfo,
+                    webhooks: webhookResult.webhooks,
+                    webhooks_configured_at: new Date().toISOString()
+                  }
+                });
+                console.log(`[Store] ✅ Webhooks verificados/recreados: ${webhookResult.webhooks.length} configurados`);
+              }
+            } catch (webhookError: any) {
+              console.error(`[Store] Error configurando webhooks:`, webhookError.message);
+              // No fallar la actualización si los webhooks fallan
+            }
+          }
+          
           const finalStore = await storage.getStore(parseInt(storeId));
           res.json({
             store: finalStore,
             connection: connectionResult,
+            webhooks: webhookResult,
             message: connectionResult.success ? "Store updated and connection verified" : "Store updated but connection failed"
           });
         } catch (connectionError: any) {
