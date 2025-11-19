@@ -223,6 +223,14 @@ export class ContificoConnector extends BaseConnector {
     }
   }
 
+  /**
+   * Busca un producto específicamente por SKU
+   * Wrapper de getProduct() para mayor claridad en el código
+   */
+  async getProductBySku(sku: string): Promise<ProductResult> {
+    return this.getProduct(sku);
+  }
+
   async getProductStock(productId: string, sku: string): Promise<number> {
     const primaryWarehouse = this.contificoCredentials.warehouse_primary;
 

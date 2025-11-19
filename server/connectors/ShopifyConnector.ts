@@ -942,6 +942,7 @@ export class ShopifyConnector extends BaseConnector {
     errors: Array<{ topic: string; error: string }>;
   }> {
     const webhookTopics = [
+      'orders/create',
       'orders/paid',
       'orders/cancelled',
       'refunds/create'
