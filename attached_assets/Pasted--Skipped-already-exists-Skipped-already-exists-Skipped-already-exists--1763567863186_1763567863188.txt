@@ -1,0 +1,103 @@
+   ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0000_salty_emma_frost.sql
+  ⚡ Running 0001_sharp_ego.sql (4 statements)...
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0000_salty_emma_frost.sql
+  ⚡ Running 0001_sharp_ego.sql (4 statements)...
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0001_sharp_ego.sql
+  ⚡ Running 0002_add_notifications.sql (9 statements)...
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0001_sharp_ego.sql
+  ⚡ Running 0002_add_notifications.sql (9 statements)...
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0002_add_notifications.sql
+  ⚡ Running 0003_add_push_inventory_tables.sql (21 statements)...
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0002_add_notifications.sql
+  ⚡ Running 0003_add_push_inventory_tables.sql (21 statements)...
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0003_add_push_inventory_tables.sql
+✅ All migrations completed successfully
+3:55:48 PM [express] ✓ Database migrations completed successfully
+3:55:48 PM [express] ✓ Background workers disabled (Autoscale mode). Set ENABLE_BACKGROUND_WORKERS=true for Reserved VM deployments.
+    ⏭️  Skipped (already exists)
+    ✅ Completed 0003_add_push_inventory_tables.sql
+✅ All migrations completed successfully
+✅ Migration script completed
