@@ -106,10 +106,54 @@ Successfully implemented the complete Shopify Push system for synchronizing inve
 - **Critical Fix**: Fixed bug where webhook re-registration was overwriting fresh connection metadata with stale data
 - **Worker Status**: Runs conditionally (development environment or ENABLE_BACKGROUND_WORKERS=true)
 
-### Next Steps:
+## Phase 2: Enhanced Push System - COMPLETED (November 19, 2025)
 
-Phase 2 would include:
-- Implement missing `getProductBySku()` method in ContificoConnector
-- Add UI for monitoring queue status and failed movements
-- Implement retry mechanism for failed movements
-- Add comprehensive logging and alerting system
+Successfully enhanced the Push system with comprehensive order event handling, SKU-based product lookups, and idempotency safeguards.
+
+### Key Features Implemented:
+
+1. **Expanded Webhook Coverage**
+   - Added `orders/create` webhook topic to capture all order events, not just paid orders
+   - System now supports both `orders/create` and `orders/paid` to accommodate different Shopify store configurations
+   - Idempotency logic prevents duplicate inventory movements when orders transition through multiple states
+
+2. **SKU-Based Product Lookup (All Connectors)**
+   - **ShopifyConnector.getProductBySku()**: Uses GraphQL Admin API with `productVariants(query: "sku:...")` for efficient SKU lookups without manual pagination
+   - **WooCommerceConnector.getProductBySku()**: Uses REST API query parameter `?sku=` to filter products
+   - **ContificoConnector.getProductBySku()**: Simple wrapper since Contifico accepts SKU as product identifier
+   - All implementations properly handle "SKU not found" errors
+
+3. **Idempotency Protection**
+   - Application-level duplicate detection in `queueMovementsFromWebhook()`
+   - Checks for existing movements with same orderId+SKU+movementType before enqueueing
+   - Prevents double stock decrements when same order is processed multiple times
+   - Comprehensive logging when duplicates are detected
+
+4. **Monitoring & Retry UI (Already Existed)**
+   - UI components for monitoring inventory movement queue already implemented
+   - Endpoints for statistics and manual retry already functional
+   - MovementsTab component displays queue status and allows retry of failed movements
+
+### Technical Implementation:
+
+- **Files Modified**: 
+  - `server/connectors/ShopifyConnector.ts`: GraphQL-based getProductBySku()
+  - `server/connectors/WooCommerceConnector.ts`: REST-based getProductBySku()
+  - `server/connectors/ContificoConnector.ts`: SKU-wrapper getProductBySku()
+  - `server/connectors/BaseConnector.ts`: Abstract method definition
+  - `server/services/inventoryPushService.ts`: Idempotency logic and orders/create support
+  - `server/routes/webhooks.ts`: Added orders/create to supported events
+
+### Known Improvements for Future:
+
+**Database-Level Idempotency (Optional Enhancement)**
+- Current implementation has application-level duplicate detection
+- For high-concurrency scenarios, consider adding unique index on `(orderId, sku, movementType)` in the database schema
+- This would prevent race conditions where concurrent webhook deliveries might both pass the duplicate check
+- Recommendation: `CREATE UNIQUE INDEX idx_movement_idempotency ON inventory_movements_queue (order_id, sku, movement_type) WHERE status != 'failed';`
+
+### Production Notes:
+
+- Background workers (InventoryPushWorker) disabled by default in Autoscale deployments
+- To enable continuous processing on Reserved VM: set `ENABLE_BACKGROUND_WORKERS=true`
+- GraphQL implementation in Shopify connector is more efficient than deprecated REST pagination
