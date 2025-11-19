@@ -51,17 +51,4 @@ async function runMigrations() {
   }
 }
 
-// Run migrations if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  runMigrations()
-    .then(() => {
-      console.log('✅ Migration script completed');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('❌ Migration script failed:', error);
-      process.exit(1);
-    });
-}
-
 export { runMigrations };
