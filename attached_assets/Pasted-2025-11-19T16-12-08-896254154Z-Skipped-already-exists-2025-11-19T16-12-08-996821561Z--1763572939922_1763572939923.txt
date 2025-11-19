@@ -1,0 +1,336 @@
+2025-11-19T16:12:08.896254154Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:08.996821561Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:09.358539196Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:09.412952024Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:09.577445675Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:09.631367423Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:09.793410124Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:09.896282689Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.255271267Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.30553122Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.50889507Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.522558531Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.729408612Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.736992819Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.949066947Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:10.952025758Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.168804844Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.170472788Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.385691981Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.388825016Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.604765304Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.653336433Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.825626934Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:11.873051899Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.044223657Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.090279623Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.260306218Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.307650641Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.487324664Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.530812398Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.700561667Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.75811141Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.922487408Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:12.970886723Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:13.138051349Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:13.186038925Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:13.358801196Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:13.358840847Z     ✅ Completed 0003_add_push_inventory_tables.sql
+2025-11-19T16:12:13.358846197Z ✅ All migrations completed successfully
+2025-11-19T16:12:13.359149194Z 4:12:13 PM [express] ✓ Database migrations completed successfully
+2025-11-19T16:12:13.359158914Z 4:12:13 PM [express] ✓ Background workers disabled (Autoscale mode). Set ENABLE_BACKGROUND_WORKERS=true for Reserved VM deployments.
+2025-11-19T16:12:13.403154488Z     ⏭️  Skipped (already exists)
+2025-11-19T16:12:13.403223429Z     ✅ Completed 0003_add_push_inventory_tables.sql
+2025-11-19T16:12:13.403281221Z ✅ All migrations completed successfully
+2025-11-19T16:12:13.403426313Z ✅ Migration script completed
+2025-11-19T17:20:00.876910797Z ==> Deploying...
+2025-11-19T17:20:34.291992847Z ==> Running 'npm run start'
+2025-11-19T17:20:35.292723451Z 
+2025-11-19T17:20:35.292748581Z > rest-express@1.0.0 start
+2025-11-19T17:20:35.292755741Z > NODE_ENV=production node dist/index.js
+2025-11-19T17:20:35.292757941Z 
+2025-11-19T17:20:45.293142954Z 🔄 Running database migrations...
+2025-11-19T17:20:45.293581344Z 📁 Found 4 migration files
+2025-11-19T17:20:45.294504147Z   ⚡ Running 0000_salty_emma_frost.sql (23 statements)...
+2025-11-19T17:20:45.504965372Z 5:20:45 PM [express] ✓ Environment variables validated successfully
+2025-11-19T17:20:45.794166132Z 5:20:45 PM [express] ✓ Server is ready and listening on port 10000
+2025-11-19T17:20:45.794240484Z 5:20:45 PM [express] ✓ Health check available at http://0.0.0.0:10000/health
+2025-11-19T17:20:45.794393457Z 5:20:45 PM [express] Running database migrations...
+2025-11-19T17:20:45.794482139Z 🔄 Running database migrations...
+2025-11-19T17:20:45.794736256Z 📁 Found 4 migration files
+2025-11-19T17:20:45.794892459Z   ⚡ Running 0000_salty_emma_frost.sql (23 statements)...
+2025-11-19T17:20:46.448158488Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:46.451156971Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:46.670762838Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:46.673825363Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:46.894101967Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:46.896375312Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.113692264Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.11804186Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.336150122Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.339508233Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.555634017Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.557406629Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.773499372Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.77590028Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.992438274Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:47.99434173Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.00946553Z ==> Your service is live 🎉
+2025-11-19T17:20:48.06021228Z ==> 
+2025-11-19T17:20:48.10630512Z ==> ///////////////////////////////////////////////////////////
+2025-11-19T17:20:48.15045269Z ==> 
+2025-11-19T17:20:48.195509419Z ==> Available at your primary URL https://g4-hub.onrender.com
+2025-11-19T17:20:48.214662055Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.216452848Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.243649639Z ==> 
+2025-11-19T17:20:48.291147509Z ==> ///////////////////////////////////////////////////////////
+2025-11-19T17:20:48.433859073Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.435269617Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.651940004Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.654239069Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.870076356Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:48.872645678Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.084647641Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.090275918Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.301656206Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.305319275Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.519320316Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.554750437Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.733677146Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.771221729Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.947622747Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:49.989264429Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.164037517Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.202187544Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.37686188Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.42046208Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.599379999Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.635300621Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.812637772Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:50.84876059Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.02896249Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.061936911Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.242797388Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.242821778Z     ✅ Completed 0000_salty_emma_frost.sql
+2025-11-19T17:20:51.243597397Z   ⚡ Running 0001_sharp_ego.sql (4 statements)...
+2025-11-19T17:20:51.272360556Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.272375857Z     ✅ Completed 0000_salty_emma_frost.sql
+2025-11-19T17:20:51.272460029Z   ⚡ Running 0001_sharp_ego.sql (4 statements)...
+2025-11-19T17:20:51.455908678Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.488208153Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.779502793Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.779524824Z     ✅ Completed 0001_sharp_ego.sql
+2025-11-19T17:20:51.780276022Z   ⚡ Running 0002_add_notifications.sql (9 statements)...
+2025-11-19T17:20:51.811774657Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:51.811797158Z     ✅ Completed 0001_sharp_ego.sql
+2025-11-19T17:20:51.811882Z   ⚡ Running 0002_add_notifications.sql (9 statements)...
+2025-11-19T17:20:51.996285362Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.029042708Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.21341387Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.242886506Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.426508739Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.471480002Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.642650213Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.683463485Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.856033609Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:52.895916939Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.068284198Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.111436737Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.28515484Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.323676436Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.501618241Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.5386132Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.712113998Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.712151868Z     ✅ Completed 0002_add_notifications.sql
+2025-11-19T17:20:53.712948668Z   ⚡ Running 0003_add_push_inventory_tables.sql (21 statements)...
+2025-11-19T17:20:53.755903602Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.755928872Z     ✅ Completed 0002_add_notifications.sql
+2025-11-19T17:20:53.755943283Z   ⚡ Running 0003_add_push_inventory_tables.sql (21 statements)...
+2025-11-19T17:20:53.929401359Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:53.970888837Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:54.143668497Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:54.186390815Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:54.355228929Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:54.480509084Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:54.838205178Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:54.889935356Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.056355431Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.104333727Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.276504382Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.480177173Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.688480665Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.743504333Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.908834392Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:55.956034389Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.121598913Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.168878632Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.338189357Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.386542763Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.550242882Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.600403141Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.768181669Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.813944081Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:56.982015066Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.03195746Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.196885069Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.243640996Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.413691059Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.460488126Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.628262854Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.677751927Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.850177518Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:57.888367156Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.064153989Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.102608874Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.277933696Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.315754235Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.495475533Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.535586888Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.714704432Z     ⏭️  Skipped (already exists)
+2025-11-19T17:20:58.714724752Z     ✅ Completed 0003_add_push_inventory_tables.sql
+2025-11-19T17:20:58.714727822Z ✅ All migrations completed successfully
+2025-11-19T17:20:58.715061461Z ✅ Migration script completed
+2025-11-19T17:21:09.221069276Z ==> Running 'npm run start'
+2025-11-19T17:21:10.231241935Z 
+2025-11-19T17:21:10.231267725Z > rest-express@1.0.0 start
+2025-11-19T17:21:10.231275725Z > NODE_ENV=production node dist/index.js
+2025-11-19T17:21:10.231278936Z 
+2025-11-19T17:21:20.834604162Z 🔄 Running database migrations...
+2025-11-19T17:21:20.834621832Z 📁 Found 4 migration files
+2025-11-19T17:21:20.834820317Z   ⚡ Running 0000_salty_emma_frost.sql (23 statements)...
+2025-11-19T17:21:21.028664282Z 5:21:20 PM [express] ✓ Environment variables validated successfully
+2025-11-19T17:21:21.431828691Z 5:21:21 PM [express] ✓ Server is ready and listening on port 10000
+2025-11-19T17:21:21.432001746Z 5:21:21 PM [express] ✓ Health check available at http://0.0.0.0:10000/health
+2025-11-19T17:21:21.432149319Z 5:21:21 PM [express] Running database migrations...
+2025-11-19T17:21:21.432267072Z 🔄 Running database migrations...
+2025-11-19T17:21:21.432528599Z 📁 Found 4 migration files
+2025-11-19T17:21:21.432782775Z   ⚡ Running 0000_salty_emma_frost.sql (23 statements)...
+2025-11-19T17:21:21.745470119Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:21.748303489Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:21.97099785Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:21.973161243Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:22.188215607Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:22.235366412Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:22.407402203Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:22.452598379Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:22.781182693Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:22.831786422Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:22.998090583Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.04701295Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.211377714Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.262962057Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.423773913Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.478264697Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.642928678Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.698379015Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.855671766Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:23.914928696Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.069381397Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.1299526Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.286293807Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.346902101Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.502184762Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.565739798Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.71575396Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.780211578Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.928627171Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:24.997237921Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.14016322Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.211482065Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.355620014Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.452431214Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.612709787Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.668358279Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.826586443Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:25.888357315Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.043605965Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.102025165Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.255296587Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.318126916Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.47027442Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.53198029Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.689195439Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.689210919Z     ✅ Completed 0000_salty_emma_frost.sql
+2025-11-19T17:21:26.689936277Z   ⚡ Running 0001_sharp_ego.sql (4 statements)...
+2025-11-19T17:21:26.755069741Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:26.755089122Z     ✅ Completed 0000_salty_emma_frost.sql
+2025-11-19T17:21:26.755130743Z   ⚡ Running 0001_sharp_ego.sql (4 statements)...
+2025-11-19T17:21:27.033125838Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:27.034614495Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:27.356986016Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:27.357008207Z     ✅ Completed 0001_sharp_ego.sql
+2025-11-19T17:21:27.357781186Z   ⚡ Running 0002_add_notifications.sql (9 statements)...
+2025-11-19T17:21:27.415525689Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:27.41556747Z     ✅ Completed 0001_sharp_ego.sql
+2025-11-19T17:21:27.415640132Z   ⚡ Running 0002_add_notifications.sql (9 statements)...
+2025-11-19T17:21:27.573122687Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:27.63166876Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:27.789612856Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:27.850954768Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.00464027Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.064847834Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.217827089Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.279208002Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.431036428Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.496661025Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.649140967Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.712096378Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.860360648Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:28.928030174Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.075824412Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.168237464Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.287954855Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.287980265Z     ✅ Completed 0002_add_notifications.sql
+2025-11-19T17:21:29.288882848Z   ⚡ Running 0003_add_push_inventory_tables.sql (21 statements)...
+2025-11-19T17:21:29.383012972Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.383038123Z     ✅ Completed 0002_add_notifications.sql
+2025-11-19T17:21:29.383917794Z   ⚡ Running 0003_add_push_inventory_tables.sql (21 statements)...
+2025-11-19T17:21:29.505285565Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.601194023Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.717015688Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.814481864Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:29.933121778Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:30.034622143Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:30.147535757Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:30.247840442Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:30.357912407Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:30.465289245Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:30.575942004Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:30.680434312Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.021588653Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.083107969Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.238339499Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.299527797Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.451900087Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.514670073Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.720977494Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:31.921490362Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.089876644Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.134723742Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.303576065Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.348211448Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.515180245Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.560936635Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.728734523Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.778123162Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.945713114Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:32.993710239Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.160085332Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.210496966Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.401792588Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.424236348Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.613110832Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.676259707Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.827969091Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:33.890450701Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:34.04770321Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:34.10980515Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:34.266089986Z     ⏭️  Skipped (already exists)
+2025-11-19T17:21:34.266111126Z     ✅ Completed 0003_add_push_inventory_tables.sql
+2025-11-19T17:21:34.266114246Z ✅ All migrations completed successfully
+2025-11-19T17:21:34.26624638Z ✅ Migration script completed
+2025-11-19T17:21:53.652233237Z ==> Running 'npm run start'
+2025-11-19T17:21:54.665197363Z 
+2025-11-19T17:21:54.665219514Z > rest-express@1.0.0 start
+2025-11-19T17:21:54.665225114Z > NODE_ENV=production node dist/index.js
+2025-11-19T17:21:54.665227034Z 
