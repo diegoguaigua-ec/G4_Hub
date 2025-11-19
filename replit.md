@@ -19,7 +19,10 @@ The application is a full-stack TypeScript project featuring a React frontend an
 ## Feature Specifications
 - **Multi-tenancy**: Row-level data isolation using `tenant_id` foreign keys, API data filtering by tenant, subdomain-based tenant identification, and JSON storage for tenant-specific settings.
 - **Post-sale Automation**: Includes inventory synchronization, automated invoice generation, and logistics management across various e-commerce platforms.
-- **Webhook System**: Robust webhook reception with HMAC signature validation for Shopify events (orders, inventory levels), automatic queuing of inventory movements, and background processing workers with retry logic.
+- **Webhook System**: Robust webhook reception with HMAC signature validation for Shopify events, automatic queuing of inventory movements, and background processing workers with retry logic.
+  - **Shopify Webhooks**: Requires `api_secret` for HMAC validation; supports orders/create, orders/paid, orders/cancelled, orders/updated, and refunds/create events.
+  - **Credential Protection**: Smart credential merging in store updates preserves api_secret when not explicitly changed; filters empty/whitespace-only values to prevent accidental deletion.
+  - **Event Processing**: orders/updated generates inventory egress movements; idempotency based on orderId+SKU+movementType prevents duplicate processing across all order events.
 - **SKU-Based Product Lookup**: Implemented across connectors (Shopify, WooCommerce, Contifico) for efficient product identification.
 - **Idempotency**: Application-level duplicate detection for inventory movements to prevent double processing.
 
