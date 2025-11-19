@@ -231,10 +231,12 @@ export class InventoryPushService {
       }
 
       // Crear una tienda temporal con las credenciales de la integración
+      // Usar la URL correcta de Contífico en lugar de la URL de la tienda
       const contificoStore: Store = {
         ...store,
-        storeUrl: integration.settings?.apiUrl || store.storeUrl,
+        storeUrl: 'https://api.contifico.com',
         apiCredentials: integration.settings,
+        platform: 'contifico',
       };
 
       // Inicializar API de Contífico
