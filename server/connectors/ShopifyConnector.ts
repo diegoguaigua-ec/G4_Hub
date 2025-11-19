@@ -389,6 +389,67 @@ export class ShopifyConnector extends BaseConnector {
     }
   }
 
+  /**
+   * Busca un producto específicamente por SKU usando GraphQL Admin API
+   * En Shopify, el SKU está en las variantes, por lo que necesitamos:
+   * 1. Usar GraphQL productVariants query para buscar por SKU
+   * 2. Una vez encontrada la variante, obtener el producto padre por su ID
+   */
+  async getProductBySku(sku: string): Promise<ProductResult> {
+    try {
+      console.log(`[Shopify] Buscando producto por SKU usando GraphQL: ${sku}`);
+      
+      // Usar GraphQL Admin API para buscar variante por SKU
+      const graphqlQuery = `
+        query {
+          productVariants(first: 10, query: "sku:${sku}") {
+            edges {
+              node {
+                id
+                sku
+                product {
+                  id
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      const response = await this.makeRequest(
+        'POST',
+        `/admin/api/${this.apiVersion}/graphql.json`,
+        { query: graphqlQuery }
+      );
+      
+      const edges = response.data?.data?.productVariants?.edges;
+      
+      if (!edges || edges.length === 0) {
+        throw new Error(`Producto con SKU ${sku} no encontrado`);
+      }
+      
+      // Obtener el ID del producto desde la primera variante que coincide
+      const variant = edges[0].node;
+      const productGid = variant.product.id; // Format: "gid://shopify/Product/123456"
+      
+      // Extraer el ID numérico del GID
+      const productId = productGid.split('/').pop();
+      
+      if (!productId) {
+        throw new Error(`No se pudo extraer ID del producto del GID: ${productGid}`);
+      }
+      
+      console.log(`[Shopify] SKU ${sku} encontrado en producto ID ${productId}`);
+      
+      // Obtener el producto completo usando su ID
+      return this.getProduct(productId);
+      
+    } catch (error: any) {
+      console.error(`[Shopify] Failed to fetch product by SKU ${sku}:`, error.message);
+      throw error;
+    }
+  }
+
   async updateProduct(
     productId: string,
     data: Partial<StandardProduct>,

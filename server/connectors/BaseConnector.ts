@@ -171,6 +171,7 @@ export abstract class BaseConnector {
     pageInfo?: string,
   ): Promise<ProductsResult>;
   abstract getProduct(productId: string): Promise<ProductResult>;
+  abstract getProductBySku(sku: string): Promise<ProductResult>;
   abstract updateProduct(
     productId: string,
     data: Partial<StandardProduct>,

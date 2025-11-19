@@ -194,6 +194,33 @@ export class WooCommerceConnector extends BaseConnector {
     }
   }
 
+  /**
+   * Busca un producto específicamente por SKU
+   * Usa el parámetro de query ?sku= para buscar en WooCommerce
+   */
+  async getProductBySku(sku: string): Promise<ProductResult> {
+    try {
+      console.log(`[WooCommerce] Buscando producto por SKU: ${sku}`);
+      
+      const response = await this.makeRequest('GET', '/wp-json/wc/v3/products', null, {
+        params: { sku }
+      });
+      
+      const products: WooCommerceProduct[] = response.data;
+      
+      if (!products || products.length === 0) {
+        throw new Error(`Producto con SKU ${sku} no encontrado`);
+      }
+      
+      return {
+        product: this.transformProduct(products[0])
+      };
+    } catch (error: any) {
+      console.error(`[WooCommerce] Failed to fetch product by SKU ${sku}:`, error.message);
+      throw error;
+    }
+  }
+
   async updateProduct(productId: string, data: Partial<StandardProduct>): Promise<UpdateResult> {
     try {
       console.log(`[WooCommerce] Updating product ${productId}`);

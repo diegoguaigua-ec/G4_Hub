@@ -124,7 +124,7 @@ router.post("/shopify/:storeId", async (req: Request, res: Response) => {
     });
 
     // Validar que sea un evento soportado
-    const supportedEvents = ["orders/paid", "orders/cancelled", "refunds/create"];
+    const supportedEvents = ["orders/create", "orders/paid", "orders/cancelled", "refunds/create"];
     if (!supportedEvents.includes(topic)) {
       console.log(`[Webhook][Shopify] Evento ${topic} no soportado, ignorando`);
       return res.status(200).json({ message: "Event not supported, ignored" });
