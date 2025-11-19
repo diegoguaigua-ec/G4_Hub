@@ -157,3 +157,55 @@ Successfully enhanced the Push system with comprehensive order event handling, S
 - Background workers (InventoryPushWorker) disabled by default in Autoscale deployments
 - To enable continuous processing on Reserved VM: set `ENABLE_BACKGROUND_WORKERS=true`
 - GraphQL implementation in Shopify connector is more efficient than deprecated REST pagination
+
+## Phase 3: Webhook Infrastructure Improvements - COMPLETED (November 19, 2025)
+
+Successfully upgraded webhook registration system to support production deployments and added modern GraphQL API support.
+
+### Key Features Implemented:
+
+1. **Fixed Production Webhook URL Generation**
+   - Created `getPublicUrl()` helper function that correctly handles all environments
+   - Priority: `PUBLIC_URL` env var → `REPLIT_DOMAINS` (production) → request host (development)
+   - Fixed bug where webhooks were using incorrect URL construction with REPL_SLUG/REPL_OWNER (which don't exist in production)
+   - Updated 3 webhook registration points: POST /api/stores, PUT /api/stores/:storeId, POST /api/stores/:storeId/configure-webhooks
+
+2. **Expanded Webhook Topics**
+   - Added `inventory_levels/update` webhook (critical for inventory sync system)
+   - Added `orders/updated` webhook (for comprehensive order state tracking and idempotency)
+   - Complete topics now: orders/create, orders/paid, orders/updated, orders/cancelled, refunds/create, inventory_levels/update
+
+3. **GraphQL Admin API Support**
+   - Implemented `registerWebhooksGraphQL()` method following Shopify's October 2024 recommendations
+   - Uses modern GraphQL mutations instead of legacy REST API
+   - Benefits: Better error handling, typed responses, future-proof implementation
+   - **Note**: Currently implemented as future-ready alternative; REST API remains the active method
+   - GraphQL method available for manual testing or future migration
+
+### OAuth Scopes Required for Shopify Integration:
+
+**Critical**: Shopify webhooks require READ permissions on the resources being monitored. The application needs the following scopes:
+
+- `read_orders` - Required for all order-related webhooks (orders/create, orders/paid, orders/updated, orders/cancelled)
+- `read_inventory` - Required for inventory_levels/update webhook
+- `read_products` - Required for product synchronization features
+- `write_inventory` - Required for inventory sync operations (sending movements to ERP)
+
+**Setup Instructions for Shopify Partners**:
+When creating a Shopify app in the Partner Dashboard, ensure these scopes are requested during OAuth flow. Without proper scopes, webhook registration will fail with 403 Forbidden errors.
+
+### Technical Implementation:
+
+- **Files Modified**:
+  - `server/routes.ts`: Added getPublicUrl() helper, updated 3 webhook registration callsites
+  - `server/connectors/ShopifyConnector.ts`: Updated webhook topics, added registerWebhooksGraphQL() method
+  
+### Environment Variables:
+
+- **Development**: Uses request host (automatic)
+- **Production (Autoscale/Reserved VM)**: Uses `REPLIT_DOMAINS` (automatically set by Replit)
+- **Custom Domains**: Set `PUBLIC_URL` env var to override (e.g., `https://yourdomain.com`)
+
+### Testing Notes:
+
+Webhooks should now register successfully in both development and production environments. The system automatically detects the environment and uses the appropriate URL for webhook callbacks.

@@ -1005,8 +1005,10 @@ export class ShopifyConnector extends BaseConnector {
     const webhookTopics = [
       'orders/create',
       'orders/paid',
+      'orders/updated',
       'orders/cancelled',
-      'refunds/create'
+      'refunds/create',
+      'inventory_levels/update'
     ];
 
     const createdWebhooks: Array<{ id: number; topic: string; address: string }> = [];
@@ -1100,6 +1102,109 @@ export class ShopifyConnector extends BaseConnector {
         errors: [{ topic: 'general', error: error.message }]
       };
     }
+  }
+
+  /**
+   * Registra webhooks usando GraphQL Admin API (recomendado desde octubre 2024)
+   * @param callbackUrl - URL pública donde Shopify enviará los webhooks
+   * @returns Array de webhooks creados con sus IDs
+   */
+  async registerWebhooksGraphQL(callbackUrl: string): Promise<{
+    success: boolean;
+    webhooks: Array<{ id: string; topic: string; endpoint: string }>;
+    errors: Array<{ topic: string; error: string }>;
+  }> {
+    const webhookTopics = [
+      'ORDERS_CREATE',
+      'ORDERS_PAID',
+      'ORDERS_UPDATED',
+      'ORDERS_CANCELLED',
+      'REFUNDS_CREATE',
+      'INVENTORY_LEVELS_UPDATE'
+    ];
+
+    const createdWebhooks: Array<{ id: string; topic: string; endpoint: string }> = [];
+    const errors: Array<{ topic: string; error: string }> = [];
+
+    console.log(`[Shopify] Registrando webhooks con GraphQL para ${this.shopDomain}`);
+    console.log(`[Shopify] URL de callback: ${callbackUrl}`);
+
+    for (const topic of webhookTopics) {
+      try {
+        const mutation = `
+          mutation webhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) {
+            webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) {
+              webhookSubscription {
+                id
+                topic
+                endpoint {
+                  __typename
+                  ... on WebhookHttpEndpoint {
+                    callbackUrl
+                  }
+                }
+              }
+              userErrors {
+                field
+                message
+              }
+            }
+          }
+        `;
+
+        const variables = {
+          topic: topic,
+          webhookSubscription: {
+            callbackUrl: callbackUrl,
+            format: 'JSON'
+          }
+        };
+
+        const response = await axios.post(
+          `${this.apiUrl}/graphql.json`,
+          { query: mutation, variables },
+          { headers: this.headers }
+        );
+
+        const result = response.data.data?.webhookSubscriptionCreate;
+
+        if (result?.userErrors && result.userErrors.length > 0) {
+          console.error(`[Shopify] GraphQL errors for ${topic}:`, result.userErrors);
+          errors.push({
+            topic: topic,
+            error: result.userErrors.map((e: any) => e.message).join(', ')
+          });
+        } else if (result?.webhookSubscription) {
+          console.log(`[Shopify] ✅ Webhook creado via GraphQL: ${topic} → ${result.webhookSubscription.id}`);
+          createdWebhooks.push({
+            id: result.webhookSubscription.id,
+            topic: topic,
+            endpoint: callbackUrl
+          });
+        } else {
+          errors.push({
+            topic: topic,
+            error: 'No webhook subscription in response'
+          });
+        }
+      } catch (error: any) {
+        const errorMsg = error.response?.data?.errors || error.message;
+        console.error(`[Shopify] ❌ Error creando webhook GraphQL ${topic}:`, errorMsg);
+        errors.push({
+          topic: topic,
+          error: JSON.stringify(errorMsg)
+        });
+      }
+    }
+
+    const success = createdWebhooks.length > 0 && errors.length === 0;
+    console.log(`[Shopify] GraphQL resultado: ${createdWebhooks.length} webhooks configurados, ${errors.length} errores`);
+
+    return {
+      success,
+      webhooks: createdWebhooks,
+      errors
+    };
   }
 
   /**

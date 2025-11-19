@@ -40,6 +40,29 @@ function getPlanLimits(planType: string) {
   return plans[planType] || plans.starter;
 }
 
+/**
+ * Helper function to get the public URL for webhook callbacks
+ * Works in both development and production (Autoscale/Reserved VM)
+ * Always returns HTTPS URLs as required by Shopify
+ */
+function getPublicUrl(req: Request): string {
+  // 1. Check for explicit PUBLIC_URL env var (highest priority)
+  if (process.env.PUBLIC_URL) {
+    return process.env.PUBLIC_URL;
+  }
+
+  // 2. Check for REPLIT_DOMAINS (production Autoscale/Reserved VM)
+  if (process.env.REPLIT_DOMAINS) {
+    const domains = process.env.REPLIT_DOMAINS.split(',');
+    return `https://${domains[0]}`;
+  }
+
+  // 3. Development fallback: force HTTPS as Shopify requires it
+  // Express behind Replit's reverse proxy reports 'http' but the public URL is HTTPS
+  const host = req.get('host');
+  return `https://${host}`;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint - responds immediately for deployment health checks
   // Must be before authentication middleware but should not interfere with SPA root
@@ -207,10 +230,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (store.platform === 'shopify') {
             try {
               const shopifyConnector = connector as any; // ShopifyConnector
-              const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
-                ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-                : req.protocol + '://' + req.get('host');
-
+              const publicUrl = getPublicUrl(req);
               const webhookUrl = `${publicUrl}/api/webhooks/shopify/${store.id}`;
 
               console.log(`[Store] Configurando webhooks automáticamente para tienda ${store.id}`);
@@ -331,10 +351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let webhookResult = null;
           if (updatedStore.platform === 'shopify' && connectionResult.success) {
             try {
-              const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
-                ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-                : req.protocol + '://' + req.get('host');
-              
+              const publicUrl = getPublicUrl(req);
               const webhookUrl = `${publicUrl}/api/webhooks/shopify/${updatedStore.id}`;
               const shopifyConnector = connector as any;
               
@@ -472,10 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Obtener URL pública
-      const publicUrl = process.env.PUBLIC_URL || process.env.REPL_SLUG
-        ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-        : req.protocol + '://' + req.get('host');
-
+      const publicUrl = getPublicUrl(req);
       const webhookUrl = `${publicUrl}/api/webhooks/shopify/${storeId}`;
 
       const connector = getConnector(store);
