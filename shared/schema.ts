@@ -609,62 +609,135 @@ export const createStoreSchema = z
           path: ["apiCredentials", "access_token"],
         });
       }
+      if (
+        !creds.api_secret ||
+        typeof creds.api_secret !== "string" ||
+        creds.api_secret.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "API Secret is required for Shopify webhook validation",
+          path: ["apiCredentials", "api_secret"],
+        });
+      }
     }
   });
 
-export const updateStoreSchema = z.object({
-  storeName: z
-    .string()
-    .min(1, "Store name is required")
-    .max(255, "Store name too long")
-    .optional(),
-  storeUrl: z
-    .string()
-    .url("Must be a valid URL")
-    .refine((url) => {
-      try {
-        const parsed = new URL(url);
-        if (parsed.protocol !== "https:") return false;
+export const updateStoreSchema = z
+  .object({
+    storeName: z
+      .string()
+      .min(1, "Store name is required")
+      .max(255, "Store name too long")
+      .optional(),
+    storeUrl: z
+      .string()
+      .url("Must be a valid URL")
+      .refine(
+        (url) => {
+          try {
+            const parsed = new URL(url);
+            if (parsed.protocol !== "https:") return false;
 
-        const hostname = parsed.hostname.toLowerCase();
-        if (hostname === "localhost" || hostname.startsWith("127."))
-          return false;
-        if (
-          hostname.startsWith("10.") ||
-          hostname.startsWith("192.168.") ||
-          hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)
-        )
-          return false;
-        if (hostname.startsWith("169.254.")) return false;
-        if (
-          hostname === "169.254.169.254" ||
-          hostname === "metadata.google.internal" ||
-          hostname === "metadata.gce.internal"
-        )
-          return false;
-        if (
-          hostname === "::1" ||
-          hostname.startsWith("fc00:") ||
-          hostname.startsWith("fd00:") ||
-          hostname.startsWith("fe80:")
-        )
-          return false;
-        if (
-          hostname.includes(".internal") ||
-          hostname.includes(".local") ||
-          hostname.endsWith(".consul")
-        )
-          return false;
+            const hostname = parsed.hostname.toLowerCase();
+            if (hostname === "localhost" || hostname.startsWith("127."))
+              return false;
+            if (
+              hostname.startsWith("10.") ||
+              hostname.startsWith("192.168.") ||
+              hostname.match(/^172\.(1[6-9]|2[0-9]|3[0-1])\./)
+            )
+              return false;
+            if (hostname.startsWith("169.254.")) return false;
+            if (
+              hostname === "169.254.169.254" ||
+              hostname === "metadata.google.internal" ||
+              hostname === "metadata.gce.internal"
+            )
+              return false;
+            if (
+              hostname === "::1" ||
+              hostname.startsWith("fc00:") ||
+              hostname.startsWith("fd00:") ||
+              hostname.startsWith("fe80:")
+            )
+              return false;
+            if (
+              hostname.includes(".internal") ||
+              hostname.includes(".local") ||
+              hostname.endsWith(".consul")
+            )
+              return false;
 
-        return true;
-      } catch {
-        return false;
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services",
+      )
+      .optional(),
+    platform: z.enum(["woocommerce", "shopify"]).optional(),
+    apiCredentials: z.record(z.any()).optional(),
+    syncConfig: z.record(z.any()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    // If apiCredentials is provided and platform is Shopify, validate required fields
+    if (data.apiCredentials && data.platform === "shopify") {
+      const creds = data.apiCredentials;
+
+      if (
+        !creds.access_token ||
+        typeof creds.access_token !== "string" ||
+        creds.access_token.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Access Token is required for Shopify",
+          path: ["apiCredentials", "access_token"],
+        });
       }
-    }, "URL must use HTTPS and cannot access private networks, localhost, or cloud metadata services")
-    .optional(),
-  apiCredentials: z.record(z.any()).optional(),
-  syncConfig: z.record(z.any()).optional(),
-});
+      if (
+        !creds.api_secret ||
+        typeof creds.api_secret !== "string" ||
+        creds.api_secret.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "API Secret is required for Shopify webhook validation",
+          path: ["apiCredentials", "api_secret"],
+        });
+      }
+    }
+
+    // If apiCredentials is provided and platform is WooCommerce, validate required fields
+    if (data.apiCredentials && data.platform === "woocommerce") {
+      const creds = data.apiCredentials;
+
+      if (
+        !creds.consumer_key ||
+        typeof creds.consumer_key !== "string" ||
+        creds.consumer_key.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Consumer Key is required for WooCommerce",
+          path: ["apiCredentials", "consumer_key"],
+        });
+      }
+      if (
+        !creds.consumer_secret ||
+        typeof creds.consumer_secret !== "string" ||
+        creds.consumer_secret.trim() === ""
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Consumer Secret is required for WooCommerce",
+          path: ["apiCredentials", "consumer_secret"],
+        });
+      }
+    }
+  });
 
 export const insertStoreProductSchema = createInsertSchema(storeProducts).omit({
   id: true,

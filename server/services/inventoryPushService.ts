@@ -32,11 +32,12 @@ export class InventoryPushService {
   private static determineMovementType(
     eventType: string,
   ): "egreso" | "ingreso" {
-    // Órdenes creadas y pagadas generan egresos (salidas de inventario)
+    // Órdenes creadas, actualizadas y pagadas generan egresos (salidas de inventario)
     if (
       eventType === "order_paid" ||
       eventType === "orders/paid" ||
       eventType === "orders/create" ||
+      eventType === "orders/updated" ||
       eventType === "order.completed"
     ) {
       return "egreso";
@@ -83,21 +84,20 @@ export class InventoryPushService {
           continue;
         }
 
-        // Verificar idempotencia: evitar duplicados del mismo orderId+SKU
-        // Solo procesamos si es orders/create O orders/paid, no ambos para la misma orden
+        // Verificar idempotencia: evitar duplicados del mismo orderId+SKU+movementType
+        // Solo procesamos si NO existe ya un movimiento de egreso para la misma orden+SKU
+        // (independientemente si vino de orders/create, orders/paid u orders/updated)
         const existingMovements = await storage.getMovementsByStore(data.storeId, 1000);
         const duplicateMovement = existingMovements.find(
           (m) => 
             m.orderId === data.orderId && 
             m.sku === item.sku &&
-            m.movementType === movementType &&
-            // Evitar duplicados entre orders/create y orders/paid
-            (m.eventType === 'orders/create' || m.eventType === 'orders/paid')
+            m.movementType === movementType
         );
 
         if (duplicateMovement) {
           console.log(
-            `[InventoryPush] ⚠️ Movimiento duplicado detectado para orden ${data.orderId}, SKU ${item.sku} (evento anterior: ${duplicateMovement.eventType}), saltando`,
+            `[InventoryPush] ⚠️ Movimiento duplicado detectado para orden ${data.orderId}, SKU ${item.sku}, tipo ${movementType} (evento anterior: ${duplicateMovement.eventType}), saltando`,
           );
           continue;
         }

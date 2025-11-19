@@ -62,6 +62,7 @@ const editStoreFormSchema = z
     // Shopify credentials
     apiKey: z.string().optional(),
     accessToken: z.string().optional(),
+    apiSecret: z.string().optional(),
     shopDomain: z.string().optional(),
     // Contífico credentials
     username: z.string().optional(),
@@ -74,7 +75,7 @@ const editStoreFormSchema = z
         return data.consumerKey && data.consumerSecret;
       }
       if (data.platform === "shopify") {
-        return data.apiKey && data.accessToken;
+        return data.apiKey && data.accessToken && data.apiSecret;
       }
       if (data.platform === "contifico") {
         return data.username && data.password && data.apiUrl;
@@ -132,6 +133,7 @@ export function EditStoreDialog({
       consumerSecret: "",
       apiKey: "",
       accessToken: "",
+      apiSecret: "",
       shopDomain: "",
       username: "",
       password: "",
@@ -164,6 +166,7 @@ export function EditStoreDialog({
         consumerSecret: credentials.consumer_secret || "",
         apiKey: credentials.api_key || "",
         accessToken: credentials.access_token || "",
+        apiSecret: credentials.api_secret || "",
         shopDomain: credentials.shop_domain || "",
         username: credentials.username || "",
         password: credentials.password || "",
@@ -189,6 +192,7 @@ export function EditStoreDialog({
           apiCredentials = {
             api_key: data.apiKey,
             access_token: data.accessToken,
+            api_secret: data.apiSecret,
             shop_domain: data.shopDomain,
           };
           break;
@@ -474,6 +478,24 @@ export function EditStoreDialog({
                       type="password"
                       placeholder="shpat_..."
                       data-testid="input-access-token"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="apiSecret"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>API Secret</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="password"
+                      placeholder="shpss_..."
+                      data-testid="input-api-secret"
                       {...field}
                     />
                   </FormControl>

@@ -317,16 +317,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as AuthenticatedRequest).user;
       const { storeId } = req.params;
       
-      // Validate input with Zod
-      const validatedData = updateStoreSchema.parse(req.body);
-      
+      // Get existing store first to validate credentials for the correct platform
       const store = await storage.getStore(parseInt(storeId));
       if (!store || store.tenantId !== user.tenantId) {
         return res.status(404).json({ message: "Store not found" });
       }
 
-      // Update store
-      const updatedStore = await storage.updateStore(parseInt(storeId), validatedData);
+      // Inject platform from existing store for proper credential validation
+      const dataToValidate = {
+        ...req.body,
+        platform: req.body.platform || store.platform
+      };
+      
+      // Validate input with Zod (including existing platform for credential checks)
+      const validatedData = updateStoreSchema.parse(dataToValidate);
+
+      // Only include fields that were actually provided in the request to avoid clearing existing data
+      // This is critical for apiCredentials - if not provided, we should keep existing ones
+      const updateData: any = {};
+      if (validatedData.storeName !== undefined) updateData.storeName = validatedData.storeName;
+      if (validatedData.storeUrl !== undefined) updateData.storeUrl = validatedData.storeUrl;
+      if (validatedData.syncConfig !== undefined) updateData.syncConfig = validatedData.syncConfig;
+      
+      // Special handling for apiCredentials: merge with existing to preserve critical fields
+      if (validatedData.apiCredentials !== undefined) {
+        const existingCreds = (store.apiCredentials as any) || {};
+        const newCreds = validatedData.apiCredentials;
+        
+        // Helper function to check if a value is effectively empty (null, undefined, empty string, or only whitespace)
+        const isEffectivelyEmpty = (value: any): boolean => {
+          if (value === null || value === undefined) return true;
+          if (typeof value === 'string') return value.trim() === '';
+          return false;
+        };
+        
+        // Merge credentials, preserving existing values for empty/missing fields
+        // Filter out empty/whitespace values to avoid overwriting existing credentials
+        updateData.apiCredentials = {
+          ...existingCreds,
+          ...Object.fromEntries(
+            Object.entries(newCreds)
+              .filter(([_, value]) => !isEffectivelyEmpty(value))
+              .map(([key, value]) => [key, typeof value === 'string' ? value.trim() : value])
+          )
+        };
+      }
+
+      // Update store with only the fields that were provided
+      const updatedStore = await storage.updateStore(parseInt(storeId), updateData);
       
       // If API credentials were updated, test connection
       if (validatedData.apiCredentials || validatedData.storeUrl) {
