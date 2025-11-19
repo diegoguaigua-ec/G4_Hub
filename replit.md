@@ -209,3 +209,15 @@ When creating a Shopify app in the Partner Dashboard, ensure these scopes are re
 ### Testing Notes:
 
 Webhooks should now register successfully in both development and production environments. The system automatically detects the environment and uses the appropriate URL for webhook callbacks.
+
+### Follow-up Improvements (November 19, 2025):
+
+1. **API Version Update**
+   - Updated default Shopify API version from `2024-10` to `2025-07`
+   - Aligns with current Shopify supported versions and user configurations
+   - Ensures webhook registrations use the latest stable API version
+
+2. **URL Construction Fix**
+   - Fixed double slash (`//`) issue in webhook registration URLs
+   - Modified `apiUrl` getter to clean trailing slashes from `baseUrl` before URL construction
+   - Results in cleaner, properly formatted API URLs: `https://domain.com/admin/api/2025-07/webhooks.json`

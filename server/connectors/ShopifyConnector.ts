@@ -160,7 +160,7 @@ export class ShopifyConnector extends BaseConnector {
     super(store);
     this.validateShopifyCredentials();
     this.shopifyCredentials = store.apiCredentials as ShopifyCredentials;
-    this.apiVersion = this.shopifyCredentials.api_version || "2024-10";
+    this.apiVersion = this.shopifyCredentials.api_version || "2025-07";
 
     // Extraer shop domain del storeUrl (ej: "https://myshop.myshopify.com" → "myshop.myshopify.com")
     try {
@@ -174,7 +174,9 @@ export class ShopifyConnector extends BaseConnector {
 
   // Getter para apiUrl usado en métodos de webhooks
   private get apiUrl(): string {
-    return `${this.baseUrl}/admin/api/${this.apiVersion}`;
+    // Eliminar trailing slash de baseUrl para evitar doble barra en URLs
+    const cleanBaseUrl = this.baseUrl.replace(/\/$/, '');
+    return `${cleanBaseUrl}/admin/api/${this.apiVersion}`;
   }
 
   // Getter para headers usado en métodos de webhooks
