@@ -269,7 +269,7 @@ export class InventoryPushService {
           warehouseId,
           movement.sku,
           movement.quantity,
-          movement.orderId,
+          movement.orderId || undefined,
           `Orden ${movement.orderId} - ${movement.eventType}`,
         );
       } else {
@@ -277,7 +277,7 @@ export class InventoryPushService {
           warehouseId,
           movement.sku,
           movement.quantity,
-          movement.orderId,
+          movement.orderId || undefined,
           `Orden ${movement.orderId} - ${movement.eventType}`,
         );
       }
@@ -319,12 +319,13 @@ export class InventoryPushService {
 
         // Rastrear SKU no mapeado si es ese el error
         if (error.message.includes("no encontrado")) {
+          const metadata = movement.metadata as { productName?: string } | undefined;
           await storage.trackUnmappedSku({
             tenantId: movement.tenantId,
             storeId: movement.storeId,
             sku: movement.sku,
             productName:
-              movement.metadata?.productName || `Producto ${movement.sku}`,
+              metadata?.productName || `Producto ${movement.sku}`,
           });
         }
 
