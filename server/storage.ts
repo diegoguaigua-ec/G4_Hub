@@ -35,7 +35,7 @@ import {
   type InsertSyncLock,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, or, desc, sql } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 
@@ -121,6 +121,7 @@ export interface IStorage {
 
   // Inventory movements queue operations
   queueInventoryMovement(movement: InsertInventoryMovement): Promise<InventoryMovement>;
+  getMovementById(id: number): Promise<InventoryMovement | undefined>;
   getPendingMovements(limit?: number): Promise<InventoryMovement[]>;
   getMovementsByStore(storeId: number, limit?: number): Promise<InventoryMovement[]>;
   updateMovementStatus(
@@ -129,6 +130,7 @@ export interface IStorage {
     errorMessage?: string,
   ): Promise<InventoryMovement>;
   incrementMovementAttempts(id: number, nextAttemptAt: Date): Promise<InventoryMovement>;
+  resetMovementToPending(id: number, attempts: number, nextAttemptAt: Date, errorMessage: string): Promise<InventoryMovement>;
   markMovementAsProcessed(id: number): Promise<InventoryMovement>;
   deleteOldMovements(beforeDate: Date): Promise<void>;
 
@@ -773,13 +775,25 @@ export class DatabaseStorage implements IStorage {
     return queued;
   }
 
+  async getMovementById(id: number): Promise<InventoryMovement | undefined> {
+    const [movement] = await db
+      .select()
+      .from(inventoryMovementsQueue)
+      .where(eq(inventoryMovementsQueue.id, id))
+      .limit(1);
+    return movement;
+  }
+
   async getPendingMovements(limit: number = 50): Promise<InventoryMovement[]> {
     return await db
       .select()
       .from(inventoryMovementsQueue)
       .where(
         and(
-          eq(inventoryMovementsQueue.status, "pending"),
+          or(
+            eq(inventoryMovementsQueue.status, "pending"),
+            eq(inventoryMovementsQueue.status, "processing"),
+          ),
           sql`${inventoryMovementsQueue.nextAttemptAt} IS NULL OR ${inventoryMovementsQueue.nextAttemptAt} <= NOW()`,
         ),
       )
@@ -826,6 +840,26 @@ export class DatabaseStorage implements IStorage {
         attempts: sql`${inventoryMovementsQueue.attempts} + 1`,
         lastAttemptAt: new Date(),
         nextAttemptAt,
+      })
+      .where(eq(inventoryMovementsQueue.id, id))
+      .returning();
+    return updated;
+  }
+
+  async resetMovementToPending(
+    id: number,
+    attempts: number,
+    nextAttemptAt: Date,
+    errorMessage: string,
+  ): Promise<InventoryMovement> {
+    const [updated] = await db
+      .update(inventoryMovementsQueue)
+      .set({
+        status: "pending",
+        attempts,
+        lastAttemptAt: new Date(),
+        nextAttemptAt,
+        errorMessage,
       })
       .where(eq(inventoryMovementsQueue.id, id))
       .returning();

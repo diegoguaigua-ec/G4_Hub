@@ -146,11 +146,11 @@ export class InventoryPushService {
    */
   static async processMovement(movementId: number): Promise<boolean> {
     let lockAcquired = false;
+    let cachedStoreId: number | null = null; // Para liberar lock incluso si movimiento se borra
 
     try {
       // Obtener el movimiento de la base de datos
-      const movements = await storage.getPendingMovements(1000);
-      const movement = movements.find((m) => m.id === movementId);
+      const movement = await storage.getMovementById(movementId);
 
       if (!movement) {
         console.error(
@@ -158,6 +158,9 @@ export class InventoryPushService {
         );
         return false;
       }
+
+      // Guardar storeId para liberar lock en finally
+      cachedStoreId = movement.storeId;
 
       console.log(
         `[InventoryPush] Procesando movimiento ${movementId}: ${movement.sku} x${movement.quantity} (${movement.movementType})`,
@@ -221,14 +224,19 @@ export class InventoryPushService {
       }
 
       // Obtener warehouse de la configuración
+      // Prioridad 1: syncConfig (configuración específica de pull)
+      // Prioridad 2: integration.settings.warehouse_primary (configuración global de Contifico)
       const syncConfig: any = storeIntegration.syncConfig || {};
-      const warehouseId = syncConfig.pull?.warehouse;
+      const integrationSettings: any = integration.settings || {};
+      const warehouseId = syncConfig.pull?.warehouse || integrationSettings.warehouse_primary;
 
       if (!warehouseId) {
         throw new Error(
-          `No se encontró bodega configurada para la tienda ${movement.storeId}`,
+          `No se encontró bodega configurada para la tienda ${movement.storeId}. Configure una bodega en la integración de Contifico.`,
         );
       }
+
+      console.log(`[InventoryPush] Usando bodega: ${warehouseId} para movimiento ${movementId}`);
 
       // Crear una tienda temporal con las credenciales de la integración
       // Usar la URL correcta de Contífico en lugar de la URL de la tienda
@@ -297,11 +305,16 @@ export class InventoryPushService {
       );
 
       // Obtener el movimiento actual para verificar intentos
-      const movements = await storage.getPendingMovements(1000);
-      const movement = movements.find((m) => m.id === movementId);
+      const movement = await storage.getMovementById(movementId);
 
       if (!movement) {
+        console.error(`[InventoryPush] Movimiento ${movementId} no encontrado después de error`);
         return false;
+      }
+
+      // Guardar storeId si no se había guardado antes
+      if (!cachedStoreId) {
+        cachedStoreId = movement.storeId;
       }
 
       const newAttempts = movement.attempts + 1;
@@ -336,23 +349,26 @@ export class InventoryPushService {
       const backoffMinutes = Math.pow(2, newAttempts); // 2, 4, 8 minutos
       const nextAttempt = new Date(Date.now() + backoffMinutes * 60 * 1000);
 
-      await storage.incrementMovementAttempts(movementId, nextAttempt);
+      // CRÍTICO: Volver a estado "pending" para que el worker lo recoja
+      // Usar método storage para evitar condiciones de carrera y mantener invariantes
+      await storage.resetMovementToPending(
+        movementId,
+        newAttempts,
+        nextAttempt,
+        error.message,
+      );
 
       console.log(
-        `[InventoryPush] Reintentando movimiento ${movementId} en ${backoffMinutes} minutos (intento ${newAttempts}/${movement.maxAttempts})`,
+        `[InventoryPush] Movimiento ${movementId} devuelto a 'pending' para reintento en ${backoffMinutes} minutos (intento ${newAttempts}/${movement.maxAttempts})`,
       );
 
       return false;
     } finally {
-      // Liberar lock si fue adquirido
-      if (lockAcquired) {
+      // Liberar lock si fue adquirido, usando cachedStoreId para garantizar liberación
+      if (lockAcquired && cachedStoreId) {
         try {
-          const movements = await storage.getPendingMovements(1000);
-          const movement = movements.find((m) => m.id === movementId);
-          if (movement) {
-            await storage.releaseLock(movement.storeId);
-            console.log(`[InventoryPush] ✅ Lock liberado para movimiento ${movementId}`);
-          }
+          await storage.releaseLock(cachedStoreId);
+          console.log(`[InventoryPush] ✅ Lock liberado para tienda ${cachedStoreId}`);
         } catch (unlockError) {
           console.error(`[InventoryPush] Error liberando lock:`, unlockError);
         }
