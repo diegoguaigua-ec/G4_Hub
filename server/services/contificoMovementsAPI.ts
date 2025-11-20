@@ -4,27 +4,30 @@ import { Store } from "@shared/schema";
 /**
  * Tipos de movimiento en Contífico
  */
-export type MovementType = "egreso" | "ingreso";
+export type MovementType = "ING" | "EGR";
 
 /**
  * Interfaz para el detalle de un movimiento de inventario
  */
 interface MovementDetail {
   producto_id: string; // ID del producto en Contífico
-  cantidad: number; // Cantidad del movimiento (siempre positivo)
-  costo?: number; // Costo unitario (opcional)
-  descripcion?: string; // Descripción adicional del ítem
+  cantidad: string; // Cantidad del movimiento (string según API)
+  precio: string; // Precio unitario (string según API)
+  serie?: string | null; // Número de serie (opcional)
+  edicion?: string | null; // Edición del producto (opcional)
 }
 
 /**
  * Interfaz para crear un movimiento de inventario en Contífico
  */
 interface CreateMovementRequest {
-  tipo: MovementType; // "egreso" o "ingreso"
+  tipo: MovementType; // "ING" (ingreso) o "EGR" (egreso)
   bodega_id: string; // ID de la bodega
-  fecha: string; // Fecha del movimiento (ISO 8601)
-  referencia?: string; // Número de referencia (ej: número de orden)
-  observaciones?: string; // Observaciones adicionales
+  fecha: string; // Fecha del movimiento (formato dd/mm/yyyy)
+  descripcion?: string; // Descripción del movimiento
+  codigo_interno?: string; // Código interno (ej: número de orden)
+  generar_asiento?: boolean; // Si se debe generar asiento contable
+  bodega_destino_id?: string | null; // ID de bodega destino (para traslados)
   detalles: MovementDetail[]; // Detalles de productos
 }
 
@@ -102,17 +105,25 @@ export class ContificoMovementsAPI {
       throw new Error(`Producto con SKU ${sku} no encontrado en Contífico`);
     }
 
+    // Formatear fecha al formato dd/mm/yyyy requerido por Contífico
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const fecha = `${day}/${month}/${year}`;
+
     const movement: CreateMovementRequest = {
-      tipo: "egreso",
+      tipo: "EGR",
       bodega_id: warehouseId,
-      fecha: new Date().toISOString(),
-      referencia: orderId || `ECOM-${Date.now()}`,
-      observaciones: notes || `Venta desde tienda e-commerce - SKU: ${sku}`,
+      fecha,
+      descripcion: notes || `Venta desde tienda e-commerce - SKU: ${sku}`,
+      codigo_interno: orderId || `ECOM-${Date.now()}`,
+      generar_asiento: false,
       detalles: [
         {
           producto_id: productId,
-          cantidad: quantity,
-          descripcion: `Egreso automático - SKU: ${sku}`,
+          cantidad: quantity.toString(),
+          precio: "0",
         },
       ],
     };
@@ -143,17 +154,25 @@ export class ContificoMovementsAPI {
       throw new Error(`Producto con SKU ${sku} no encontrado en Contífico`);
     }
 
+    // Formatear fecha al formato dd/mm/yyyy requerido por Contífico
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const fecha = `${day}/${month}/${year}`;
+
     const movement: CreateMovementRequest = {
-      tipo: "ingreso",
+      tipo: "ING",
       bodega_id: warehouseId,
-      fecha: new Date().toISOString(),
-      referencia: orderId || `ECOM-RETURN-${Date.now()}`,
-      observaciones: notes || `Devolución/Cancelación desde tienda e-commerce - SKU: ${sku}`,
+      fecha,
+      descripcion: notes || `Devolución/Cancelación desde tienda e-commerce - SKU: ${sku}`,
+      codigo_interno: orderId || `ECOM-RETURN-${Date.now()}`,
+      generar_asiento: false,
       detalles: [
         {
           producto_id: productId,
-          cantidad: quantity,
-          descripcion: `Ingreso automático - SKU: ${sku}`,
+          cantidad: quantity.toString(),
+          precio: "0",
         },
       ],
     };
@@ -179,7 +198,7 @@ export class ContificoMovementsAPI {
       );
 
       // Endpoint de movimientos de inventario en Contífico
-      const endpoint = "/sistema/api/v1/movimiento/";
+      const endpoint = "/sistema/api/v1/movimiento-inventario/";
 
       const response = await this.connector["makeRequest"](
         "POST",
