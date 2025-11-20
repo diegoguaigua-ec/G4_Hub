@@ -66,7 +66,7 @@ export class ContificoMovementsAPI {
       // Buscar producto por código/SKU
       const result = await this.connector.getProductBySku(sku);
 
-      if (result.success && result.product) {
+      if (result.product) {
         console.log(`[ContificoMovements] Producto encontrado: ${result.product.id}`);
         return result.product.id as string;
       }
