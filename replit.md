@@ -30,6 +30,8 @@ The application is a full-stack TypeScript project featuring a React frontend an
   - **Worker Processing**: Queries both "pending" and "processing" movements where `nextAttemptAt <= NOW()` to handle stuck/retry-eligible movements.
   - **Lock Management**: Caches `storeId` at processing start to guarantee lock release even if movement record is deleted during processing.
   - **Storage Atomicity**: `resetMovementToPending` method ensures atomic updates of status, attempts, nextAttemptAt, and errorMessage to prevent race conditions.
+  - **Idempotent Error Handling**: 409 Conflict errors from Contífico API are treated as successful completions (movement already exists); detection uses both error.response.status and error message content for robustness.
+  - **Contífico API Integration**: Uses `/sistema/api/v1/movimiento-inventario/` endpoint with movement types "EGR"/"ING", dd/mm/yyyy date format, and string-typed quantity/precio fields; producto_id lookup via SKU-based search.
 - **SKU-Based Product Lookup**: Implemented across connectors (Shopify, WooCommerce, Contifico) for efficient product identification.
 - **Idempotency**: Application-level duplicate detection for inventory movements to prevent double processing.
 

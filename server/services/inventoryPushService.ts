@@ -306,7 +306,12 @@ export class InventoryPushService {
 
       // Manejar error 409 (Conflict) - el movimiento ya existe en Contífico
       // En este caso, debemos marcar el movimiento como exitoso, no como fallido
-      if (error.message.includes('409') || error.message.includes('Conflict')) {
+      const is409Error = 
+        error.response?.status === 409 ||
+        error.message.includes('409') || 
+        error.message.includes('Conflict');
+        
+      if (is409Error) {
         console.log(
           `[InventoryPush] ✅ Movimiento ${movementId} ya existe en Contífico (409 Conflict), marcando como exitoso`,
         );
