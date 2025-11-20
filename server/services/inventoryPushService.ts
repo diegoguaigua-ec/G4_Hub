@@ -320,14 +320,14 @@ export class InventoryPushService {
       const newAttempts = movement.attempts + 1;
 
       // Si alcanzó el máximo de intentos, marcar como fallido
-      if (newAttempts >= movement.maxAttempts) {
+      if (newAttempts > movement.maxAttempts) {
         await storage.updateMovementStatus(
           movementId,
           "failed",
           error.message,
         );
         console.log(
-          `[InventoryPush] Movimiento ${movementId} marcado como fallido después de ${newAttempts} intentos`,
+          `[InventoryPush] Movimiento ${movementId} marcado como fallido después de ${movement.maxAttempts} intentos`,
         );
 
         // Rastrear SKU no mapeado si es ese el error
@@ -359,7 +359,7 @@ export class InventoryPushService {
       );
 
       console.log(
-        `[InventoryPush] Movimiento ${movementId} devuelto a 'pending' para reintento en ${backoffMinutes} minutos (intento ${newAttempts}/${movement.maxAttempts})`,
+        `[InventoryPush] Movimiento ${movementId} devuelto a 'pending' para reintento ${newAttempts} de ${movement.maxAttempts} en ${backoffMinutes} minutos`,
       );
 
       return false;
