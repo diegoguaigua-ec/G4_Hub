@@ -23,6 +23,13 @@ The application is a full-stack TypeScript project featuring a React frontend an
   - **Shopify Webhooks**: Requires `api_secret` for HMAC validation; supports orders/create, orders/paid, orders/cancelled, orders/updated, and refunds/create events.
   - **Credential Protection**: Smart credential merging in store updates preserves api_secret when not explicitly changed; filters empty/whitespace-only values to prevent accidental deletion.
   - **Event Processing**: orders/updated generates inventory egress movements; idempotency based on orderId+SKU+movementType prevents duplicate processing across all order events.
+  - **Webhook Event Strategy**: `inventory_levels/update` events are ignored (logged for telemetry) to prevent duplicate movements; order events are the primary source of truth.
+- **Inventory Push System**: Automated background worker for pushing inventory movements from e-commerce platforms to ERP systems.
+  - **Warehouse Configuration**: Dual-source lookup - primary: `syncConfig.pull.warehouse`, fallback: `integration.settings.warehouse_primary` for robust configuration handling.
+  - **Movement Retry Logic**: Exponential backoff (2, 4, 8 minutes) with atomic state transitions; failed movements reset to "pending" status for retry eligibility.
+  - **Worker Processing**: Queries both "pending" and "processing" movements where `nextAttemptAt <= NOW()` to handle stuck/retry-eligible movements.
+  - **Lock Management**: Caches `storeId` at processing start to guarantee lock release even if movement record is deleted during processing.
+  - **Storage Atomicity**: `resetMovementToPending` method ensures atomic updates of status, attempts, nextAttemptAt, and errorMessage to prevent race conditions.
 - **SKU-Based Product Lookup**: Implemented across connectors (Shopify, WooCommerce, Contifico) for efficient product identification.
 - **Idempotency**: Application-level duplicate detection for inventory movements to prevent double processing.
 
