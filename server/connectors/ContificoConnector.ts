@@ -205,6 +205,18 @@ export class ContificoConnector extends BaseConnector {
         },
       );
 
+      // 🔍 DEBUG: Logging detallado de la respuesta
+      console.log(`[Contífico][DEBUG] Tipo de response.data:`, typeof response.data);
+      console.log(`[Contífico][DEBUG] Es array:`, Array.isArray(response.data));
+      if (Array.isArray(response.data)) {
+        console.log(`[Contífico][DEBUG] Tamaño del array:`, response.data.length);
+        if (response.data.length > 0) {
+          console.log(`[Contífico][DEBUG] Primer producto:`, JSON.stringify(response.data[0], null, 2));
+        }
+      } else {
+        console.log(`[Contífico][DEBUG] response.data:`, JSON.stringify(response.data, null, 2));
+      }
+
       if (!Array.isArray(response.data) || response.data.length === 0) {
         throw new Error(`Producto con SKU ${productId} no encontrado`);
       }
