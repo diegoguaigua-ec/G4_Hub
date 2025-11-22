@@ -63,7 +63,6 @@ const editStoreFormSchema = z
     apiKey: z.string().optional(),
     accessToken: z.string().optional(),
     apiSecret: z.string().optional(),
-    shopDomain: z.string().optional(),
     // Contífico credentials
     username: z.string().optional(),
     password: z.string().optional(),
@@ -134,7 +133,6 @@ export function EditStoreDialog({
       apiKey: "",
       accessToken: "",
       apiSecret: "",
-      shopDomain: "",
       username: "",
       password: "",
       apiUrl: "",
@@ -167,7 +165,6 @@ export function EditStoreDialog({
         apiKey: credentials.api_key || "",
         accessToken: credentials.access_token || "",
         apiSecret: credentials.api_secret || "",
-        shopDomain: credentials.shop_domain || "",
         username: credentials.username || "",
         password: credentials.password || "",
         apiUrl: credentials.api_url || "",
@@ -189,11 +186,21 @@ export function EditStoreDialog({
           };
           break;
         case "shopify":
+          // Extract shop_domain from storeUrl automatically
+          let shopDomain = "";
+          try {
+            const url = new URL(data.storeUrl);
+            shopDomain = url.hostname;
+          } catch {
+            // Fallback: remove protocol and trailing slash
+            shopDomain = data.storeUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+          }
+          
           apiCredentials = {
             api_key: data.apiKey,
             access_token: data.accessToken,
             api_secret: data.apiSecret,
-            shop_domain: data.shopDomain,
+            shop_domain: shopDomain,
           };
           break;
         case "contifico":
@@ -496,23 +503,6 @@ export function EditStoreDialog({
                       type="password"
                       placeholder="shpss_..."
                       data-testid="input-api-secret"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="shopDomain"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Shop Domain</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="tutienda.myshopify.com"
-                      data-testid="input-shop-domain"
                       {...field}
                     />
                   </FormControl>

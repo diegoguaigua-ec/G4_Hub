@@ -49,7 +49,6 @@ const addStoreFormSchema = z
     apiKey: z.string().optional(),
     accessToken: z.string().optional(),
     apiSecret: z.string().optional(),
-    shopDomain: z.string().optional(),
     // Contífico credentials
     username: z.string().optional(),
     password: z.string().optional(),
@@ -99,7 +98,6 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
       apiKey: "",
       accessToken: "",
       apiSecret: "",
-      shopDomain: "",
       // Contífico
       username: "",
       password: "",
@@ -120,11 +118,21 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
           };
           break;
         case "shopify":
+          // Extract shop_domain from storeUrl automatically
+          let shopDomain = "";
+          try {
+            const url = new URL(data.storeUrl);
+            shopDomain = url.hostname;
+          } catch {
+            // Fallback: remove protocol and trailing slash
+            shopDomain = data.storeUrl.replace(/^https?:\/\//, "").replace(/\/$/, "");
+          }
+          
           apiCredentials = {
             api_key: data.apiKey,
             access_token: data.accessToken,
             api_secret: data.apiSecret,
-            shop_domain: data.shopDomain,
+            shop_domain: shopDomain,
           };
           break;
         case "contifico":
@@ -295,23 +303,6 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="shopDomain"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Dominio de Tienda</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="yourstore.myshopify.com"
-                      data-testid="input-shop-domain"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
           </>
         );
 
@@ -380,7 +371,7 @@ export function AddStoreDialog({ open, onOpenChange }: AddStoreDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Agregar Nueva Tienda</DialogTitle>
           <DialogDescription>
