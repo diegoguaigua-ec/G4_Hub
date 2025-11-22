@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -72,22 +71,25 @@ export default function LoginForm() {
                   <Input
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    className="h-12 pr-10"
-                    data-testid="input-password"
+                    className="h-12 pr-12"
+                    data-testid="input-password-login"
                     {...field}
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                    data-testid="button-toggle-password"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-10"
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    data-testid="button-toggle-password-login"
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
                     ) : (
                       <Eye className="h-5 w-5" />
                     )}
-                  </button>
+                  </Button>
                 </div>
               </FormControl>
               <FormMessage />

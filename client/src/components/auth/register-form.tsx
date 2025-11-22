@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -5,8 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Loader2 } from "lucide-react";
-import { insertUserSchema } from "@shared/schema";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 
 const registerSchema = z.object({
   tenantName: z.string().min(2, "El nombre de la empresa debe tener al menos 2 caracteres"),
@@ -27,6 +27,8 @@ type RegisterData = z.infer<typeof registerSchema>;
 
 export default function RegisterForm() {
   const { registerMutation } = useAuth();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const form = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
@@ -145,13 +147,30 @@ export default function RegisterForm() {
               <FormItem>
                 <FormLabel>Contraseña</FormLabel>
                 <FormControl>
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    className="h-12"
-                    data-testid="input-password"
-                    {...field}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      className="h-12 pr-12"
+                      data-testid="input-password-register"
+                      {...field}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-10"
+                      aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                      data-testid="button-toggle-password-register"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -165,13 +184,30 @@ export default function RegisterForm() {
               <FormItem>
                 <FormLabel>Confirmar Contraseña</FormLabel>
                 <FormControl>
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    className="h-12"
-                    data-testid="input-confirm-password"
-                    {...field}
-                  />
+                  <div className="relative">
+                    <Input
+                      type={showConfirmPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      className="h-12 pr-12"
+                      data-testid="input-confirm-password-register"
+                      {...field}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-0 top-1/2 -translate-y-1/2 h-10 w-10"
+                      aria-label={showConfirmPassword ? "Ocultar confirmar contraseña" : "Mostrar confirmar contraseña"}
+                      data-testid="button-toggle-confirm-password-register"
+                    >
+                      {showConfirmPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </Button>
+                  </div>
                 </FormControl>
                 <FormMessage />
               </FormItem>
