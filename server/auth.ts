@@ -46,10 +46,24 @@ export function setupAuth(app: Express) {
       const user = await storage.getUserByUsername(username);
       if (!user || !(await comparePasswords(password, user.passwordHash))) {
         return done(null, false);
-      } else {
-        await storage.updateUserLastLogin(user.id);
-        return done(null, user);
       }
+
+      // Check tenant account status (except for admins)
+      if (user.tenantId && user.role !== "admin") {
+        const tenant = await storage.getTenant(user.tenantId);
+        if (!tenant) {
+          return done(null, false);
+        }
+        
+        if (tenant.accountStatus !== "approved") {
+          return done(null, false, {
+            message: `Tu cuenta está ${tenant.accountStatus === "pending" ? "pendiente de aprobación" : "no disponible"}. Por favor contacta al administrador.`
+          });
+        }
+      }
+
+      await storage.updateUserLastLogin(user.id);
+      return done(null, user);
     }),
   );
 
@@ -61,7 +75,7 @@ export function setupAuth(app: Express) {
 
   app.post("/api/register", async (req, res, next) => {
     try {
-      const { tenantName, subdomain, name, email, password } = req.body;
+      const { tenantName, subdomain, name, email, password, planType } = req.body;
 
       // Validate required fields
       if (!name || !email || !password) {
@@ -75,6 +89,10 @@ export function setupAuth(app: Express) {
         });
       }
 
+      // Validate plan type
+      const validPlanTypes = ["starter", "professional", "enterprise"];
+      const selectedPlan = planType && validPlanTypes.includes(planType) ? planType : "starter";
+
       // Check if email already exists
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
@@ -87,31 +105,54 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Subdomain already exists" });
       }
 
+      // Check if this is the first tenant (for initial admin)
+      const allTenants = await storage.getAllTenants();
+      const isFirstTenant = allTenants.length === 0;
+
       // Create tenant first (required for user creation)
       const apiKey = randomBytes(32).toString('hex');
       const tenant = await storage.createTenant({
         name: tenantName,
         subdomain,
-        planType: "starter",
+        planType: selectedPlan,
+        accountStatus: isFirstTenant ? "approved" : "pending", // First tenant auto-approved
         status: "active",
         settings: {},
         apiKey,
       });
 
-      // Create user with tenant association
+      // Create user with tenant association (first tenant user is admin + owner)
       const user = await storage.createUser({
-        tenantId: tenant.id, // Now guaranteed to exist
+        tenantId: tenant.id,
         name,
         email,
         passwordHash: await hashPassword(password),
-        role: "admin",
+        role: isFirstTenant ? "admin" : "user", // First tenant user is admin
         emailVerified: false,
       });
 
-      req.login(user, (err) => {
-        if (err) return next(err);
-        res.status(201).json({ user, tenant });
-      });
+      // First tenant gets auto-login, others need approval
+      if (isFirstTenant) {
+        req.login(user, (err) => {
+          if (err) return next(err);
+          res.status(201).json({ 
+            user, 
+            tenant,
+            message: "Welcome! Your account has been created successfully.",
+            isAdmin: true
+          });
+        });
+      } else {
+        res.status(201).json({ 
+          message: "Registration successful. Your account is pending approval.",
+          requiresApproval: true,
+          tenant: {
+            name: tenant.name,
+            subdomain: tenant.subdomain,
+            planType: tenant.planType,
+          }
+        });
+      }
     } catch (error: any) {
       if (error.code === '23505') { // Unique constraint violation
         return res.status(400).json({ message: "Email or subdomain already exists" });

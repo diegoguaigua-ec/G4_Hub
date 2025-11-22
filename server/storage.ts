@@ -11,6 +11,7 @@ import {
   inventoryMovementsQueue,
   unmappedSkus,
   syncLocks,
+  adminActions,
   type User,
   type InsertUser,
   type Tenant,
@@ -58,6 +59,7 @@ export interface IStorage {
   createUser(user: CreateUserData): Promise<User>;
   updateUser(id: number, updates: Partial<{ name: string; email: string }>): Promise<User>;
   updateUserPassword(id: number, passwordHash: string): Promise<void>;
+  updateUserRole(id: number, role: string): Promise<void>;
   updateUserLastLogin(id: number): Promise<void>;
   deleteUser(id: number): Promise<void>;
 
@@ -66,6 +68,11 @@ export interface IStorage {
   getTenantBySubdomain(subdomain: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
   updateTenant(id: number, updates: Partial<{ name: string }>): Promise<Tenant>;
+  updateTenantAccountStatus(id: number, accountStatus: string): Promise<Tenant>;
+  updateTenantPlan(id: number, planType: string): Promise<Tenant>;
+  getTenantOwnerUser(tenantId: number): Promise<User | undefined>;
+  deleteTenant(id: number): Promise<void>;
+  createAdminAction(action: { adminUserId: number; targetTenantId: number; actionType: string; description: string; metadata?: any }): Promise<void>;
 
   getStoresByTenant(tenantId: number): Promise<Store[]>;
   getStore(id: number): Promise<Store | undefined>;
@@ -747,6 +754,13 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id));
   }
 
+  async updateUserRole(id: number, role: string): Promise<void> {
+    await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, id));
+  }
+
   async deleteUser(id: number): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
   }
@@ -762,6 +776,41 @@ export class DatabaseStorage implements IStorage {
       .where(eq(tenants.id, id))
       .returning();
     return tenant;
+  }
+
+  async updateTenantAccountStatus(id: number, accountStatus: string): Promise<Tenant> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ accountStatus, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+    return tenant;
+  }
+
+  async updateTenantPlan(id: number, planType: string): Promise<Tenant> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ planType, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+    return tenant;
+  }
+
+  async getTenantOwnerUser(tenantId: number): Promise<User | undefined> {
+    const allUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.tenantId, tenantId))
+      .orderBy(users.createdAt);
+    return allUsers[0];
+  }
+
+  async deleteTenant(id: number): Promise<void> {
+    await db.delete(tenants).where(eq(tenants.id, id));
+  }
+
+  async createAdminAction(action: { adminUserId: number; targetTenantId: number; actionType: string; description: string; metadata?: any }): Promise<void> {
+    await db.insert(adminActions).values(action);
   }
 
   // Inventory movements queue operations
