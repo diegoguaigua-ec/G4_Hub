@@ -56,7 +56,7 @@ export default function Header() {
       transition={{ duration: 0.5, ease: [0.21, 0.47, 0.32, 0.98] }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-background/80 backdrop-blur-md shadow-lg border-b"
+          ? "bg-[hsl(207,11%,11%)]/95 backdrop-blur-md shadow-lg border-b border-white/10"
           : "bg-transparent"
       }`}
     >
@@ -68,9 +68,9 @@ export default function Header() {
             className="flex items-center gap-2 group cursor-pointer"
           >
             <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center transition-transform group-hover:scale-110">
-              <Box className="h-5 w-5 text-secondary" />
+              <Box className="h-5 w-5 text-[hsl(207,11%,11%)]" />
             </div>
-            <span className="text-xl font-bold text-foreground">G4 Hub</span>
+            <span className="text-xl font-bold text-white">G4 Hub</span>
           </button>
 
           {/* Desktop Navigation */}
@@ -79,7 +79,7 @@ export default function Header() {
               <button
                 key={item.href}
                 onClick={() => scrollToSection(item.href)}
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors relative group"
+                className="text-sm font-medium text-gray-300 hover:text-white transition-colors relative group"
               >
                 {item.label}
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full" />
