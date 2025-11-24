@@ -304,6 +304,21 @@ export class InventoryPushService {
         error.message,
       );
 
+      // Manejar error 409 (Conflict) - el movimiento ya existe en Contífico
+      // En este caso, debemos marcar el movimiento como exitoso, no como fallido
+      const is409Error = 
+        error.response?.status === 409 ||
+        error.message.includes('409') || 
+        error.message.includes('Conflict');
+        
+      if (is409Error) {
+        console.log(
+          `[InventoryPush] ✅ Movimiento ${movementId} ya existe en Contífico (409 Conflict), marcando como exitoso`,
+        );
+        await storage.markMovementAsProcessed(movementId);
+        return true;
+      }
+
       // Obtener el movimiento actual para verificar intentos
       const movement = await storage.getMovementById(movementId);
 
@@ -320,14 +335,14 @@ export class InventoryPushService {
       const newAttempts = movement.attempts + 1;
 
       // Si alcanzó el máximo de intentos, marcar como fallido
-      if (newAttempts >= movement.maxAttempts) {
+      if (newAttempts > movement.maxAttempts) {
         await storage.updateMovementStatus(
           movementId,
           "failed",
           error.message,
         );
         console.log(
-          `[InventoryPush] Movimiento ${movementId} marcado como fallido después de ${newAttempts} intentos`,
+          `[InventoryPush] Movimiento ${movementId} marcado como fallido después de ${movement.maxAttempts} intentos`,
         );
 
         // Rastrear SKU no mapeado si es ese el error
@@ -359,7 +374,7 @@ export class InventoryPushService {
       );
 
       console.log(
-        `[InventoryPush] Movimiento ${movementId} devuelto a 'pending' para reintento en ${backoffMinutes} minutos (intento ${newAttempts}/${movement.maxAttempts})`,
+        `[InventoryPush] Movimiento ${movementId} devuelto a 'pending' para reintento ${newAttempts} de ${movement.maxAttempts} en ${backoffMinutes} minutos`,
       );
 
       return false;

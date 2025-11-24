@@ -1,4 +1,5 @@
 import type { Express, Request } from "express";
+import { Router } from "express";
 import { createServer, type Server } from "http";
 import { User } from "@shared/schema";
 import ExcelJS from "exceljs";
@@ -16,29 +17,9 @@ import { ContificoConnector } from './connectors/ContificoConnector';
 import { SyncService } from './services/SyncService';
 import { ZodError } from "zod";
 import webhookRoutes from "./routes/webhooks";
-
-// Helper function to get plan limits
-function getPlanLimits(planType: string) {
-  const plans: Record<string, { stores: number; products: number; syncs: number }> = {
-    starter: {
-      stores: 1,
-      products: 50,
-      syncs: 1000,
-    },
-    professional: {
-      stores: 3,
-      products: 500,
-      syncs: 10000,
-    },
-    enterprise: {
-      stores: Infinity,
-      products: Infinity,
-      syncs: Infinity,
-    },
-  };
-
-  return plans[planType] || plans.starter;
-}
+import adminRoutes from "./routes/admin";
+import { getPlan, PlanType } from "@shared/plans";
+import { requireApprovedTenant } from "./middleware/requireApprovedTenant";
 
 /**
  * Helper function to get the public URL for webhook callbacks
@@ -89,43 +70,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register webhook routes (before authentication middleware)
   app.use("/api/webhooks", webhookRoutes);
 
-  // Tenant registration endpoint
-  app.post("/api/register-tenant", async (req, res) => {
-    try {
-      const { tenantName, subdomain, userEmail, userName, password } = req.body;
+  // Protected routes - require authentication + approved tenant status
+  const protectedRouter = Router();
+  app.use("/api", requireApprovedTenant, protectedRouter);
 
-      // Check if subdomain already exists
-      const existingTenant = await storage.getTenantBySubdomain(subdomain);
-      if (existingTenant) {
-        return res.status(400).json({ message: "Subdomain already exists" });
-      }
+  // Register admin routes (requires authentication + admin role)
+  app.use("/api/admin", adminRoutes);
 
-      // Check if user email already exists
-      const existingUser = await storage.getUserByEmail(userEmail);
-      if (existingUser) {
-        return res.status(400).json({ message: "Email already exists" });
-      }
-
-      // Create tenant
-      const apiKey = randomBytes(32).toString('hex');
-      const tenant = await storage.createTenant({
-        name: tenantName,
-        subdomain,
-        planType: "starter",
-        status: "active",
-        settings: {},
-        apiKey,
-      });
-
-      res.status(201).json({ tenant, message: "Tenant created successfully" });
-    } catch (error) {
-      console.error("Error creating tenant:", error);
-      res.status(500).json({ message: "Failed to create tenant" });
-    }
-  });
 
   // Get current tenant info
-  app.get("/api/tenant/current", async (req, res) => {
+  protectedRouter.get("/tenant/current", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -148,7 +102,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get stores for current tenant
-  app.get("/api/stores", async (req, res) => {
+  protectedRouter.get("/stores", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -167,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create a new store connection
-  app.post("/api/stores", async (req, res) => {
+  protectedRouter.post("/stores", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -181,13 +135,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get tenant to check plan limits
       const tenant = await storage.getTenant(user.tenantId);
-      const planLimits = getPlanLimits(tenant.planType);
+      const plan = getPlan(tenant.planType as PlanType);
 
       // Check if user has reached store limit
       const existingStores = await storage.getStoresByTenant(user.tenantId);
-      if (existingStores.length >= planLimits.stores) {
+      const maxStores = plan.limits.maxStores === "unlimited" ? Infinity : plan.limits.maxStores;
+      if (existingStores.length >= maxStores) {
         return res.status(403).json({
-          message: `Has alcanzado el límite de ${planLimits.stores} ${planLimits.stores === 1 ? 'tienda' : 'tiendas'} de tu plan ${tenant.planType}. Por favor actualiza tu plan para añadir más tiendas.`
+          message: `Has alcanzado el límite de ${plan.limits.maxStores} ${plan.limits.maxStores === 1 ? 'tienda' : 'tiendas'} de tu plan ${tenant.planType}. Por favor actualiza tu plan para añadir más tiendas.`
         });
       }
 
@@ -308,7 +263,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update an existing store
-  app.put("/api/stores/:storeId", async (req, res) => {
+  protectedRouter.put("/stores/:storeId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -461,7 +416,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete a store
-  app.delete("/api/stores/:storeId", async (req, res) => {
+  protectedRouter.delete("/stores/:storeId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -500,7 +455,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Configure webhooks for a Shopify store (manual)
-  app.post("/api/stores/:storeId/configure-webhooks", async (req, res) => {
+  protectedRouter.post("/stores/:storeId/configure-webhooks", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -569,7 +524,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get configured webhooks for a store
-  app.get("/api/stores/:storeId/webhooks", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/webhooks", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -609,7 +564,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete webhooks for a store
-  app.delete("/api/stores/:storeId/webhooks", async (req, res) => {
+  protectedRouter.delete("/stores/:storeId/webhooks", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -667,7 +622,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update store API secret (for Shopify webhooks)
-  app.patch("/api/stores/:storeId/api-secret", async (req, res) => {
+  protectedRouter.patch("/stores/:storeId/api-secret", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -725,7 +680,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // Get all integrations for current tenant
-  app.get("/api/integrations", async (req, res) => {
+  protectedRouter.get("/integrations", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -745,7 +700,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get a specific integration
-  app.get("/api/integrations/:integrationId", async (req, res) => {
+  protectedRouter.get("/integrations/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -767,7 +722,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create a new integration
-  app.post("/api/integrations", async (req, res) => {
+  protectedRouter.post("/integrations", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -811,7 +766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update an integration
-  app.put("/api/integrations/:integrationId", async (req, res) => {
+  protectedRouter.put("/integrations/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -849,7 +804,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete an integration
-  app.delete("/api/integrations/:integrationId", async (req, res) => {
+  protectedRouter.delete("/integrations/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -875,7 +830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Test integration connection (for Contífico)
-  app.post("/api/integrations/:integrationId/test-connection", async (req, res) => {
+  protectedRouter.post("/integrations/:integrationId/test-connection", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -931,7 +886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get warehouses from Contífico integration
-  app.get("/api/integrations/:integrationId/warehouses", async (req, res) => {
+  protectedRouter.get("/integrations/:integrationId/warehouses", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -991,7 +946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // Get integrations linked to a store
-  app.get("/api/stores/:storeId/integrations", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/integrations", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -1030,7 +985,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Link an integration to a store
-  app.post("/api/stores/:storeId/integrations/:integrationId", async (req, res) => {
+  protectedRouter.post("/stores/:storeId/integrations/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -1082,7 +1037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update a store-integration link (toggle sync, change config)
-  app.put("/api/stores/:storeId/integrations/:integrationId", async (req, res) => {
+  protectedRouter.put("/stores/:storeId/integrations/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -1135,7 +1090,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Unlink an integration from a store
-  app.delete("/api/stores/:storeId/integrations/:integrationId", async (req, res) => {
+  protectedRouter.delete("/stores/:storeId/integrations/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -1181,7 +1136,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Test store connection with status persistence
-  app.post("/api/stores/:storeId/test-connection", async (req, res) => {
+  protectedRouter.post("/stores/:storeId/test-connection", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1233,7 +1188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get products from a store with pagination support (including cursor-based for Shopify)
-  app.get("/api/stores/:storeId/products", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/products", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1264,7 +1219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Get product sync status comparison (Inventory Tab)
   // IMPORTANT: This route must be BEFORE the generic /products/:productId route
-  app.get("/api/stores/:storeId/products/sync-status", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/products/sync-status", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1421,7 +1376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get sync statistics for a store
-  app.get("/api/stores/:storeId/sync-stats", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/sync-stats", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -1484,7 +1439,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get a specific product from a store
-  app.get("/api/stores/:storeId/products/:productId", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/products/:productId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1509,7 +1464,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update a product in a store
-  app.put("/api/stores/:storeId/products/:productId", async (req, res) => {
+  protectedRouter.put("/stores/:storeId/products/:productId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1535,7 +1490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get store information with caching
-  app.get("/api/stores/:storeId/info", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/info", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1596,7 +1551,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Inventory sync routes
   
   // Get sync status for a store
-  app.get("/api/sync/inventory/:storeId", async (req, res) => {
+  protectedRouter.get("/sync/inventory/:storeId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1629,7 +1584,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Trigger manual inventory sync
-  app.post("/api/sync/inventory/:storeId", async (req, res) => {
+  protectedRouter.post("/sync/inventory/:storeId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1644,10 +1599,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get tenant to check plan limits
       const tenant = await storage.getTenant(user.tenantId);
-      const planLimits = getPlanLimits(tenant.planType);
+      const plan = getPlan(tenant.planType as PlanType);
 
-      // Check sync limits for this month (if not infinite)
-      if (planLimits.syncs !== Infinity) {
+      // Check sync limits for this month (if not unlimited)
+      if (plan.limits.maxMonthlySyncs !== "unlimited") {
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
@@ -1657,9 +1612,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           log.createdAt >= startOfMonth && log.syncType === 'inventory'
         );
 
-        if (monthSyncs.length >= planLimits.syncs) {
+        if (monthSyncs.length >= plan.limits.maxMonthlySyncs) {
           return res.status(403).json({
-            message: `Has alcanzado el límite de ${planLimits.syncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
+            message: `Has alcanzado el límite de ${plan.limits.maxMonthlySyncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
           });
         }
       }
@@ -1779,7 +1734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get sync history for a store  
-  app.get("/api/sync/inventory/:storeId/logs", async (req, res) => {
+  protectedRouter.get("/sync/inventory/:storeId/logs", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -1811,7 +1766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // Sincronización manual Pull (Contífico → Tienda)
-  app.post("/api/sync/pull/:storeId/:integrationId", async (req, res) => {
+  protectedRouter.post("/sync/pull/:storeId/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -1827,10 +1782,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get tenant to check plan limits
       const tenant = await storage.getTenant(user.tenantId);
-      const planLimits = getPlanLimits(tenant.planType);
+      const plan = getPlan(tenant.planType as PlanType);
 
-      // Check sync limits for this month (if not infinite and not a dry run)
-      if (!dryRun && planLimits.syncs !== Infinity) {
+      // Check sync limits for this month (if not unlimited and not a dry run)
+      if (!dryRun && plan.limits.maxMonthlySyncs !== "unlimited") {
         const startOfMonth = new Date();
         startOfMonth.setDate(1);
         startOfMonth.setHours(0, 0, 0, 0);
@@ -1840,9 +1795,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           log.createdAt >= startOfMonth
         );
 
-        if (monthSyncs.length >= planLimits.syncs) {
+        if (monthSyncs.length >= plan.limits.maxMonthlySyncs) {
           return res.status(403).json({
-            message: `Has alcanzado el límite de ${planLimits.syncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
+            message: `Has alcanzado el límite de ${plan.limits.maxMonthlySyncs} sincronizaciones/mes de tu plan ${tenant.planType}. El límite se reiniciará el próximo mes.`
           });
         }
       }
@@ -1883,7 +1838,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Pull selectivo: sincroniza solo productos seleccionados por SKU
-  app.post("/api/sync/pull-selective/:storeId/:integrationId", async (req, res) => {
+  protectedRouter.post("/sync/pull-selective/:storeId/:integrationId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -1945,7 +1900,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * GET /api/sync/logs
    * Listar sincronizaciones con filtros y paginación
    */
-  app.get("/api/sync/logs", async (req, res) => {
+  protectedRouter.get("/sync/logs", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2023,7 +1978,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * GET /api/sync/logs/:id
    * Obtener detalle de una sincronización con sus items
    */
-  app.get("/api/sync/logs/:id", async (req, res) => {
+  protectedRouter.get("/sync/logs/:id", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2082,7 +2037,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * GET /api/sync/stats
    * Obtener métricas agregadas para Dashboard
    */
-  app.get("/api/sync/stats", async (req, res) => {
+  protectedRouter.get("/sync/stats", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2164,7 +2119,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * GET /api/sync/logs/:id/export
    * Exportar productos de una sincronización a Excel
    */
-  app.get("/api/sync/logs/:id/export", async (req, res) => {
+  protectedRouter.get("/sync/logs/:id/export", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2338,7 +2293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // Get notifications for the current tenant
-  app.get("/api/notifications", async (req, res) => {
+  protectedRouter.get("/notifications", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2374,7 +2329,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Mark a notification as read
-  app.patch("/api/notifications/:id/read", async (req, res) => {
+  protectedRouter.patch("/notifications/:id/read", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2410,7 +2365,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Mark all notifications as read for the current tenant
-  app.patch("/api/notifications/mark-all-read", async (req, res) => {
+  protectedRouter.patch("/notifications/mark-all-read", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2434,7 +2389,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete a notification
-  app.delete("/api/notifications/:id", async (req, res) => {
+  protectedRouter.delete("/notifications/:id", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2474,7 +2429,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // Update user information
-  app.put("/api/user/:userId", async (req, res) => {
+  protectedRouter.put("/user/:userId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2514,7 +2469,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Change password
-  app.post("/api/user/change-password", async (req, res) => {
+  protectedRouter.post("/user/change-password", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2559,7 +2514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete user account
-  app.delete("/api/user/:userId", async (req, res) => {
+  protectedRouter.delete("/user/:userId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2590,7 +2545,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update tenant information
-  app.put("/api/tenant/:tenantId", async (req, res) => {
+  protectedRouter.put("/tenant/:tenantId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "No autorizado" });
     }
@@ -2622,7 +2577,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========================================
 
   // Get inventory push statistics
-  app.get("/api/stores/:storeId/inventory-push/stats", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/inventory-push/stats", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2675,7 +2630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get inventory push movements with filters
-  app.get("/api/stores/:storeId/inventory-push/movements", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/inventory-push/movements", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2743,7 +2698,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get single movement details
-  app.get("/api/stores/:storeId/inventory-push/movements/:movementId", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/inventory-push/movements/:movementId", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2772,7 +2727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Retry a failed movement
-  app.post("/api/stores/:storeId/inventory-push/movements/:movementId/retry", async (req, res) => {
+  protectedRouter.post("/stores/:storeId/inventory-push/movements/:movementId/retry", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2811,7 +2766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get unmapped SKUs
-  app.get("/api/stores/:storeId/unmapped-skus", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/unmapped-skus", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2843,7 +2798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Clear sync locks for a store (admin utility)
-  app.post("/api/stores/:storeId/clear-locks", async (req, res) => {
+  protectedRouter.post("/stores/:storeId/clear-locks", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2870,7 +2825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Mark unmapped SKU as resolved
-  app.patch("/api/stores/:storeId/unmapped-skus/:skuId/resolve", async (req, res) => {
+  protectedRouter.patch("/stores/:storeId/unmapped-skus/:skuId/resolve", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2897,7 +2852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export movements to Excel
-  app.get("/api/stores/:storeId/inventory-push/movements/export", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/inventory-push/movements/export", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -2979,7 +2934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Export unmapped SKUs to Excel
-  app.get("/api/stores/:storeId/unmapped-skus/export", async (req, res) => {
+  protectedRouter.get("/stores/:storeId/unmapped-skus/export", async (req, res) => {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ message: "Unauthorized" });
     }

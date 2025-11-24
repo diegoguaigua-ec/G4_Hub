@@ -33,6 +33,7 @@ export const tenants = pgTable("tenants", {
   name: varchar("name", { length: 255 }).notNull(),
   subdomain: varchar("subdomain", { length: 100 }).notNull().unique(),
   planType: varchar("plan_type", { length: 50 }).default("starter"),
+  accountStatus: varchar("account_status", { length: 20 }).default("pending"), // 'pending', 'approved', 'rejected', 'suspended'
   status: varchar("status", { length: 20 }).default("active"),
   settings: jsonb("settings").default({}),
   apiKey: varchar("api_key", { length: 255 }).notNull().unique(),
@@ -55,7 +56,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 255 }).notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: varchar("name", { length: 255 }).notNull(),
-  role: varchar("role", { length: 50 }).default("admin"),
+  role: varchar("role", { length: 50 }).default("user"), // 'user' or 'admin'
   emailVerified: boolean("email_verified").notNull().default(false),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -321,6 +322,28 @@ export const syncLocks = pgTable(
   ],
 );
 
+// Admin Actions - audit log for administrative actions
+export const adminActions = pgTable(
+  "admin_actions",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    adminUserId: integer("admin_user_id")
+      .references(() => users.id, { onDelete: "set null" }),
+    targetTenantId: integer("target_tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    actionType: varchar("action_type", { length: 50 }).notNull(), // 'approve_account', 'reject_account', 'change_plan', 'suspend_account', etc.
+    description: text("description").notNull(),
+    metadata: jsonb("metadata").default({}), // Store additional data like old plan, new plan, reason, etc.
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_admin_actions_admin").on(table.adminUserId),
+    index("idx_admin_actions_tenant").on(table.targetTenantId),
+    index("idx_admin_actions_type").on(table.actionType),
+    index("idx_admin_actions_created").on(table.createdAt),
+  ],
+);
+
 // Relations
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
@@ -452,6 +475,17 @@ export const syncLocksRelations = relations(syncLocks, ({ one }) => ({
   store: one(stores, {
     fields: [syncLocks.storeId],
     references: [stores.id],
+  }),
+}));
+
+export const adminActionsRelations = relations(adminActions, ({ one }) => ({
+  adminUser: one(users, {
+    fields: [adminActions.adminUserId],
+    references: [users.id],
+  }),
+  targetTenant: one(tenants, {
+    fields: [adminActions.targetTenantId],
+    references: [tenants.id],
   }),
 }));
 
@@ -779,6 +813,13 @@ export const insertSyncLockSchema = createInsertSchema(syncLocks, {
   lockedAt: true,
 });
 
+export const insertAdminActionSchema = createInsertSchema(adminActions, {
+  createdAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -794,6 +835,7 @@ export type InsertInventoryMovement = z.infer<
 >;
 export type InsertUnmappedSku = z.infer<typeof insertUnmappedSkuSchema>;
 export type InsertSyncLock = z.infer<typeof insertSyncLockSchema>;
+export type InsertAdminAction = z.infer<typeof insertAdminActionSchema>;
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -806,3 +848,4 @@ export type Notification = typeof notifications.$inferSelect;
 export type InventoryMovement = typeof inventoryMovementsQueue.$inferSelect;
 export type UnmappedSku = typeof unmappedSkus.$inferSelect;
 export type SyncLock = typeof syncLocks.$inferSelect;
+export type AdminAction = typeof adminActions.$inferSelect;

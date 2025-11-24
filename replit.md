@@ -10,6 +10,10 @@ The application is a full-stack TypeScript project featuring a React frontend an
 ## UI/UX Decisions
 - **UI Framework**: shadcn/ui components built on Radix UI primitives for consistent and accessible design.
 - **Styling**: Tailwind CSS with CSS custom properties for theming and responsive design.
+- **Form UX Improvements**: 
+  - Password visibility toggles in login/register forms with Eye/EyeOff icons
+  - Scrollable dialogs (max-h-90vh overflow-y-auto) for store forms on small screens
+  - Auto-extraction of shopDomain from storeUrl for Shopify stores (URL.hostname with regex fallback)
 
 ## Technical Implementations
 - **Frontend**: React 18 with Vite, TypeScript for type safety, React Query for server state management, Wouter for routing, React Hook Form with Zod for form handling and validation, and context-based authentication.
@@ -30,6 +34,8 @@ The application is a full-stack TypeScript project featuring a React frontend an
   - **Worker Processing**: Queries both "pending" and "processing" movements where `nextAttemptAt <= NOW()` to handle stuck/retry-eligible movements.
   - **Lock Management**: Caches `storeId` at processing start to guarantee lock release even if movement record is deleted during processing.
   - **Storage Atomicity**: `resetMovementToPending` method ensures atomic updates of status, attempts, nextAttemptAt, and errorMessage to prevent race conditions.
+  - **Idempotent Error Handling**: 409 Conflict errors from Contífico API are treated as successful completions (movement already exists); detection uses both error.response.status and error message content for robustness.
+  - **Contífico API Integration**: Uses `/sistema/api/v1/movimiento-inventario/` endpoint with movement types "EGR"/"ING", dd/mm/yyyy date format, and string-typed quantity/precio fields; producto_id lookup via SKU-based search.
 - **SKU-Based Product Lookup**: Implemented across connectors (Shopify, WooCommerce, Contifico) for efficient product identification.
 - **Idempotency**: Application-level duplicate detection for inventory movements to prevent double processing.
 
