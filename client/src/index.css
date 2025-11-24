@@ -101,4 +101,87 @@
     margin: var(--spacing);
     padding: var(--spacing);
   }
+
+  /* Glass Card Effects */
+  .glass-card {
+    @apply relative overflow-hidden;
+    @apply bg-white/5 backdrop-blur-md;
+    @apply border border-white/10;
+    @apply rounded-2xl;
+    @apply transition-all duration-300;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  }
+
+  .glass-card::before {
+    content: '';
+    @apply absolute inset-0;
+    @apply bg-gradient-to-br from-white/10 to-transparent;
+    @apply opacity-0 transition-opacity duration-300;
+    @apply pointer-events-none;
+  }
+
+  .glass-card:hover {
+    @apply border-white/20;
+    transform: translateY(-8px);
+    box-shadow: 0 25px 50px -12px rgba(196, 255, 64, 0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  }
+
+  .glass-card:hover::before {
+    @apply opacity-100;
+  }
+
+  /* Primary variant for important cards */
+  .glass-card-primary {
+    @apply glass-card;
+    border-color: rgba(196, 255, 64, 0.3);
+    box-shadow: 0 20px 25px -5px rgba(196, 255, 64, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  }
+
+  .glass-card-primary:hover {
+    border-color: rgba(196, 255, 64, 0.5);
+    box-shadow: 0 25px 50px -12px rgba(196, 255, 64, 0.3), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Shimmer effect for buttons */
+  .glass-shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .glass-shimmer::after {
+    content: '';
+    @apply absolute inset-0;
+    @apply bg-gradient-to-r from-transparent via-white/30 to-transparent;
+    transform: translateX(-100%);
+    transition: transform 0.6s ease;
+    @apply pointer-events-none;
+  }
+
+  .glass-shimmer:hover::after {
+    transform: translateX(100%);
+  }
+}
+
+/* Infinite Scroll Animation */
+@keyframes infinite-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-infinite-scroll {
+  animation: infinite-scroll 30s linear infinite;
+}
+
+.animate-infinite-scroll:hover {
+  animation-play-state: paused;
+}
+
+/* Fallback for browsers without backdrop-filter support */
+@supports not (backdrop-filter: blur(10px)) {
+  .glass-card {
+    background: rgba(0, 0, 0, 0.8);
+  }
 }

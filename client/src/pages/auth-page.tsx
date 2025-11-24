@@ -1,13 +1,22 @@
 import { useAuth } from "@/hooks/use-auth";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import LoginForm from "@/components/auth/login-form";
 import RegisterForm from "@/components/auth/register-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Box } from "lucide-react";
+import { useMemo } from "react";
 
 export default function AuthPage() {
   const { user, isLoading } = useAuth();
+  const [location] = useLocation();
+
+  // Parse query params to determine default tab
+  const defaultTab = useMemo(() => {
+    const params = new URLSearchParams(location.split("?")[1] || "");
+    const tab = params.get("tab");
+    return tab === "register" ? "register" : "login";
+  }, [location]);
 
   if (isLoading) {
     return (
@@ -18,7 +27,7 @@ export default function AuthPage() {
   }
 
   if (user) {
-    return <Redirect to="/" />;
+    return <Redirect to="/dashboard" />;
   }
 
   return (
@@ -79,7 +88,7 @@ export default function AuthPage() {
         <div className="w-full max-w-md mx-auto">
           <Card className="shadow-2xl border-0">
             <CardContent className="p-8">
-              <Tabs defaultValue="login" className="space-y-6">
+              <Tabs defaultValue={defaultTab} className="space-y-6">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="login" data-testid="tab-login">Iniciar Sesión</TabsTrigger>
                   <TabsTrigger value="register" data-testid="tab-register">Comenzar</TabsTrigger>
