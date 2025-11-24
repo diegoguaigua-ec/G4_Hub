@@ -66,9 +66,12 @@ export default function HeroSection() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0 }}
-              className="space-y-6"
+              className="space-y-6 relative"
             >
-              <h1 className="text-4xl lg:text-5xl font-bold leading-tight text-white">
+              {/* Subtle glow behind title */}
+              <div className="glow-primary absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96" />
+
+              <h1 className="text-4xl lg:text-5xl font-bold leading-tight text-white relative z-10">
                 Automatiza tu E-commerce en{" "}
                 <span className="text-primary">Latinoamérica</span>
               </h1>
@@ -90,7 +93,7 @@ export default function HeroSection() {
               <Link href="/auth?tab=register">
                 <Button variant="glass-primary" size="lg" className="text-base px-8 glass-shimmer w-full sm:w-auto">
                   <Zap className="mr-2 h-5 w-5" />
-                  Comenzar Gratis - Sin Tarjeta
+                  Comenzar Ahora
                 </Button>
               </Link>
               <Button
@@ -111,19 +114,15 @@ export default function HeroSection() {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="flex flex-wrap gap-3 justify-center lg:justify-start"
             >
-              <Badge variant="secondary" className="py-1.5 px-3 text-sm bg-white/10 text-white border-white/20">
-                <Check className="mr-1 h-4 w-4 text-primary" />
-                Sin tarjeta de crédito
-              </Badge>
-              <Badge variant="secondary" className="py-1.5 px-3 text-sm bg-white/10 text-white border-white/20">
+              <Badge variant="secondary" className="py-1.5 px-3 text-sm bg-white/10 backdrop-blur-md text-white border-white/20 shadow-md">
                 <Check className="mr-1 h-4 w-4 text-primary" />
                 Setup en 5 minutos
               </Badge>
-              <Badge variant="secondary" className="py-1.5 px-3 text-sm bg-white/10 text-white border-white/20">
+              <Badge variant="secondary" className="py-1.5 px-3 text-sm bg-white/10 backdrop-blur-md text-white border-white/20 shadow-md">
                 <Check className="mr-1 h-4 w-4 text-primary" />
                 Soporte en español
               </Badge>
-              <Badge variant="secondary" className="py-1.5 px-3 text-sm bg-white/10 text-white border-white/20">
+              <Badge variant="secondary" className="py-1.5 px-3 text-sm bg-white/10 backdrop-blur-md text-white border-white/20 shadow-md">
                 <Check className="mr-1 h-4 w-4 text-primary" />
                 Cancela cuando quieras
               </Badge>

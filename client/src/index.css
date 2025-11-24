@@ -215,6 +215,37 @@
   animation-play-state: paused;
 }
 
+/* Subtle Glow Animations */
+@keyframes subtle-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.08;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.12;
+  }
+}
+
+.glow-primary {
+  position: absolute;
+  z-index: -10;
+  border-radius: 9999px;
+  filter: blur(60px);
+  background: radial-gradient(circle, rgba(196, 255, 64, 0.15) 0%, rgba(196, 255, 64, 0.05) 50%, transparent 100%);
+  animation: subtle-pulse 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.glow-primary-static {
+  position: absolute;
+  z-index: -10;
+  border-radius: 9999px;
+  filter: blur(60px);
+  background: radial-gradient(circle, rgba(196, 255, 64, 0.1) 0%, rgba(196, 255, 64, 0.03) 50%, transparent 100%);
+  pointer-events: none;
+}
+
 /* Fallback for browsers without backdrop-filter support */
 @supports not (backdrop-filter: blur(10px)) {
   .glass-card {

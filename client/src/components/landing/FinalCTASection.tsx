@@ -80,7 +80,7 @@ export default function FinalCTASection() {
                   className="px-10 py-6 h-auto bg-white text-primary hover:bg-white/90 shadow-2xl"
                 >
                   <Zap className="mr-2 h-5 w-5" />
-                  Comenzar Gratis - Sin Tarjeta de Crédito
+                  Solicitar Demo
                 </Button>
               </Link>
             </motion.div>

@@ -59,7 +59,7 @@ export default function Footer() {
   };
 
   return (
-    <footer id="footer" className="bg-muted/30 border-t pt-16 pb-8">
+    <footer id="footer" className="bg-[hsl(207,11%,13%)] border-t border-white/10 pt-16 pb-8">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Newsletter Section */}
         <div className="mb-16 max-w-2xl mx-auto text-center">
