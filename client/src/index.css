@@ -133,12 +133,12 @@
   /* Primary variant for important cards */
   .glass-card-primary {
     @apply glass-card;
-    @apply border-primary/30;
+    border-color: rgba(196, 255, 64, 0.3);
     box-shadow: 0 20px 25px -5px rgba(196, 255, 64, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
   }
 
   .glass-card-primary:hover {
-    @apply border-primary/50;
+    border-color: rgba(196, 255, 64, 0.5);
     box-shadow: 0 25px 50px -12px rgba(196, 255, 64, 0.3), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
   }
 
