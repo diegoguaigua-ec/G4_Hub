@@ -96,7 +96,7 @@ export default function Header() {
             </Link>
             <Link href="/auth?tab=register">
               <Button size="default" className="shadow-lg hover:shadow-xl transition-shadow">
-                Comenzar Gratis
+                Comenzar Ahora
               </Button>
             </Link>
           </div>
@@ -144,7 +144,7 @@ export default function Header() {
                   <SheetClose asChild>
                     <Link href="/auth?tab=register">
                       <Button size="lg" className="w-full">
-                        Comenzar Gratis
+                        Comenzar Ahora
                       </Button>
                     </Link>
                   </SheetClose>

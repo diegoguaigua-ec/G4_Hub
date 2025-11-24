@@ -56,14 +56,14 @@ const features: Feature[] = [
 
 export default function FeaturesSection() {
   return (
-    <section id="features" className="py-20 lg:py-28 bg-muted/30">
+    <section id="features" className="py-20 lg:py-28 bg-[hsl(207,11%,11%)]">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-white mb-4">
             Todo lo que Necesitas para Automatizar tu E-commerce
           </h2>
-          <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-gray-300 max-w-3xl mx-auto">
             Funcionalidades diseñadas para el mercado latinoamericano
           </p>
         </AnimatedSection>

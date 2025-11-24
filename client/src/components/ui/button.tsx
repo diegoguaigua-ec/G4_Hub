@@ -19,7 +19,7 @@ const buttonVariants = cva(
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
         glass: "relative overflow-hidden bg-white/10 backdrop-blur-md border border-white/20 text-white shadow-lg shadow-black/10 hover:bg-white/20 hover:border-white/30 hover:shadow-xl hover:shadow-primary/20 active:scale-95 transition-all duration-300",
-        "glass-primary": "relative overflow-hidden bg-primary/20 backdrop-blur-md border border-primary/30 text-white shadow-lg shadow-primary/20 hover:bg-primary/30 hover:border-primary/50 hover:shadow-xl hover:shadow-primary/40 active:scale-95 transition-all duration-300",
+        "glass-primary": "relative overflow-hidden bg-primary/90 backdrop-blur-sm border border-primary/50 text-[hsl(207,11%,11%)] font-semibold shadow-lg shadow-primary/30 hover:bg-primary hover:border-primary hover:shadow-xl hover:shadow-primary/50 active:scale-95 transition-all duration-300",
       },
       size: {
         default: "h-10 px-4 py-2",

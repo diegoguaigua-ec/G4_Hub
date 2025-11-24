@@ -23,14 +23,14 @@ export default function PricingSection() {
   };
 
   return (
-    <section id="pricing" className="py-20 lg:py-28 bg-muted/30">
+    <section id="pricing" className="py-20 lg:py-28 bg-[hsl(207,11%,11%)]">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-white mb-4">
             Planes que Escalan con tu Negocio
           </h2>
-          <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-gray-300 max-w-3xl mx-auto">
             Precios transparentes sin sorpresas
           </p>
         </AnimatedSection>
@@ -68,7 +68,7 @@ export default function PricingSection() {
             Mensual
           </span>
           {billingPeriod === "annual" && (
-            <Badge variant="secondary" className="ml-2">
+            <Badge variant="secondary" className="ml-2 bg-primary/20 backdrop-blur-md border-primary/30 text-white shadow-md">
               Ahorra 17%
             </Badge>
           )}
@@ -97,7 +97,7 @@ export default function PricingSection() {
                   {/* Popular Badge */}
                   {isPopular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary text-primary-foreground shadow-lg">
+                      <Badge className="bg-primary/90 backdrop-blur-sm border border-primary/50 text-[hsl(207,11%,11%)] font-semibold shadow-lg shadow-primary/30">
                         Popular
                       </Badge>
                     </div>
@@ -169,7 +169,10 @@ export default function PricingSection() {
 
                   {/* Decorative gradient for popular plan */}
                   {isPopular && (
-                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 -z-10 blur-2xl" />
+                    <>
+                      <div className="glow-primary-static absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full" />
+                      <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-primary/10 to-secondary/10 -z-10 blur-2xl" />
+                    </>
                   )}
                 </motion.div>
               </StaggerItem>

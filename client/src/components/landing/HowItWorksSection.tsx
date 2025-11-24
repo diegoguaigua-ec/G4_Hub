@@ -54,7 +54,7 @@ export default function HowItWorksSection() {
     <section
       id="how-it-works"
       ref={containerRef}
-      className="py-20 lg:py-28 bg-background relative overflow-hidden"
+      className="py-20 lg:py-28 bg-[hsl(207,11%,13%)] relative overflow-hidden"
     >
       {/* Background decoration */}
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-secondary/5 -z-10" />
@@ -62,10 +62,10 @@ export default function HowItWorksSection() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-20">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold text-white mb-4">
             Comienza en 3 Simples Pasos
           </h2>
-          <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-gray-300 max-w-3xl mx-auto">
             De la configuración a la automatización completa en minutos
           </p>
         </AnimatedSection>
@@ -126,7 +126,7 @@ export default function HowItWorksSection() {
                     </div>
 
                     {/* Description */}
-                    <p className="text-muted-foreground text-lg leading-relaxed max-w-md">
+                    <p className="text-muted-foreground leading-relaxed max-w-md">
                       {step.description}
                     </p>
                   </div>
@@ -170,12 +170,12 @@ export default function HowItWorksSection() {
 
         {/* Bottom CTA */}
         <AnimatedSection delay={0.6} className="text-center mt-16">
-          <p className="text-lg text-muted-foreground mb-6">
-            ¿Listo para comenzar? Sin tarjeta de crédito requerida
+          <p className="text-gray-300 mb-6">
+            ¿Listo para comenzar? Setup rápido y sin permanencia
           </p>
           <Link href="/auth?tab=register">
             <Button size="lg" className="text-base px-8 shadow-lg hover:shadow-xl transition-shadow">
-              Comenzar Ahora Gratis
+              Comenzar Ahora
             </Button>
           </Link>
         </AnimatedSection>
