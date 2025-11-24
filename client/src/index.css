@@ -108,8 +108,8 @@
     @apply bg-white/5 backdrop-blur-md;
     @apply border border-white/10;
     @apply rounded-2xl;
-    @apply shadow-xl shadow-black/20;
     @apply transition-all duration-300;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
   }
 
   .glass-card::before {
@@ -122,8 +122,8 @@
 
   .glass-card:hover {
     @apply border-white/20;
-    @apply shadow-2xl shadow-primary/10;
     transform: translateY(-8px);
+    box-shadow: 0 25px 50px -12px rgba(196, 255, 64, 0.1), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
   }
 
   .glass-card:hover::before {
@@ -134,12 +134,12 @@
   .glass-card-primary {
     @apply glass-card;
     @apply border-primary/30;
-    @apply shadow-primary/20;
+    box-shadow: 0 20px 25px -5px rgba(196, 255, 64, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
   }
 
   .glass-card-primary:hover {
     @apply border-primary/50;
-    @apply shadow-primary/30;
+    box-shadow: 0 25px 50px -12px rgba(196, 255, 64, 0.3), 0 20px 25px -5px rgba(0, 0, 0, 0.3);
   }
 
   /* Shimmer effect for buttons */
