@@ -8,6 +8,7 @@ import { AuthProvider } from "@/hooks/use-auth";
 import { ProtectedRoute } from "./lib/protected-route";
 import NotFound from "@/pages/not-found";
 import AuthPage from "@/pages/auth-page";
+import LandingPage from "@/pages/landing-page";
 
 // Dashboard Pages
 import OverviewPage from "@/pages/dashboard/overview";
@@ -23,10 +24,8 @@ import SettingsPage from "@/pages/dashboard/settings";
 function Router() {
   return (
     <Switch>
-      {/* Redirect root to dashboard */}
-      <Route path="/">
-        <Redirect to="/dashboard" />
-      </Route>
+      {/* Landing Page - shows marketing content or redirects to dashboard if authenticated */}
+      <Route path="/" component={LandingPage} />
 
       {/* Dashboard Routes */}
       <ProtectedRoute path="/dashboard" component={OverviewPage} />
