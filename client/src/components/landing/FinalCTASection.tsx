@@ -58,12 +58,12 @@ export default function FinalCTASection() {
             className="space-y-8"
           >
             {/* Title */}
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white">
+            <h2 className="text-4xl lg:text-5xl font-bold text-white">
               ¿Listo para Automatizar tu E-commerce?
             </h2>
 
             {/* Subtitle */}
-            <p className="text-lg sm:text-xl text-white/90 max-w-2xl mx-auto">
+            <p className="text-white/90 max-w-2xl mx-auto">
               Únete a cientos de negocios latinoamericanos que ya confían en G4 Hub
               para gestionar su inventario automáticamente
             </p>
@@ -77,7 +77,7 @@ export default function FinalCTASection() {
               <Link href="/auth?tab=register">
                 <Button
                   size="lg"
-                  className="text-lg px-10 py-6 h-auto bg-white text-primary hover:bg-white/90 shadow-2xl"
+                  className="px-10 py-6 h-auto bg-white text-primary hover:bg-white/90 shadow-2xl"
                 >
                   <Zap className="mr-2 h-5 w-5" />
                   Comenzar Gratis - Sin Tarjeta de Crédito

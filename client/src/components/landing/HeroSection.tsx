@@ -68,12 +68,12 @@ export default function HeroSection() {
               transition={{ duration: 0.6, delay: 0 }}
               className="space-y-6"
             >
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight text-white">
+              <h1 className="text-4xl lg:text-5xl font-bold leading-tight text-white">
                 Automatiza tu E-commerce en{" "}
                 <span className="text-primary">Latinoamérica</span>
               </h1>
 
-              <p className="text-lg sm:text-xl text-gray-300 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+              <p className="text-gray-300 leading-relaxed max-w-2xl mx-auto lg:mx-0">
                 La plataforma que conecta tus tiendas Shopify y WooCommerce con
                 Contífico y otros ERPs. Sincronización en tiempo real,
                 facturación automática y gestión completa de inventario.

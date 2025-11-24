@@ -90,10 +90,10 @@ export default function BenefitsSection() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold mb-4">
             Transforma tu Operación E-commerce
           </h2>
-          <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-muted-foreground max-w-3xl mx-auto">
             G4 Hub elimina tareas manuales y errores costosos en tu proceso post-venta
           </p>
         </AnimatedSection>
@@ -143,7 +143,7 @@ export default function BenefitsSection() {
 
         {/* Bottom CTA */}
         <AnimatedSection delay={0.4} className="text-center mt-16">
-          <p className="text-lg text-muted-foreground mb-4">
+          <p className="text-muted-foreground mb-4">
             ¿Listo para optimizar tu operación e-commerce?
           </p>
           <motion.div

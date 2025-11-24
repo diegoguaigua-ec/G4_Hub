@@ -62,10 +62,10 @@ export default function HowItWorksSection() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-20">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-4">
+          <h2 className="text-4xl lg:text-5xl font-bold mb-4">
             Comienza en 3 Simples Pasos
           </h2>
-          <p className="text-lg sm:text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-muted-foreground max-w-3xl mx-auto">
             De la configuración a la automatización completa en minutos
           </p>
         </AnimatedSection>
@@ -126,7 +126,7 @@ export default function HowItWorksSection() {
                     </div>
 
                     {/* Description */}
-                    <p className="text-muted-foreground text-lg leading-relaxed max-w-md">
+                    <p className="text-muted-foreground leading-relaxed max-w-md">
                       {step.description}
                     </p>
                   </div>
@@ -170,7 +170,7 @@ export default function HowItWorksSection() {
 
         {/* Bottom CTA */}
         <AnimatedSection delay={0.6} className="text-center mt-16">
-          <p className="text-lg text-muted-foreground mb-6">
+          <p className="text-muted-foreground mb-6">
             ¿Listo para comenzar? Sin tarjeta de crédito requerida
           </p>
           <Link href="/auth?tab=register">
