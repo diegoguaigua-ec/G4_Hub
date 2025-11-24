@@ -18,7 +18,7 @@ type AuthContextType = {
 };
 
 type LoginData = { username: string; password: string; };
-type RegisterData = { tenantName: string; subdomain: string; name: string; email: string; password: string; };
+type RegisterData = { tenantName: string; subdomain: string; name: string; email: string; password: string; planType?: string; };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {

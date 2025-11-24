@@ -173,8 +173,20 @@ export function setupAuth(app: Express) {
     });
   });
 
-  app.get("/api/user", (req, res) => {
+  app.get("/api/user", async (req, res) => {
     if (!req.isAuthenticated()) return res.sendStatus(401);
-    res.json(req.user);
+
+    const user = req.user;
+
+    // Include tenant information with the user
+    if (user && user.tenantId) {
+      const tenant = await storage.getTenant(user.tenantId);
+      return res.json({
+        ...user,
+        tenant: tenant || null,
+      });
+    }
+
+    res.json(user);
   });
 }
