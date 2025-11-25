@@ -52,8 +52,17 @@ import {
   Loader2,
   ChevronLeft,
   ChevronRight,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
 
 interface Tenant {
   id: number;
@@ -62,6 +71,7 @@ interface Tenant {
   planType: string;
   accountStatus: string;
   createdAt: string;
+  expiresAt?: string | null;
   ownerEmail?: string;
   ownerName?: string;
 }
@@ -73,7 +83,7 @@ interface UsersResponse {
   limit: number;
 }
 
-type ActionType = "approve" | "reject" | "suspend" | "activate" | "plan" | "delete";
+type ActionType = "approve" | "reject" | "suspend" | "activate" | "plan" | "delete" | "expiration";
 
 interface ActionDialog {
   open: boolean;
@@ -81,6 +91,7 @@ interface ActionDialog {
   tenant: Tenant | null;
   reason?: string;
   planType?: string;
+  expirationDate?: Date | null;
 }
 
 export default function AdminUsersPage() {
@@ -114,6 +125,7 @@ export default function AdminUsersPage() {
     tenant: null,
     reason: "",
     planType: "starter",
+    expirationDate: null,
   });
 
   // Fetch users
@@ -229,6 +241,23 @@ export default function AdminUsersPage() {
     },
   });
 
+  const expirationMutation = useMutation({
+    mutationFn: async ({ tenantId, expiresAt }: { tenantId: number; expiresAt: Date | null }) => {
+      const res = await apiRequest("PUT", `/api/admin/users/${tenantId}/expires-at`, {
+        expiresAt: expiresAt ? expiresAt.toISOString() : null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Fecha de vencimiento actualizada exitosamente" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
+      closeDialog();
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const openDialog = (type: ActionType, tenant: Tenant) => {
     setActionDialog({
       open: true,
@@ -236,6 +265,7 @@ export default function AdminUsersPage() {
       tenant,
       reason: "",
       planType: tenant.planType || "starter",
+      expirationDate: tenant.expiresAt ? new Date(tenant.expiresAt) : null,
     });
   };
 
@@ -246,6 +276,7 @@ export default function AdminUsersPage() {
       tenant: null,
       reason: "",
       planType: "starter",
+      expirationDate: null,
     });
   };
 
@@ -283,6 +314,9 @@ export default function AdminUsersPage() {
       case "delete":
         deleteMutation.mutate(tenantId);
         break;
+      case "expiration":
+        expirationMutation.mutate({ tenantId, expiresAt: actionDialog.expirationDate || null });
+        break;
     }
   };
 
@@ -318,7 +352,8 @@ export default function AdminUsersPage() {
     suspendMutation.isPending ||
     activateMutation.isPending ||
     changePlanMutation.isPending ||
-    deleteMutation.isPending;
+    deleteMutation.isPending ||
+    expirationMutation.isPending;
 
   return (
     <DashboardLayout>
@@ -382,6 +417,7 @@ export default function AdminUsersPage() {
                         <TableHead>Propietario</TableHead>
                         <TableHead>Plan</TableHead>
                         <TableHead>Estado</TableHead>
+                        <TableHead>Vencimiento</TableHead>
                         <TableHead>Fecha Creación</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                       </TableRow>
@@ -389,7 +425,7 @@ export default function AdminUsersPage() {
                     <TableBody>
                       {data?.tenants.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                             No se encontraron usuarios
                           </TableCell>
                         </TableRow>
@@ -412,6 +448,26 @@ export default function AdminUsersPage() {
                             </TableCell>
                             <TableCell>{getPlanBadge(tenant.planType)}</TableCell>
                             <TableCell>{getStatusBadge(tenant.accountStatus)}</TableCell>
+                            <TableCell>
+                              {tenant.expiresAt ? (
+                                <div>
+                                  <div className={
+                                    new Date(tenant.expiresAt) < new Date()
+                                      ? "text-red-500 font-medium"
+                                      : new Date(tenant.expiresAt) < new Date(Date.now() + 10 * 24 * 60 * 60 * 1000)
+                                      ? "text-yellow-500 font-medium"
+                                      : "text-foreground"
+                                  }>
+                                    {new Date(tenant.expiresAt).toLocaleDateString("es-ES")}
+                                  </div>
+                                  {new Date(tenant.expiresAt) < new Date() && (
+                                    <div className="text-xs text-red-500">Expirada</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground">Sin vencimiento</span>
+                              )}
+                            </TableCell>
                             <TableCell>
                               {new Date(tenant.createdAt).toLocaleDateString("es-ES")}
                             </TableCell>
@@ -456,6 +512,11 @@ export default function AdminUsersPage() {
                                   <DropdownMenuItem onClick={() => openDialog("plan", tenant)}>
                                     <CreditCard className="mr-2 h-4 w-4 text-blue-600" />
                                     Cambiar Plan
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuItem onClick={() => openDialog("expiration", tenant)}>
+                                    <CalendarIcon className="mr-2 h-4 w-4 text-purple-600" />
+                                    Establecer Vencimiento
                                   </DropdownMenuItem>
 
                                   <DropdownMenuSeparator />
@@ -520,6 +581,7 @@ export default function AdminUsersPage() {
               {actionDialog.type === "suspend" && "Suspender Cuenta"}
               {actionDialog.type === "activate" && "Reactivar Cuenta"}
               {actionDialog.type === "plan" && "Cambiar Plan"}
+              {actionDialog.type === "expiration" && "Establecer Fecha de Vencimiento"}
               {actionDialog.type === "delete" && "Eliminar Cuenta"}
             </DialogTitle>
             <DialogDescription>
@@ -533,6 +595,8 @@ export default function AdminUsersPage() {
                 `¿Estás seguro que deseas reactivar la cuenta de ${actionDialog.tenant?.name}?`}
               {actionDialog.type === "plan" &&
                 `Selecciona el nuevo plan para ${actionDialog.tenant?.name}`}
+              {actionDialog.type === "expiration" &&
+                `Establece la fecha de vencimiento para la cuenta de ${actionDialog.tenant?.name}. Deja vacío para eliminar el vencimiento.`}
               {actionDialog.type === "delete" &&
                 `ADVERTENCIA: Esta acción es irreversible. Se eliminará permanentemente la cuenta de ${actionDialog.tenant?.name} y todos sus datos.`}
             </DialogDescription>
@@ -572,6 +636,52 @@ export default function AdminUsersPage() {
                     <SelectItem value="enterprise">Enterprise</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {actionDialog.type === "expiration" && (
+              <div className="space-y-2">
+                <Label>Fecha de Vencimiento</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {actionDialog.expirationDate ? (
+                        format(actionDialog.expirationDate, "PPP", { locale: es })
+                      ) : (
+                        <span>Selecciona una fecha</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={actionDialog.expirationDate || undefined}
+                      onSelect={(date) =>
+                        setActionDialog({ ...actionDialog, expirationDate: date || null })
+                      }
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+                <div className="flex gap-2 mt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setActionDialog({ ...actionDialog, expirationDate: null })}
+                  >
+                    Eliminar Vencimiento
+                  </Button>
+                  {actionDialog.tenant?.expiresAt && (
+                    <div className="text-sm text-muted-foreground flex items-center">
+                      Actual: {format(new Date(actionDialog.tenant.expiresAt), "PPP", { locale: es })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

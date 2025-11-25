@@ -8,6 +8,11 @@ export interface AuthenticatedRequest extends Request {
     name: string;
     role: string;
     tenantId: number | null;
+    tenant?: {
+      id: number;
+      expiresAt?: Date | null;
+      accountStatus?: string;
+    };
   };
 }
 
@@ -41,6 +46,13 @@ export async function requireApprovedTenant(req: Request, res: Response, next: N
       accountStatus: tenant.accountStatus,
     });
   }
+
+  // Attach tenant info to user for downstream middleware (like checkExpiration)
+  user.tenant = {
+    id: tenant.id,
+    expiresAt: tenant.expiresAt,
+    accountStatus: tenant.accountStatus,
+  };
 
   next();
 }

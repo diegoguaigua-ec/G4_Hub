@@ -20,6 +20,7 @@ import webhookRoutes from "./routes/webhooks";
 import adminRoutes from "./routes/admin";
 import { getPlan, PlanType } from "@shared/plans";
 import { requireApprovedTenant } from "./middleware/requireApprovedTenant";
+import { checkExpiration } from "./middleware/checkExpiration";
 
 /**
  * Helper function to get the public URL for webhook callbacks
@@ -70,9 +71,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register webhook routes (before authentication middleware)
   app.use("/api/webhooks", webhookRoutes);
 
-  // Protected routes - require authentication + approved tenant status
+  // Protected routes - require authentication + approved tenant status + expiration check
   const protectedRouter = Router();
-  app.use("/api", requireApprovedTenant, protectedRouter);
+  app.use("/api", requireApprovedTenant, checkExpiration, protectedRouter);
 
   // Register admin routes (requires authentication + admin role)
   app.use("/api/admin", adminRoutes);

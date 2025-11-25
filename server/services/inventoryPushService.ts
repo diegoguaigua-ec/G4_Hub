@@ -412,6 +412,16 @@ export class InventoryPushService {
       let failed = 0;
 
       for (const movement of pendingMovements) {
+        // Check if tenant account is expired
+        const tenant = await storage.getTenant(movement.tenantId);
+        if (tenant?.expiresAt && new Date(tenant.expiresAt) < new Date()) {
+          console.log(
+            `[InventoryPush] ⏸️  Movimiento ${movement.id} - tenant ${tenant.id} expirado, saltando...`,
+          );
+          // Don't mark as failed, just skip - will retry when account is renewed
+          continue;
+        }
+
         const result = await this.processMovement(movement.id);
         if (result) {
           successful++;
