@@ -19,7 +19,17 @@ interface AuthenticatedRequest extends Request {
  */
 export function checkExpiration(req: AuthenticatedRequest, res: Response, next: NextFunction) {
   // Skip if no user (will be caught by authentication middleware)
-  if (!req.user || !req.user.tenant) {
+  if (!req.user) {
+    return next();
+  }
+
+  // Skip check for admins
+  if (req.user.role === "admin") {
+    return next();
+  }
+
+  // Skip if no tenant info
+  if (!req.user.tenant) {
     return next();
   }
 
@@ -55,7 +65,16 @@ export function checkExpiration(req: AuthenticatedRequest, res: Response, next: 
  * Use this for creating integrations, modifying settings, etc.
  */
 export function strictCheckExpiration(req: AuthenticatedRequest, res: Response, next: NextFunction) {
-  if (!req.user || !req.user.tenant) {
+  if (!req.user) {
+    return next();
+  }
+
+  // Skip check for admins
+  if (req.user.role === "admin") {
+    return next();
+  }
+
+  if (!req.user.tenant) {
     return next();
   }
 

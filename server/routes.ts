@@ -71,12 +71,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register webhook routes (before authentication middleware)
   app.use("/api/webhooks", webhookRoutes);
 
+  // Register admin routes FIRST (requires authentication + admin role)
+  // Admin routes should not be affected by expiration checks
+  app.use("/api/admin", adminRoutes);
+
   // Protected routes - require authentication + approved tenant status + expiration check
   const protectedRouter = Router();
   app.use("/api", requireApprovedTenant, checkExpiration, protectedRouter);
-
-  // Register admin routes (requires authentication + admin role)
-  app.use("/api/admin", adminRoutes);
 
 
   // Get current tenant info
