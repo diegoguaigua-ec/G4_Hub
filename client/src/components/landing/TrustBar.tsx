@@ -91,22 +91,14 @@ export default function TrustBar() {
           Integrado con las plataformas líderes del mercado
         </motion.p>
 
-        {/* Infinite scroll container */}
-        <div className="relative">
-          {/* Wide gradient masks - extended to cover full width */}
-          <div
-            className="absolute left-0 top-0 bottom-0 w-32 sm:w-48 md:w-64 lg:w-96 z-30 pointer-events-none"
-            style={{
-              background: 'linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.98) 10%, rgba(0, 0, 0, 0.95) 20%, rgba(0, 0, 0, 0.8) 40%, rgba(0, 0, 0, 0) 100%)'
-            }}
-          />
-          <div
-            className="absolute right-0 top-0 bottom-0 w-32 sm:w-48 md:w-64 lg:w-96 z-30 pointer-events-none"
-            style={{
-              background: 'linear-gradient(to left, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.98) 10%, rgba(0, 0, 0, 0.95) 20%, rgba(0, 0, 0, 0.8) 40%, rgba(0, 0, 0, 0) 100%)'
-            }}
-          />
-
+        {/* Carousel container with mask-image - Native CSS masking technique */}
+        <div
+          className="relative w-full overflow-hidden flex items-center justify-center py-2.5"
+          style={{
+            maskImage: 'linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgb(0, 0, 0) 12.5%, rgb(0, 0, 0) 87.5%, rgba(0, 0, 0, 0) 100%)',
+            WebkitMaskImage: 'linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgb(0, 0, 0) 12.5%, rgb(0, 0, 0) 87.5%, rgba(0, 0, 0, 0) 100%)'
+          }}
+        >
           {/* Scrolling track */}
           <div className="flex gap-0 animate-infinite-scroll">
             {/* First iteration */}
