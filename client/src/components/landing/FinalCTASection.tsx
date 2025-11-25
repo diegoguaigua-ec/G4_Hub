@@ -74,15 +74,15 @@ export default function FinalCTASection() {
               whileTap={{ scale: 0.95 }}
               className="inline-block"
             >
-              <Link href="/auth?tab=register">
+              <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer">
                 <Button
                   size="lg"
                   className="px-10 py-6 h-auto bg-white text-primary hover:bg-white/90 shadow-2xl"
                 >
                   <Zap className="mr-2 h-5 w-5" />
-                  Solicitar Demo
+                  Agendar Demo
                 </Button>
-              </Link>
+              </a>
             </motion.div>
 
             {/* Benefits List */}

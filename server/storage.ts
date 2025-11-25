@@ -70,6 +70,7 @@ export interface IStorage {
   updateTenant(id: number, updates: Partial<{ name: string }>): Promise<Tenant>;
   updateTenantAccountStatus(id: number, accountStatus: string): Promise<Tenant>;
   updateTenantPlan(id: number, planType: string): Promise<Tenant>;
+  updateTenantExpiresAt(id: number, expiresAt: Date | null): Promise<Tenant>;
   getTenantOwnerUser(tenantId: number): Promise<User | undefined>;
   deleteTenant(id: number): Promise<void>;
   createAdminAction(action: { adminUserId: number; targetTenantId: number; actionType: string; description: string; metadata?: any }): Promise<void>;
@@ -791,6 +792,15 @@ export class DatabaseStorage implements IStorage {
     const [tenant] = await db
       .update(tenants)
       .set({ planType, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+    return tenant;
+  }
+
+  async updateTenantExpiresAt(id: number, expiresAt: Date | null): Promise<Tenant> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ expiresAt, updatedAt: new Date() })
       .where(eq(tenants.id, id))
       .returning();
     return tenant;

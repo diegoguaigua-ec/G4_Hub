@@ -94,11 +94,11 @@ export default function Header() {
                 Iniciar Sesión
               </Button>
             </Link>
-            <Link href="/auth?tab=register">
-              <Button size="default" className="shadow-lg hover:shadow-xl transition-shadow">
-                Comenzar Ahora
+            <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer">
+              <Button size="default" className="shadow-lg hover:shadow-xl transition-shadow text-white">
+                Agendar Demo
               </Button>
-            </Link>
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -142,11 +142,11 @@ export default function Header() {
                     </Link>
                   </SheetClose>
                   <SheetClose asChild>
-                    <Link href="/auth?tab=register">
-                      <Button size="lg" className="w-full">
-                        Comenzar Ahora
+                    <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer" className="w-full">
+                      <Button size="lg" className="w-full text-white">
+                        Agendar Demo
                       </Button>
-                    </Link>
+                    </a>
                   </SheetClose>
                 </div>
               </div>

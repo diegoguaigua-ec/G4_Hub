@@ -43,6 +43,7 @@ export const tenants = pgTable("tenants", {
   contificoEnvironment: varchar("contifico_environment", {
     length: 20,
   }).default("test"),
+  expiresAt: timestamp("expires_at"), // Account expiration date
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

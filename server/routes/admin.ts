@@ -457,6 +457,48 @@ router.put("/users/:id/plan", async (req, res) => {
 });
 
 /**
+ * PUT /api/admin/users/:id/expires-at
+ * Update tenant expiration date
+ */
+router.put("/users/:id/expires-at", async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+    const { expiresAt } = req.body;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ message: "Tenant not found" });
+    }
+
+    // expiresAt can be a date string or null to remove expiration
+    const expirationDate = expiresAt ? new Date(expiresAt) : null;
+
+    // Update tenant expiration
+    await storage.updateTenantExpiresAt(tenantId, expirationDate);
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: tenantId,
+      actionType: "update_expiration",
+      description: expirationDate
+        ? `Fecha de vencimiento actualizada a ${expirationDate.toLocaleDateString()} por ${adminUser.name}`
+        : `Fecha de vencimiento eliminada por ${adminUser.name}`,
+      metadata: {
+        oldExpiresAt: tenant.expiresAt,
+        newExpiresAt: expirationDate,
+      },
+    });
+
+    res.json({ message: "Expiration date updated successfully" });
+  } catch (error) {
+    console.error("Error updating expiration:", error);
+    res.status(500).json({ message: "Failed to update expiration date" });
+  }
+});
+
+/**
  * DELETE /api/admin/users/:id
  * Delete a tenant (dangerous operation)
  */

@@ -144,28 +144,16 @@ export default function PricingSection() {
                   </ul>
 
                   {/* CTA Button */}
-                  {plan.id === "enterprise" ? (
+                  <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer" className="w-full">
                     <Button
                       size="lg"
                       variant={isPopular ? "default" : "outline"}
-                      className="w-full"
-                      onClick={() => scrollToSection("#footer")}
+                      className="w-full text-white"
                     >
                       <Zap className="mr-2 h-4 w-4" />
-                      Contactar Ventas
+                      Agendar Demo
                     </Button>
-                  ) : (
-                    <Link href="/auth?tab=register">
-                      <Button
-                        size="lg"
-                        variant={isPopular ? "default" : "outline"}
-                        className="w-full"
-                      >
-                        <Zap className="mr-2 h-4 w-4" />
-                        Comenzar Ahora
-                      </Button>
-                    </Link>
-                  )}
+                  </a>
 
                   {/* Decorative gradient for popular plan */}
                   {isPopular && (
