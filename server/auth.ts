@@ -105,54 +105,42 @@ export function setupAuth(app: Express) {
         return res.status(400).json({ message: "Subdomain already exists" });
       }
 
-      // Check if this is the first tenant (for initial admin)
-      const allTenants = await storage.getAllTenants();
-      const isFirstTenant = allTenants.length === 0;
-
-      // Create tenant first (required for user creation)
+      // All tenants start as "pending" - superadmin must be created manually in DB
       const apiKey = randomBytes(32).toString('hex');
       const tenant = await storage.createTenant({
         name: tenantName,
         subdomain,
         planType: selectedPlan,
-        accountStatus: isFirstTenant ? "approved" : "pending", // First tenant auto-approved
+        accountStatus: "pending", // All accounts require admin approval
         status: "active",
         settings: {},
         apiKey,
       });
 
-      // Create user with tenant association (first tenant user is admin + owner)
+      // Create user with tenant association - all start as regular users
       const user = await storage.createUser({
         tenantId: tenant.id,
         name,
         email,
         passwordHash: await hashPassword(password),
-        role: isFirstTenant ? "admin" : "user", // First tenant user is admin
+        role: "user", // All users start as regular users
         emailVerified: false,
       });
 
-      // First tenant gets auto-login, others need approval
-      if (isFirstTenant) {
-        req.login(user, (err) => {
-          if (err) return next(err);
-          res.status(201).json({ 
-            user, 
-            tenant,
-            message: "Welcome! Your account has been created successfully.",
-            isAdmin: true
-          });
-        });
-      } else {
-        res.status(201).json({ 
-          message: "Registration successful. Your account is pending approval.",
-          requiresApproval: true,
-          tenant: {
-            name: tenant.name,
-            subdomain: tenant.subdomain,
-            planType: tenant.planType,
-          }
-        });
-      }
+      // All registrations return success message with pending status
+      res.status(201).json({
+        message: "¡Registro exitoso! Tu cuenta está pendiente de aprobación. Recibirás un correo cuando sea aprobada.",
+        requiresApproval: true,
+        tenant: {
+          name: tenant.name,
+          subdomain: tenant.subdomain,
+          planType: tenant.planType,
+        },
+        user: {
+          name: user.name,
+          email: user.email,
+        }
+      });
     } catch (error: any) {
       if (error.code === '23505') { // Unique constraint violation
         return res.status(400).json({ message: "Email or subdomain already exists" });
@@ -162,8 +150,37 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", passport.authenticate("local"), (req, res) => {
-    res.status(200).json(req.user);
+  app.post("/api/login", (req, res, next) => {
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) {
+        return next(err);
+      }
+
+      if (!user) {
+        // If info has a message, it's likely about account status
+        if (info && info.message) {
+          return res.status(403).json({ message: info.message });
+        }
+        return res.status(401).json({ message: "Credenciales incorrectas" });
+      }
+
+      req.logIn(user, async (err) => {
+        if (err) {
+          return next(err);
+        }
+
+        // Include tenant information with the user
+        if (user && user.tenantId) {
+          const tenant = await storage.getTenant(user.tenantId);
+          return res.status(200).json({
+            ...user,
+            tenant: tenant || null,
+          });
+        }
+
+        res.status(200).json(user);
+      });
+    })(req, res, next);
   });
 
   app.post("/api/logout", (req, res, next) => {
