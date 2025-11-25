@@ -23,7 +23,7 @@ export default function PricingSection() {
   };
 
   return (
-    <section id="pricing" className="py-20 lg:py-28 bg-[hsl(207,11%,11%)]">
+    <section id="pricing" className="py-20 lg:py-28 bg-black">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-12">
@@ -35,41 +35,33 @@ export default function PricingSection() {
           </p>
         </AnimatedSection>
 
-        {/* Billing Period Toggle */}
+        {/* Billing Period Toggle - Glass Style */}
         <AnimatedSection delay={0.1} className="flex items-center justify-center gap-4 mb-12">
-          <span
-            className={`text-sm font-medium transition-colors ${
-              billingPeriod === "annual" ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            Anual
-          </span>
-          <button
-            onClick={() => setBillingPeriod(billingPeriod === "annual" ? "monthly" : "annual")}
-            className="relative inline-flex h-7 w-12 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{
-              backgroundColor: billingPeriod === "annual" ? "hsl(var(--primary))" : "hsl(var(--muted))",
-            }}
-          >
-            <motion.span
-              layout
-              transition={{ type: "spring", stiffness: 500, damping: 30 }}
-              className="inline-block h-5 w-5 rounded-full bg-background shadow-lg"
-              style={{
-                marginLeft: billingPeriod === "annual" ? "2px" : "calc(100% - 22px)",
-              }}
-            />
-          </button>
-          <span
-            className={`text-sm font-medium transition-colors ${
-              billingPeriod === "monthly" ? "text-foreground" : "text-muted-foreground"
-            }`}
-          >
-            Mensual
-          </span>
+          <div className="inline-flex items-center gap-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg p-1.5 shadow-lg">
+            <button
+              onClick={() => setBillingPeriod("annual")}
+              className={`px-6 py-2 rounded-md text-sm font-semibold transition-all duration-300 ${
+                billingPeriod === "annual"
+                  ? "bg-white/20 text-white shadow-md"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Anual
+            </button>
+            <button
+              onClick={() => setBillingPeriod("monthly")}
+              className={`px-6 py-2 rounded-md text-sm font-semibold transition-all duration-300 ${
+                billingPeriod === "monthly"
+                  ? "bg-white/20 text-white shadow-md"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Mensual
+            </button>
+          </div>
           {billingPeriod === "annual" && (
-            <Badge variant="secondary" className="ml-2 bg-primary/20 backdrop-blur-md border-primary/30 text-white shadow-md">
-              Ahorra 17%
+            <Badge className="bg-[#D2FF3D]/20 backdrop-blur-md border border-[#D2FF3D]/40 text-[#D2FF3D] font-semibold shadow-lg">
+              Ahorra 29%
             </Badge>
           )}
         </AnimatedSection>
@@ -94,10 +86,10 @@ export default function PricingSection() {
                       : "hover:border-primary/50"
                   }`}
                 >
-                  {/* Popular Badge */}
+                  {/* Popular Badge with green lime text */}
                   {isPopular && (
                     <div className="absolute -top-4 left-1/2 -translate-x-1/2">
-                      <Badge className="bg-primary/90 backdrop-blur-sm border border-primary/50 text-[hsl(207,11%,11%)] font-semibold shadow-lg shadow-primary/30">
+                      <Badge className="bg-[#D2FF3D]/20 backdrop-blur-md border border-[#D2FF3D]/40 text-[#D2FF3D] font-bold px-4 py-1.5 rounded-full shadow-lg shadow-[#D2FF3D]/20">
                         Popular
                       </Badge>
                     </div>
@@ -143,16 +135,19 @@ export default function PricingSection() {
                     ))}
                   </ul>
 
-                  {/* CTA Button */}
+                  {/* CTA Button - Green lime with liquid glass for popular */}
                   <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer" className="w-full">
-                    <Button
-                      size="lg"
-                      variant={isPopular ? "default" : "outline"}
-                      className="w-full text-white"
-                    >
-                      <Zap className="mr-2 h-4 w-4" />
-                      Agendar Demo
-                    </Button>
+                    {isPopular ? (
+                      <button className="w-full px-6 py-3 bg-[#D2FF3D]/90 backdrop-blur-sm border border-[#D2FF3D]/50 rounded-lg text-black font-semibold hover:bg-[#D2FF3D] hover:text-black hover:shadow-xl hover:shadow-[#D2FF3D]/50 active:scale-95 transition-all duration-300 shadow-lg shadow-[#D2FF3D]/30 flex items-center justify-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        Agendar Demo
+                      </button>
+                    ) : (
+                      <button className="w-full px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg text-white font-semibold hover:bg-white/20 hover:border-white/30 active:scale-95 transition-all duration-300 shadow-md flex items-center justify-center gap-2">
+                        <Zap className="h-4 w-4" />
+                        Agendar Demo
+                      </button>
+                    )}
                   </a>
 
                   {/* Decorative gradient for popular plan */}

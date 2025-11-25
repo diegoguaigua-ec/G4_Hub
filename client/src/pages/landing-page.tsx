@@ -28,7 +28,7 @@ export default function LandingPage() {
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen login-gradient dark flex items-center justify-center">
+      <div className="min-h-screen bg-black dark flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
@@ -41,7 +41,7 @@ export default function LandingPage() {
 
   // Show landing page to non-authenticated users
   return (
-    <div className="min-h-screen login-gradient dark">
+    <div className="min-h-screen bg-black dark">
       <Header />
       <main>
         <HeroSection />

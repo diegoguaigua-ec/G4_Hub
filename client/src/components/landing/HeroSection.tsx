@@ -28,7 +28,7 @@ export default function HeroSection() {
   return (
     <section
       id="hero"
-      className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 pb-16 lg:pt-24 lg:pb-20 bg-[hsl(207,11%,11%)]"
+      className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 pb-16 lg:pt-24 lg:pb-20 bg-black"
     >
       {/* Decorative Elements */}
       <div className="absolute inset-0 -z-10 overflow-hidden">

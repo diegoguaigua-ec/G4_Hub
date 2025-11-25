@@ -56,14 +56,14 @@ function LogoGroup() {
             {/* Badge for highlighted or coming soon */}
             {platform.highlighted && (
               <div className="absolute -top-2 -right-2">
-                <div className="bg-primary text-black text-[10px] font-bold px-2 py-0.5 rounded-full">
+                <div className="bg-[#D2FF3D]/90 backdrop-blur-sm border border-[#D2FF3D]/50 text-black text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-[#D2FF3D]/30">
                   Principal
                 </div>
               </div>
             )}
             {platform.comingSoon && (
               <div className="absolute -top-2 -right-2">
-                <div className="bg-white/10 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm border border-white/10">
+                <div className="bg-white/10 backdrop-blur-md border border-white/20 text-white text-[10px] font-semibold px-2 py-0.5 rounded-full shadow-md">
                   Pronto
                 </div>
               </div>
@@ -93,17 +93,17 @@ export default function TrustBar() {
 
         {/* Infinite scroll container */}
         <div className="relative">
-          {/* Wide gradient masks - desktop version */}
+          {/* Wide gradient masks - extended to cover full width */}
           <div
-            className="absolute left-0 top-0 bottom-0 w-64 md:w-96 z-30 pointer-events-none"
+            className="absolute left-0 top-0 bottom-0 w-32 sm:w-48 md:w-64 lg:w-96 z-30 pointer-events-none"
             style={{
-              background: 'linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.95) 20%, rgba(0, 0, 0, 0.8) 40%, rgba(0, 0, 0, 0) 100%)'
+              background: 'linear-gradient(to right, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.98) 10%, rgba(0, 0, 0, 0.95) 20%, rgba(0, 0, 0, 0.8) 40%, rgba(0, 0, 0, 0) 100%)'
             }}
           />
           <div
-            className="absolute right-0 top-0 bottom-0 w-64 md:w-96 z-30 pointer-events-none"
+            className="absolute right-0 top-0 bottom-0 w-32 sm:w-48 md:w-64 lg:w-96 z-30 pointer-events-none"
             style={{
-              background: 'linear-gradient(to left, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.95) 20%, rgba(0, 0, 0, 0.8) 40%, rgba(0, 0, 0, 0) 100%)'
+              background: 'linear-gradient(to left, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 0.98) 10%, rgba(0, 0, 0, 0.95) 20%, rgba(0, 0, 0, 0.8) 40%, rgba(0, 0, 0, 0) 100%)'
             }}
           />
 

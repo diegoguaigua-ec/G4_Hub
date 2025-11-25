@@ -86,7 +86,7 @@ function CounterAnimation({ value, suffix = "" }: { value: number; suffix?: stri
 
 export default function BenefitsSection() {
   return (
-    <section id="benefits" className="py-20 lg:py-28 bg-[hsl(207,11%,13%)]">
+    <section id="benefits" className="py-20 lg:py-28 bg-black">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-16">
