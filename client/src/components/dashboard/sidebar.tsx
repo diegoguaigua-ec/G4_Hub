@@ -41,10 +41,21 @@ export default function Sidebar() {
   ];
 
   const isActive = (path: string) => {
+    // Remove query params from location for matching
+    const currentPath = location.split("?")[0];
+
     if (path === "/dashboard") {
-      return location === "/dashboard" || location === "/";
+      return currentPath === "/dashboard" || currentPath === "/";
     }
-    return location.startsWith(path);
+
+    // For exact matches (like /dashboard/admin when on /dashboard/admin/users)
+    // we need to check if it's exactly the path, not just starts with it
+    if (path === "/dashboard/admin") {
+      return currentPath === "/dashboard/admin";
+    }
+
+    // For other paths, use startsWith
+    return currentPath.startsWith(path);
   };
 
   return (

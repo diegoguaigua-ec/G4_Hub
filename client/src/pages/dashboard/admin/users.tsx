@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import DashboardLayout from "@/pages/dashboard-layout";
@@ -94,6 +94,18 @@ export default function AdminUsersPage() {
   const [statusFilter, setStatusFilter] = useState(params.get("filter") || "all");
   const [page, setPage] = useState(parseInt(params.get("page") || "1"));
   const limit = 10;
+
+  // Update state when URL changes (e.g., from quick actions links)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.split("?")[1] || "");
+    const urlSearch = urlParams.get("search") || "";
+    const urlFilter = urlParams.get("filter") || "all";
+    const urlPage = parseInt(urlParams.get("page") || "1");
+
+    setSearch(urlSearch);
+    setStatusFilter(urlFilter);
+    setPage(urlPage);
+  }, [location]);
 
   // Action dialog state
   const [actionDialog, setActionDialog] = useState<ActionDialog>({
