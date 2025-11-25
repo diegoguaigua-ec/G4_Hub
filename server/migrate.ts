@@ -33,7 +33,12 @@ async function runMigrations() {
           await db.execute(sql.raw(statement));
         } catch (error: any) {
           // Ignore "already exists" errors
-          if (error.code === '42P07' || error.code === '42710') {
+          // 42P07 = table already exists
+          // 42710 = function already exists
+          // 42701 = column already exists
+          // 42P16 = index already exists
+          // 23505 = unique constraint violation (for CREATE ... IF NOT EXISTS workarounds)
+          if (error.code === '42P07' || error.code === '42710' || error.code === '42701' || error.code === '42P16' || error.code === '23505') {
             console.log(`    ⏭️  Skipped (already exists)`);
           } else {
             throw error;

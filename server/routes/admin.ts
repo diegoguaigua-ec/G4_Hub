@@ -57,6 +57,21 @@ router.get("/stats", async (req, res) => {
         .where(eq(tenants.accountStatus, "suspended"));
       const suspendedAccounts = suspendedResult[0]?.count || 0;
 
+      // Total users
+      const totalUsersResult = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(users);
+      const totalUsers = totalUsersResult[0]?.count || 0;
+
+      // Recent actions (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const recentActionsResult = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(adminActions)
+        .where(sql`created_at >= ${sevenDaysAgo.toISOString()}`);
+      const recentActions = recentActionsResult[0]?.count || 0;
+
       // Distribution by plan
       const planDistribution = await tx
         .select({
@@ -68,6 +83,13 @@ router.get("/stats", async (req, res) => {
 
       return {
         totalTenants,
+        pendingTenants: pendingApprovals,
+        approvedTenants: approvedAccounts,
+        rejectedTenants: rejectedAccounts,
+        suspendedTenants: suspendedAccounts,
+        totalUsers,
+        recentActions,
+        // Keep legacy names for backwards compatibility
         pendingApprovals,
         approvedAccounts,
         rejectedAccounts,
@@ -100,10 +122,13 @@ router.get("/users", async (req, res) => {
       search, // search in name, subdomain, email
       limit = "50",
       offset = "0",
+      page = "1", // page number (1-indexed)
     } = req.query;
 
     const limitNum = parseInt(limit as string, 10);
-    const offsetNum = parseInt(offset as string, 10);
+    const pageNum = parseInt(page as string, 10);
+    // Calculate offset from page number (page is 1-indexed)
+    const offsetNum = page !== "1" ? (pageNum - 1) * limitNum : parseInt(offset as string, 10);
 
     // Build where conditions
     const conditions: any[] = [];
@@ -156,12 +181,10 @@ router.get("/users", async (req, res) => {
     );
 
     res.json({
-      users: tenantsWithOwners,
-      pagination: {
-        total,
-        limit: limitNum,
-        offset: offsetNum,
-      },
+      tenants: tenantsWithOwners,
+      total,
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (error) {
     console.error("Error fetching users:", error);
