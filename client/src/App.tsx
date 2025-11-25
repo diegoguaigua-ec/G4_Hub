@@ -47,10 +47,10 @@ function Router() {
       <ProtectedRoute path="/dashboard/analytics" component={AnalyticsPage} />
       <ProtectedRoute path="/dashboard/settings" component={SettingsPage} />
 
-      {/* Admin Routes */}
-      <ProtectedRoute path="/dashboard/admin" component={AdminDashboard} />
+      {/* Admin Routes - Order matters: most specific first */}
       <ProtectedRoute path="/dashboard/admin/users" component={AdminUsersPage} />
       <ProtectedRoute path="/dashboard/admin/audit-logs" component={AuditLogsPage} />
+      <ProtectedRoute path="/dashboard/admin" component={AdminDashboard} />
 
       {/* Auth */}
       <Route path="/auth" component={AuthPage} />

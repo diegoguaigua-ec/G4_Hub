@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,15 @@ export default function RegisterForm() {
       planType: planType,
     });
   };
+
+  // Reset form after successful registration
+  useEffect(() => {
+    if (registerMutation.isSuccess) {
+      form.reset();
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+    }
+  }, [registerMutation.isSuccess, form]);
 
   return (
     <Form {...form}>
