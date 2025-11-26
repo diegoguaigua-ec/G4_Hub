@@ -15,6 +15,7 @@ import {
   Clock,
   Loader2,
   MinusCircle,
+  Info,
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -25,6 +26,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 
 interface InventoryTabProps {
@@ -92,7 +99,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
   );
 
   // Fetch product sync status
-  const { data, isLoading, refetch } = useQuery<SyncStatusResponse>({
+  const { data, isLoading, isFetching, refetch } = useQuery<SyncStatusResponse>({
     queryKey: [
       `/api/stores/${storeId}/products/sync-status`,
       filters.status,
@@ -113,6 +120,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
       if (!res.ok) throw new Error("Error al cargar estado de sincronización");
       return res.json();
     },
+    // Ensure fresh data on refetch
+    staleTime: 0,
   });
 
   // Sync mutation - triggers full pull from Contífico (all products)
@@ -334,31 +343,87 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
             Estado de sincronización de productos entre tu tienda y Contífico
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => refetch()} variant="outline" size="sm">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Actualizar
-          </Button>
-          <Button
-            onClick={handleSyncAll}
-            disabled={syncMutation.isPending || !contificoIntegration}
-            size="sm"
-          >
-            {syncMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            Sincronizar Todo
-          </Button>
-        </div>
+        <TooltipProvider>
+          <div className="flex gap-2">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={() => {
+                    queryClient.invalidateQueries({
+                      queryKey: [`/api/stores/${storeId}/products/sync-status`],
+                    });
+                    refetch();
+                  }}
+                  variant="outline"
+                  size="sm"
+                  disabled={isFetching}
+                >
+                  {isFetching ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Actualizar
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-start gap-2 max-w-xs">
+                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Actualizar vista</p>
+                    <p className="text-xs text-muted-foreground">
+                      Refresca los datos desde la base de datos.
+                      Para obtener datos en tiempo real, usa "Sincronizar".
+                    </p>
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  onClick={handleSyncAll}
+                  disabled={syncMutation.isPending || !contificoIntegration}
+                  size="sm"
+                >
+                  {syncMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                  )}
+                  Sincronizar Todo
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <div className="flex items-start gap-2 max-w-xs">
+                  <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium">Sincronizar con Contífico</p>
+                    <p className="text-xs text-muted-foreground">
+                      Obtiene stock actualizado desde Contífico y lo guarda en tu tienda.
+                      Puede tomar unos segundos.
+                    </p>
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
 
       {data?.lastSyncAt && (
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Última sincronización: {formatDate(data.lastSyncAt)}
+            <div className="space-y-1">
+              <p>
+                <strong>Última sincronización:</strong> {formatDate(data.lastSyncAt)}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Los datos mostrados son del último sync con Contífico. El stock de tu tienda puede haber cambiado después.
+                Para ver datos actualizados, haz clic en "Sincronizar Todo".
+              </p>
+            </div>
           </AlertDescription>
         </Alert>
       )}
