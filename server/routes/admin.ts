@@ -273,12 +273,6 @@ router.put("/users/:id/approve", async (req, res) => {
     // Update tenant status
     await storage.updateTenantAccountStatus(tenantId, "approved");
 
-    // Promote owner user to admin role
-    const ownerUser = await storage.getTenantOwnerUser(tenantId);
-    if (ownerUser && ownerUser.role !== "admin") {
-      await storage.updateUserRole(ownerUser.id, "admin");
-    }
-
     // Log admin action
     await storage.createAdminAction({
       adminUserId: adminUser.id,
@@ -288,7 +282,6 @@ router.put("/users/:id/approve", async (req, res) => {
       metadata: {
         previousStatus: tenant.accountStatus,
         newStatus: "approved",
-        ownerPromotedToAdmin: !!ownerUser,
       },
     });
 
@@ -408,6 +401,63 @@ router.put("/users/:id/activate", async (req, res) => {
   } catch (error) {
     console.error("Error activating account:", error);
     res.status(500).json({ message: "Failed to activate account" });
+  }
+});
+
+/**
+ * PUT /api/admin/users/:tenantId/role/:userId
+ * Change a user's role (user <-> admin)
+ */
+router.put("/users/:tenantId/role/:userId", async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.tenantId, 10);
+    const userId = parseInt(req.params.userId, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+    const { role } = req.body;
+
+    // Validate role
+    if (!role || !["user", "admin"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role. Must be 'user' or 'admin'" });
+    }
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ message: "Tenant not found" });
+    }
+
+    // Get the user to update
+    const targetUser = await storage.getUser(userId);
+    if (!targetUser || targetUser.tenantId !== tenantId) {
+      return res.status(404).json({ message: "User not found in this tenant" });
+    }
+
+    if (targetUser.role === role) {
+      return res.status(400).json({ message: `User already has role '${role}'` });
+    }
+
+    const oldRole = targetUser.role;
+
+    // Update user role
+    await storage.updateUserRole(userId, role);
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: tenantId,
+      actionType: "change_user_role",
+      description: `Rol de usuario ${targetUser.email} cambiado de ${oldRole} a ${role} por ${adminUser.name}`,
+      metadata: {
+        userId,
+        userEmail: targetUser.email,
+        oldRole,
+        newRole: role,
+      },
+    });
+
+    res.json({ message: "User role updated successfully", user: { id: userId, role } });
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    res.status(500).json({ message: "Failed to update user role" });
   }
 });
 
@@ -617,8 +667,8 @@ router.get("/webhooks/:storeId", async (req, res) => {
       return res.status(500).json({ message: "Failed to fetch webhooks from Shopify", error: result.error });
     }
 
-    // Get webhooks stored in our database
-    const storedWebhooks = (store.storeInfo?.webhooks as any[]) || [];
+    // Get webhooks from our database (new table)
+    const dbWebhooks = await storage.getWebhooksByStore(storeId);
 
     res.json({
       store: {
@@ -628,10 +678,10 @@ router.get("/webhooks/:storeId", async (req, res) => {
       },
       webhooks: {
         live: result.webhooks, // Webhooks actually in Shopify
-        stored: storedWebhooks, // Webhooks we have recorded in our DB
+        database: dbWebhooks, // Webhooks registered in our database table
       },
       orphaned: result.webhooks.filter(
-        (liveWh: any) => !storedWebhooks.find((stored: any) => stored.id === liveWh.id)
+        (liveWh: any) => !dbWebhooks.find((dbWh: any) => dbWh.platformWebhookId === liveWh.id.toString())
       ),
     });
   } catch (error: any) {
@@ -672,6 +722,12 @@ router.delete("/webhooks/:storeId/:webhookId", async (req, res) => {
         message: "Failed to delete webhook",
         errors: result.errors,
       });
+    }
+
+    // Mark webhook as deleted in our database
+    const dbWebhook = await storage.getWebhookByPlatformId("shopify", webhookId.toString());
+    if (dbWebhook) {
+      await storage.markWebhookAsDeleted(dbWebhook.id);
     }
 
     // Log admin action
@@ -727,12 +783,12 @@ router.post("/webhooks/:storeId/cleanup", async (req, res) => {
       return res.status(500).json({ message: "Failed to list webhooks", error: listResult.error });
     }
 
-    // Get webhooks stored in our database
-    const storedWebhooks = (store.storeInfo?.webhooks as any[]) || [];
+    // Get webhooks from our database
+    const dbWebhooks = await storage.getWebhooksByStore(storeId);
 
     // Find orphaned webhooks (in Shopify but not in our DB)
     const orphanedWebhooks = listResult.webhooks.filter(
-      (liveWh: any) => !storedWebhooks.find((stored: any) => stored.id === liveWh.id)
+      (liveWh: any) => !dbWebhooks.find((dbWh: any) => dbWh.platformWebhookId === liveWh.id.toString())
     );
 
     if (orphanedWebhooks.length === 0) {
@@ -742,9 +798,11 @@ router.post("/webhooks/:storeId/cleanup", async (req, res) => {
       });
     }
 
-    // Delete all orphaned webhooks
+    // Delete all orphaned webhooks from Shopify
     const webhookIds = orphanedWebhooks.map((wh: any) => wh.id);
     const deleteResult = await shopifyConnector.deleteWebhooks(webhookIds);
+
+    // Note: No need to mark as deleted in DB since they don't exist there (orphaned)
 
     // Log admin action
     await storage.createAdminAction({

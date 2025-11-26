@@ -194,7 +194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               webhookResult = await shopifyConnector.registerWebhooks(webhookUrl);
 
               if (webhookResult.success) {
-                // Guardar webhook IDs en storeInfo
+                // Guardar webhook IDs en storeInfo (legacy)
                 await storage.updateStore(store.id, {
                   storeInfo: {
                     ...updatedStore.storeInfo,
@@ -202,6 +202,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     webhooks_configured_at: new Date().toISOString()
                   }
                 });
+
+                // Registrar cada webhook en la tabla webhooks
+                for (const webhook of webhookResult.webhooks) {
+                  try {
+                    await storage.registerWebhook({
+                      tenantId: store.tenantId,
+                      storeId: store.id,
+                      platform: 'shopify',
+                      platformWebhookId: webhook.id.toString(),
+                      topic: webhook.topic,
+                      address: webhook.address,
+                      status: 'active',
+                      metadata: {}
+                    });
+                  } catch (webhookDbError: any) {
+                    // Log error but don't fail - might be duplicate
+                    console.error(`[Store] Error registrando webhook ${webhook.id} en DB:`, webhookDbError.message);
+                  }
+                }
+
                 console.log(`[Store] ✅ Webhooks configurados exitosamente para tienda ${store.id}`);
               } else {
                 console.log(`[Store] ⚠️ Webhooks configurados parcialmente: ${webhookResult.errors.length} errores`);
@@ -356,7 +376,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               if (webhookResult.success) {
                 // Obtener el store con metadatos de conexión frescos ANTES de actualizar webhooks
                 const storeWithFreshConnection = await storage.getStore(updatedStore.id);
-                
+
                 await storage.updateStore(updatedStore.id, {
                   storeInfo: {
                     ...storeWithFreshConnection?.storeInfo,
@@ -364,6 +384,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
                     webhooks_configured_at: new Date().toISOString()
                   }
                 });
+
+                // Registrar cada webhook en la tabla webhooks
+                for (const webhook of webhookResult.webhooks) {
+                  try {
+                    await storage.registerWebhook({
+                      tenantId: updatedStore.tenantId,
+                      storeId: updatedStore.id,
+                      platform: 'shopify',
+                      platformWebhookId: webhook.id.toString(),
+                      topic: webhook.topic,
+                      address: webhook.address,
+                      status: 'active',
+                      metadata: {}
+                    });
+                  } catch (webhookDbError: any) {
+                    // Log error but don't fail - might be duplicate
+                    console.error(`[Store] Error registrando webhook ${webhook.id} en DB:`, webhookDbError.message);
+                  }
+                }
+
                 console.log(`[Store] ✅ Webhooks verificados/recreados: ${webhookResult.webhooks.length} configurados`);
               }
             } catch (webhookError: any) {
@@ -447,6 +487,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Marcar webhooks como eliminados en la tabla
+      await storage.deleteWebhooksByStore(parseInt(storeId));
+
       await storage.deleteStore(parseInt(storeId));
 
       res.json({ message: "Store deleted successfully" });
@@ -494,7 +537,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await shopifyConnector.registerWebhooks(webhookUrl);
 
       if (result.success) {
-        // Guardar webhook IDs en storeInfo
+        // Guardar webhook IDs en storeInfo (legacy)
         await storage.updateStore(store.id, {
           storeInfo: {
             ...store.storeInfo,
@@ -502,6 +545,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             webhooks_configured_at: new Date().toISOString()
           }
         });
+
+        // Registrar cada webhook en la tabla webhooks
+        for (const webhook of result.webhooks) {
+          try {
+            await storage.registerWebhook({
+              tenantId: store.tenantId,
+              storeId: store.id,
+              platform: 'shopify',
+              platformWebhookId: webhook.id.toString(),
+              topic: webhook.topic,
+              address: webhook.address,
+              status: 'active',
+              metadata: {}
+            });
+          } catch (webhookDbError: any) {
+            // Log error but don't fail - might be duplicate
+            console.error(`[Store] Error registrando webhook ${webhook.id} en DB:`, webhookDbError.message);
+          }
+        }
 
         res.json({
           success: true,

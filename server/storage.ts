@@ -12,6 +12,7 @@ import {
   unmappedSkus,
   syncLocks,
   adminActions,
+  webhooks,
   type User,
   type InsertUser,
   type Tenant,
@@ -34,6 +35,8 @@ import {
   type InsertUnmappedSku,
   type SyncLock,
   type InsertSyncLock,
+  type Webhook,
+  type InsertWebhook,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
@@ -821,6 +824,58 @@ export class DatabaseStorage implements IStorage {
 
   async createAdminAction(action: { adminUserId: number; targetTenantId: number; actionType: string; description: string; metadata?: any }): Promise<void> {
     await db.insert(adminActions).values(action);
+  }
+
+  // Webhooks operations
+  async registerWebhook(webhook: InsertWebhook): Promise<Webhook> {
+    const [created] = await db.insert(webhooks).values(webhook).returning();
+    return created;
+  }
+
+  async getWebhooksByStore(storeId: number): Promise<Webhook[]> {
+    return await db
+      .select()
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.storeId, storeId),
+          eq(webhooks.status, "active")
+        )
+      );
+  }
+
+  async getWebhookByPlatformId(platform: string, platformWebhookId: string): Promise<Webhook | undefined> {
+    const [webhook] = await db
+      .select()
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.platform, platform),
+          eq(webhooks.platformWebhookId, platformWebhookId)
+        )
+      )
+      .limit(1);
+    return webhook;
+  }
+
+  async markWebhookAsDeleted(id: number): Promise<void> {
+    await db
+      .update(webhooks)
+      .set({
+        status: "deleted",
+        deletedAt: new Date()
+      })
+      .where(eq(webhooks.id, id));
+  }
+
+  async deleteWebhooksByStore(storeId: number): Promise<void> {
+    await db
+      .update(webhooks)
+      .set({
+        status: "deleted",
+        deletedAt: new Date()
+      })
+      .where(eq(webhooks.storeId, storeId));
   }
 
   // Inventory movements queue operations
