@@ -1336,8 +1336,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter products with SKU only
       const storeProductsWithSku = allStoreProducts.filter((p: any) => p.sku);
 
-      // Get the latest PULL sync log for this store (inventory sync from Contífico)
-      const recentLogs = await storage.getSyncLogsByStoreAndType(parseInt(storeId), 'pull', 1);
+      // Get the latest PULL sync log for this store (includes both 'pull' and 'pull_selective')
+      // This ensures we show the most recent inventory sync regardless of whether it was full or selective
+      const recentLogs = await storage.getLatestPullSyncLogs(parseInt(storeId), 1);
       const latestSyncLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
 
       // Create a map of sync log items by SKU for quick lookup

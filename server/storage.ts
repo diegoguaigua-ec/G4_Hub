@@ -559,6 +559,30 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  /**
+   * Get latest pull-type sync logs for a store (includes both 'pull' and 'pull_selective')
+   * Useful for getting the most recent inventory sync regardless of whether it was full or selective
+   */
+  async getLatestPullSyncLogs(
+    storeId: number,
+    limit: number = 1,
+  ): Promise<SyncLog[]> {
+    return await db
+      .select()
+      .from(syncLogs)
+      .where(
+        and(
+          eq(syncLogs.storeId, storeId),
+          or(
+            eq(syncLogs.syncType, 'pull'),
+            eq(syncLogs.syncType, 'pull_selective')
+          )
+        )
+      )
+      .orderBy(desc(syncLogs.createdAt))  // Order by most recent first
+      .limit(limit);
+  }
+
   async updateStoreSyncStatus(
     storeId: number,
     productsCount: number,
