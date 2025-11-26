@@ -584,4 +584,198 @@ router.get("/actions", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/webhooks/:storeId
+ * List all webhooks for a specific store from the platform (Shopify, etc.)
+ */
+router.get("/webhooks/:storeId", async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId, 10);
+
+    const store = await storage.getStore(storeId);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    if (store.platform !== "shopify") {
+      return res.status(400).json({ message: "Webhook management only supported for Shopify stores" });
+    }
+
+    // Import connector dynamically to avoid circular dependencies
+    const { getConnector } = await import("../connectors/index");
+    const connector = getConnector(store);
+    const shopifyConnector = connector as any;
+
+    if (!shopifyConnector.listWebhooks) {
+      return res.status(400).json({ message: "Store connector does not support webhook listing" });
+    }
+
+    // Get webhooks from Shopify
+    const result = await shopifyConnector.listWebhooks();
+
+    if (!result.success) {
+      return res.status(500).json({ message: "Failed to fetch webhooks from Shopify", error: result.error });
+    }
+
+    // Get webhooks stored in our database
+    const storedWebhooks = (store.storeInfo?.webhooks as any[]) || [];
+
+    res.json({
+      store: {
+        id: store.id,
+        name: store.name,
+        platform: store.platform,
+      },
+      webhooks: {
+        live: result.webhooks, // Webhooks actually in Shopify
+        stored: storedWebhooks, // Webhooks we have recorded in our DB
+      },
+      orphaned: result.webhooks.filter(
+        (liveWh: any) => !storedWebhooks.find((stored: any) => stored.id === liveWh.id)
+      ),
+    });
+  } catch (error: any) {
+    console.error("Error fetching webhooks:", error);
+    res.status(500).json({ message: "Failed to fetch webhooks", error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/webhooks/:storeId/:webhookId
+ * Delete a specific webhook from the platform
+ */
+router.delete("/webhooks/:storeId/:webhookId", async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId, 10);
+    const webhookId = parseInt(req.params.webhookId, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+
+    const store = await storage.getStore(storeId);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    if (store.platform !== "shopify") {
+      return res.status(400).json({ message: "Webhook management only supported for Shopify stores" });
+    }
+
+    // Import connector dynamically
+    const { getConnector } = await import("../connectors/index");
+    const connector = getConnector(store);
+    const shopifyConnector = connector as any;
+
+    // Delete the webhook from Shopify
+    const result = await shopifyConnector.deleteWebhooks([webhookId]);
+
+    if (!result.success && result.deleted === 0) {
+      return res.status(500).json({
+        message: "Failed to delete webhook",
+        errors: result.errors,
+      });
+    }
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: store.tenantId,
+      actionType: "delete_webhook",
+      description: `Webhook ${webhookId} eliminado manualmente por ${adminUser.name} de tienda ${store.name}`,
+      metadata: {
+        storeId: store.id,
+        webhookId,
+        storeName: store.name,
+      },
+    });
+
+    res.json({
+      message: "Webhook deleted successfully",
+      webhookId,
+      storeId,
+    });
+  } catch (error: any) {
+    console.error("Error deleting webhook:", error);
+    res.status(500).json({ message: "Failed to delete webhook", error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/webhooks/:storeId/cleanup
+ * Clean up all orphaned webhooks for a store
+ */
+router.post("/webhooks/:storeId/cleanup", async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+
+    const store = await storage.getStore(storeId);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    if (store.platform !== "shopify") {
+      return res.status(400).json({ message: "Webhook cleanup only supported for Shopify stores" });
+    }
+
+    // Import connector dynamically
+    const { getConnector } = await import("../connectors/index");
+    const connector = getConnector(store);
+    const shopifyConnector = connector as any;
+
+    // Get all webhooks from Shopify
+    const listResult = await shopifyConnector.listWebhooks();
+    if (!listResult.success) {
+      return res.status(500).json({ message: "Failed to list webhooks", error: listResult.error });
+    }
+
+    // Get webhooks stored in our database
+    const storedWebhooks = (store.storeInfo?.webhooks as any[]) || [];
+
+    // Find orphaned webhooks (in Shopify but not in our DB)
+    const orphanedWebhooks = listResult.webhooks.filter(
+      (liveWh: any) => !storedWebhooks.find((stored: any) => stored.id === liveWh.id)
+    );
+
+    if (orphanedWebhooks.length === 0) {
+      return res.json({
+        message: "No orphaned webhooks found",
+        deleted: 0,
+      });
+    }
+
+    // Delete all orphaned webhooks
+    const webhookIds = orphanedWebhooks.map((wh: any) => wh.id);
+    const deleteResult = await shopifyConnector.deleteWebhooks(webhookIds);
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: store.tenantId,
+      actionType: "cleanup_webhooks",
+      description: `${deleteResult.deleted} webhooks huérfanos eliminados por ${adminUser.name} de tienda ${store.name}`,
+      metadata: {
+        storeId: store.id,
+        storeName: store.name,
+        totalOrphaned: orphanedWebhooks.length,
+        deleted: deleteResult.deleted,
+        errors: deleteResult.errors,
+        webhookIds,
+      },
+    });
+
+    res.json({
+      message: `Cleaned up ${deleteResult.deleted} orphaned webhooks`,
+      deleted: deleteResult.deleted,
+      errors: deleteResult.errors,
+      orphanedWebhooks: orphanedWebhooks.map((wh: any) => ({
+        id: wh.id,
+        address: wh.address,
+        topic: wh.topic,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Error cleaning up webhooks:", error);
+    res.status(500).json({ message: "Failed to cleanup webhooks", error: error.message });
+  }
+});
+
 export default router;

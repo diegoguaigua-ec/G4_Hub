@@ -117,7 +117,7 @@ export class ContificoMovementsAPI {
       bodega_id: warehouseId,
       fecha,
       descripcion: notes || `Venta desde tienda e-commerce - SKU: ${sku}`,
-      codigo_interno: orderId || `ECOM-${Date.now()}`,
+      codigo_interno: orderId ? `EGR-${orderId}-${Date.now()}` : `ECOM-${Date.now()}`,
       generar_asiento: false,
       detalles: [
         {
@@ -166,7 +166,7 @@ export class ContificoMovementsAPI {
       bodega_id: warehouseId,
       fecha,
       descripcion: notes || `Devolución/Cancelación desde tienda e-commerce - SKU: ${sku}`,
-      codigo_interno: orderId || `ECOM-RETURN-${Date.now()}`,
+      codigo_interno: orderId ? `ING-${orderId}-${Date.now()}` : `ECOM-RETURN-${Date.now()}`,
       generar_asiento: false,
       detalles: [
         {

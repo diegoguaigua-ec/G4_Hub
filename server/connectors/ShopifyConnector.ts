@@ -1247,6 +1247,47 @@ export class ShopifyConnector extends BaseConnector {
   }
 
   /**
+   * Lista todos los webhooks configurados en Shopify
+   * @returns Array de webhooks con id, address y topic
+   */
+  async listWebhooks(): Promise<{
+    success: boolean;
+    webhooks: Array<{ id: number; address: string; topic: string }>;
+    error?: string;
+  }> {
+    try {
+      console.log(`[Shopify] Listando todos los webhooks`);
+
+      const response = await axios.get(
+        `${this.apiUrl}/webhooks.json`,
+        { headers: this.headers }
+      );
+
+      const webhooks = response.data.webhooks || [];
+
+      console.log(`[Shopify] ✅ ${webhooks.length} webhooks encontrados`);
+
+      return {
+        success: true,
+        webhooks: webhooks.map((wh: any) => ({
+          id: wh.id,
+          address: wh.address,
+          topic: wh.topic
+        }))
+      };
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.errors || error.message;
+      console.error(`[Shopify] ❌ Error listando webhooks:`, errorMsg);
+
+      return {
+        success: false,
+        webhooks: [],
+        error: errorMsg
+      };
+    }
+  }
+
+  /**
    * Obtiene todos los webhooks configurados en Shopify
    * @returns Lista de webhooks con su información
    */
