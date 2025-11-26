@@ -53,6 +53,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Calendar as CalendarIcon,
+  Users,
+  Shield,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Calendar } from "@/components/ui/calendar";
@@ -83,7 +85,14 @@ interface UsersResponse {
   limit: number;
 }
 
-type ActionType = "approve" | "reject" | "suspend" | "activate" | "plan" | "delete" | "expiration";
+type ActionType = "approve" | "reject" | "suspend" | "activate" | "plan" | "delete" | "expiration" | "manage-users";
+
+interface TenantUser {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+}
 
 interface ActionDialog {
   open: boolean;
@@ -92,6 +101,9 @@ interface ActionDialog {
   reason?: string;
   planType?: string;
   expirationDate?: Date | null;
+  tenantUsers?: TenantUser[];
+  selectedUserId?: number;
+  selectedUserRole?: string;
 }
 
 export default function AdminUsersPage() {
@@ -258,15 +270,53 @@ export default function AdminUsersPage() {
     },
   });
 
-  const openDialog = (type: ActionType, tenant: Tenant) => {
-    setActionDialog({
+  const changeUserRoleMutation = useMutation({
+    mutationFn: async ({ tenantId, userId, role }: { tenantId: number; userId: number; role: string }) => {
+      const res = await apiRequest("PUT", `/api/admin/users/${tenantId}/role/${userId}`, { role });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Rol de usuario actualizado exitosamente" });
+      // Refresh tenant users in the dialog
+      if (actionDialog.tenant) {
+        fetchTenantUsers(actionDialog.tenant.id);
+      }
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const fetchTenantUsers = async (tenantId: number) => {
+    try {
+      const res = await fetch(`/api/admin/users/${tenantId}`);
+      if (!res.ok) throw new Error("Failed to fetch tenant details");
+      const data = await res.json();
+      setActionDialog(prev => ({ ...prev, tenantUsers: data.users || [] }));
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const openDialog = async (type: ActionType, tenant: Tenant) => {
+    const dialogState = {
       open: true,
       type,
       tenant,
       reason: "",
       planType: tenant.planType || "starter",
       expirationDate: tenant.expiresAt ? new Date(tenant.expiresAt) : null,
-    });
+      tenantUsers: [],
+      selectedUserId: undefined,
+      selectedUserRole: undefined,
+    };
+
+    setActionDialog(dialogState);
+
+    // Fetch tenant users if managing users
+    if (type === "manage-users") {
+      await fetchTenantUsers(tenant.id);
+    }
   };
 
   const closeDialog = () => {
@@ -277,6 +327,9 @@ export default function AdminUsersPage() {
       reason: "",
       planType: "starter",
       expirationDate: null,
+      tenantUsers: [],
+      selectedUserId: undefined,
+      selectedUserRole: undefined,
     });
   };
 
@@ -317,6 +370,17 @@ export default function AdminUsersPage() {
       case "expiration":
         expirationMutation.mutate({ tenantId, expiresAt: actionDialog.expirationDate || null });
         break;
+      case "manage-users":
+        if (!actionDialog.selectedUserId || !actionDialog.selectedUserRole) {
+          toast({ title: "Error", description: "Debe seleccionar un usuario y un rol", variant: "destructive" });
+          return;
+        }
+        changeUserRoleMutation.mutate({
+          tenantId,
+          userId: actionDialog.selectedUserId,
+          role: actionDialog.selectedUserRole
+        });
+        break;
     }
   };
 
@@ -353,7 +417,8 @@ export default function AdminUsersPage() {
     activateMutation.isPending ||
     changePlanMutation.isPending ||
     deleteMutation.isPending ||
-    expirationMutation.isPending;
+    expirationMutation.isPending ||
+    changeUserRoleMutation.isPending;
 
   return (
     <DashboardLayout>
@@ -519,6 +584,11 @@ export default function AdminUsersPage() {
                                     Establecer Vencimiento
                                   </DropdownMenuItem>
 
+                                  <DropdownMenuItem onClick={() => openDialog("manage-users", tenant)}>
+                                    <Users className="mr-2 h-4 w-4 text-indigo-600" />
+                                    Gestionar Usuarios
+                                  </DropdownMenuItem>
+
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem
                                     onClick={() => openDialog("delete", tenant)}
@@ -582,6 +652,7 @@ export default function AdminUsersPage() {
               {actionDialog.type === "activate" && "Reactivar Cuenta"}
               {actionDialog.type === "plan" && "Cambiar Plan"}
               {actionDialog.type === "expiration" && "Establecer Fecha de Vencimiento"}
+              {actionDialog.type === "manage-users" && "Gestionar Usuarios"}
               {actionDialog.type === "delete" && "Eliminar Cuenta"}
             </DialogTitle>
             <DialogDescription>
@@ -597,6 +668,8 @@ export default function AdminUsersPage() {
                 `Selecciona el nuevo plan para ${actionDialog.tenant?.name}`}
               {actionDialog.type === "expiration" &&
                 `Establece la fecha de vencimiento para la cuenta de ${actionDialog.tenant?.name}. Deja vacío para eliminar el vencimiento.`}
+              {actionDialog.type === "manage-users" &&
+                `Selecciona un usuario y cambia su rol entre 'user' y 'admin'`}
               {actionDialog.type === "delete" &&
                 `ADVERTENCIA: Esta acción es irreversible. Se eliminará permanentemente la cuenta de ${actionDialog.tenant?.name} y todos sus datos.`}
             </DialogDescription>
@@ -682,6 +755,84 @@ export default function AdminUsersPage() {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {actionDialog.type === "manage-users" && (
+              <div className="space-y-4">
+                {actionDialog.tenantUsers && actionDialog.tenantUsers.length > 0 ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="user-select">Seleccionar Usuario</Label>
+                      <Select
+                        value={actionDialog.selectedUserId?.toString()}
+                        onValueChange={(value) => {
+                          const userId = parseInt(value);
+                          const user = actionDialog.tenantUsers?.find(u => u.id === userId);
+                          setActionDialog({
+                            ...actionDialog,
+                            selectedUserId: userId,
+                            selectedUserRole: user?.role || "user"
+                          });
+                        }}
+                      >
+                        <SelectTrigger id="user-select">
+                          <SelectValue placeholder="Selecciona un usuario" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {actionDialog.tenantUsers.map((user) => (
+                            <SelectItem key={user.id} value={user.id.toString()}>
+                              <div className="flex items-center gap-2">
+                                <span>{user.name || user.email}</span>
+                                <Badge variant="outline" className="text-xs">
+                                  {user.role === "admin" ? (
+                                    <><Shield className="h-3 w-3 mr-1 inline" /> Admin</>
+                                  ) : (
+                                    "User"
+                                  )}
+                                </Badge>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {actionDialog.selectedUserId && (
+                      <div className="space-y-2">
+                        <Label htmlFor="role-select">Nuevo Rol</Label>
+                        <Select
+                          value={actionDialog.selectedUserRole}
+                          onValueChange={(value) =>
+                            setActionDialog({ ...actionDialog, selectedUserRole: value })
+                          }
+                        >
+                          <SelectTrigger id="role-select">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="user">
+                              <div className="flex items-center gap-2">
+                                User <span className="text-xs text-muted-foreground">(Acceso básico)</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="admin">
+                              <div className="flex items-center gap-2">
+                                <Shield className="h-4 w-4" />
+                                Admin <span className="text-xs text-muted-foreground">(Acceso total)</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center justify-center py-8 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                    Cargando usuarios...
+                  </div>
+                )}
               </div>
             )}
           </div>
