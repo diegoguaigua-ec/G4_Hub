@@ -293,6 +293,29 @@ export class InventoryPushService {
       // Marcar como completado
       await storage.markMovementAsProcessed(movementId);
 
+      // Actualizar cache de productos para reflejar el cambio inmediatamente en la UI
+      const delta = movement.movementType === "egreso"
+        ? -movement.quantity
+        : movement.quantity;
+
+      try {
+        await storage.updateProductStockOptimistic(
+          movement.storeId,
+          movement.sku,
+          delta,
+          'push'
+        );
+        console.log(
+          `[InventoryPush] ✅ Cache actualizado para ${movement.sku}: ${delta > 0 ? '+' : ''}${delta}`,
+        );
+      } catch (cacheError: any) {
+        // No fallar el movimiento si el cache no se actualiza
+        console.warn(
+          `[InventoryPush] ⚠️ No se pudo actualizar cache para ${movement.sku}:`,
+          cacheError.message,
+        );
+      }
+
       console.log(
         `[InventoryPush] ✅ Movimiento ${movementId} procesado exitosamente`,
       );
@@ -316,6 +339,32 @@ export class InventoryPushService {
           `[InventoryPush] ✅ Movimiento ${movementId} ya existe en Contífico (409 Conflict), marcando como exitoso`,
         );
         await storage.markMovementAsProcessed(movementId);
+
+        // Actualizar cache aunque el movimiento ya existía en Contifico
+        const movement = await storage.getMovementById(movementId);
+        if (movement) {
+          const delta = movement.movementType === "egreso"
+            ? -movement.quantity
+            : movement.quantity;
+
+          try {
+            await storage.updateProductStockOptimistic(
+              movement.storeId,
+              movement.sku,
+              delta,
+              'push'
+            );
+            console.log(
+              `[InventoryPush] ✅ Cache actualizado para ${movement.sku}: ${delta > 0 ? '+' : ''}${delta}`,
+            );
+          } catch (cacheError: any) {
+            console.warn(
+              `[InventoryPush] ⚠️ No se pudo actualizar cache para ${movement.sku}:`,
+              (cacheError as Error).message,
+            );
+          }
+        }
+
         return true;
       }
 

@@ -289,10 +289,59 @@ export class DatabaseStorage implements IStorage {
           manageStock: product.manageStock,
           data: product.data,
           lastUpdated: new Date(),
+          lastModifiedAt: product.lastModifiedAt || new Date(),
+          lastModifiedBy: product.lastModifiedBy || null,
         },
       })
       .returning();
     return upsertedProduct;
+  }
+
+  /**
+   * Actualiza el stock de un producto de forma optimista (incremento/decremento)
+   * Útil para actualizar el cache después de movimientos push sin tener que hacer pull
+   */
+  async updateProductStockOptimistic(
+    storeId: number,
+    sku: string,
+    delta: number,
+    modifiedBy: 'pull' | 'push' | 'manual' = 'push'
+  ): Promise<StoreProduct | null> {
+    const [updatedProduct] = await db
+      .update(storeProducts)
+      .set({
+        stockQuantity: sql`GREATEST(0, COALESCE(${storeProducts.stockQuantity}, 0) + ${delta})`,
+        lastUpdated: new Date(),
+        lastModifiedAt: new Date(),
+        lastModifiedBy: modifiedBy,
+      })
+      .where(
+        and(
+          eq(storeProducts.storeId, storeId),
+          eq(storeProducts.sku, sku)
+        )
+      )
+      .returning();
+
+    return updatedProduct || null;
+  }
+
+  /**
+   * Obtiene un producto por storeId y SKU
+   */
+  async getProductBySku(storeId: number, sku: string): Promise<StoreProduct | null> {
+    const [product] = await db
+      .select()
+      .from(storeProducts)
+      .where(
+        and(
+          eq(storeProducts.storeId, storeId),
+          eq(storeProducts.sku, sku)
+        )
+      )
+      .limit(1);
+
+    return product || null;
   }
 
   async deleteProductsByStore(storeId: number): Promise<void> {

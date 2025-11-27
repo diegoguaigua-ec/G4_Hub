@@ -194,7 +194,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -221,7 +223,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -275,7 +279,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -322,7 +328,9 @@ export class SyncService {
                     stockQuantity: contificoStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                   console.log(`[Sync] 💾 Cache actualizado para ${sku}`);
 
@@ -351,7 +359,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
 
                   // ✅ Guardar item fallido
@@ -701,7 +711,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -726,7 +738,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -771,7 +785,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -814,7 +830,9 @@ export class SyncService {
                     stockQuantity: contificoStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
 
                   results.success++;
@@ -840,7 +858,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
 
                   itemRecord.status = 'failed';

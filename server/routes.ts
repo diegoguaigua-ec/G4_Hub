@@ -1396,6 +1396,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: syncStatus,
           lastSync: lastSync,
           platformProductId: storeProduct.platformProductId,
+          lastModifiedAt: storeProduct.lastModifiedAt,
+          lastModifiedBy: storeProduct.lastModifiedBy,
         };
       });
 

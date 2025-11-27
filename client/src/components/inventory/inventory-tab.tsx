@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Package,
   RefreshCw,
@@ -46,6 +47,8 @@ interface ProductSyncStatus {
   status: "pending" | "synced" | "different" | "not_in_contifico" | "error";
   lastSync: string | null;
   platformProductId: string;
+  lastModifiedAt?: string | null;
+  lastModifiedBy?: "pull" | "push" | "manual" | null;
 }
 
 interface SyncStatusResponse {
@@ -585,8 +588,28 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                           </span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-sm text-muted-foreground">
-                        {formatDate(product.lastSync)}
+                      <td className="py-3 px-4 text-sm">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-muted-foreground">
+                            {formatDate(product.lastSync)}
+                          </span>
+                          {product.lastModifiedBy && (
+                            <Badge
+                              variant={
+                                product.lastModifiedBy === "push"
+                                  ? "default"
+                                  : product.lastModifiedBy === "pull"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              className="w-fit text-xs"
+                            >
+                              {product.lastModifiedBy === "push" && "🛒 Por venta"}
+                              {product.lastModifiedBy === "pull" && "🔄 Sincronizado"}
+                              {product.lastModifiedBy === "manual" && "✏️ Manual"}
+                            </Badge>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

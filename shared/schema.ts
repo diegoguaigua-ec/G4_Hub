@@ -109,6 +109,8 @@ export const storeProducts = pgTable(
     manageStock: boolean("manage_stock").notNull().default(false),
     data: jsonb("data"),
     lastUpdated: timestamp("last_updated").defaultNow(),
+    lastModifiedAt: timestamp("last_modified_at").defaultNow(),
+    lastModifiedBy: varchar("last_modified_by", { length: 20 }), // 'pull', 'push', 'manual'
   },
   (table) => [
     index("idx_store_products_store_platform").on(
