@@ -604,9 +604,9 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                               }
                               className="w-fit text-xs"
                             >
-                              {product.lastModifiedBy === "push" && "🛒 Por venta"}
-                              {product.lastModifiedBy === "pull" && "🔄 Sincronizado"}
-                              {product.lastModifiedBy === "manual" && "✏️ Manual"}
+                              {product.lastModifiedBy === "push" && "Por venta"}
+                              {product.lastModifiedBy === "pull" && "Sincronizado"}
+                              {product.lastModifiedBy === "manual" && "Manual"}
                             </Badge>
                           )}
                         </div>

@@ -431,8 +431,8 @@ export class InventoryPushService {
       // Liberar lock si fue adquirido, usando cachedStoreId para garantizar liberación
       if (lockAcquired && cachedStoreId) {
         try {
-          await storage.releaseLock(cachedStoreId);
-          console.log(`[InventoryPush] ✅ Lock liberado para tienda ${cachedStoreId}`);
+          await storage.releaseLock(cachedStoreId, 'push');
+          console.log(`[InventoryPush] Lock liberado para tienda ${cachedStoreId}`);
         } catch (unlockError) {
           console.error(`[InventoryPush] Error liberando lock:`, unlockError);
         }

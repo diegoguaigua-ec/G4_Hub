@@ -296,6 +296,21 @@ export class SyncService {
 
               console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
 
+              // 3.5. Verificar si hay pushes recientes (evitar sobrescribir cambios frescos)
+              const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
+              if (hasRecentPush) {
+                console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
+                results.skipped++;
+
+                // Guardar item omitido con razón
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'recent_push';
+                itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
+                itemRecord.stockAfter = currentStock;
+                itemsToSave.push(itemRecord);
+                return;
+              }
+
               // 4. Actualizar stock en la tienda
               if (!dryRun) {
                 try {
@@ -554,8 +569,8 @@ export class SyncService {
       // Liberar lock si fue adquirido
       if (lockAcquired) {
         try {
-          await storage.releaseLock(storeId);
-          console.log(`[Sync] ✅ Lock liberado para tienda ${storeId}`);
+          await storage.releaseLock(storeId, 'pull');
+          console.log(`[Sync] Lock liberado para tienda ${storeId}`);
         } catch (unlockError) {
           console.error(`[Sync] Error liberando lock:`, unlockError);
         }
@@ -800,6 +815,20 @@ export class SyncService {
               }
 
               console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
+
+              // Verificar si hay pushes recientes (evitar sobrescribir cambios frescos)
+              const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
+              if (hasRecentPush) {
+                console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
+                results.skipped++;
+
+                itemRecord.status = 'skipped';
+                itemRecord.errorCategory = 'recent_push';
+                itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
+                itemRecord.stockAfter = currentStock;
+                itemsToSave.push(itemRecord);
+                return;
+              }
 
               // Actualizar stock
               if (!dryRun) {

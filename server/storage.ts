@@ -154,7 +154,7 @@ export interface IStorage {
 
   // Sync lock operations
   acquireLock(storeId: number, lockType: 'pull' | 'push', processId: string, durationMs: number): Promise<SyncLock | null>;
-  releaseLock(storeId: number): Promise<void>;
+  releaseLock(storeId: number, lockType?: "pull" | "push"): Promise<void>;
   hasActiveLock(storeId: number): Promise<boolean>;
   cleanExpiredLocks(): Promise<void>;
 
@@ -1189,18 +1189,57 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async releaseLock(storeId: number): Promise<void> {
-    await db.delete(syncLocks).where(eq(syncLocks.storeId, storeId));
+  async releaseLock(storeId: number, lockType?: "pull" | "push"): Promise<void> {
+    if (lockType) {
+      // Release specific lock type
+      await db
+        .delete(syncLocks)
+        .where(
+          and(
+            eq(syncLocks.storeId, storeId),
+            eq(syncLocks.lockType, lockType)
+          )
+        );
+    } else {
+      // Release all locks for backward compatibility
+      await db.delete(syncLocks).where(eq(syncLocks.storeId, storeId));
+    }
   }
 
-  async hasActiveLock(storeId: number): Promise<boolean> {
+  async hasActiveLock(storeId: number, lockType?: "pull" | "push"): Promise<boolean> {
     await this.cleanExpiredLocks();
+    const conditions = lockType
+      ? and(eq(syncLocks.storeId, storeId), eq(syncLocks.lockType, lockType))
+      : eq(syncLocks.storeId, storeId);
+
     const locks = await db
       .select()
       .from(syncLocks)
-      .where(eq(syncLocks.storeId, storeId))
+      .where(conditions)
       .limit(1);
     return locks.length > 0;
+  }
+
+  async hasRecentPushMovements(
+    storeId: number,
+    sku: string,
+    withinMinutes: number = 5
+  ): Promise<boolean> {
+    const cutoffTime = new Date(Date.now() - withinMinutes * 60 * 1000);
+    const recentMovements = await db
+      .select()
+      .from(inventoryMovementsQueue)
+      .where(
+        and(
+          eq(inventoryMovementsQueue.storeId, storeId),
+          eq(inventoryMovementsQueue.sku, sku),
+          eq(inventoryMovementsQueue.status, "completed"),
+          sql`${inventoryMovementsQueue.processedAt} > ${cutoffTime}`
+        )
+      )
+      .limit(1);
+
+    return recentMovements.length > 0;
   }
 
   async cleanExpiredLocks(): Promise<void> {

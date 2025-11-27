@@ -42,7 +42,7 @@ export function ExpirationBanner() {
       >
         <AlertCircle className="h-5 w-5" />
         <AlertTitle className="text-lg font-semibold">
-          {isExpired ? "⚠️ Tu cuenta ha expirado" : `⏰ Tu cuenta expira en ${daysUntilExpiration} ${daysUntilExpiration === 1 ? "día" : "días"}`}
+          {isExpired ? "Tu cuenta ha expirado" : `Tu cuenta expira en ${daysUntilExpiration} ${daysUntilExpiration === 1 ? "día" : "días"}`}
         </AlertTitle>
         <AlertDescription>
           <div className="mt-2 space-y-2">
