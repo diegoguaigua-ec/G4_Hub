@@ -17,6 +17,7 @@ interface SyncResult {
 interface SyncOptions {
   dryRun?: boolean;
   limit?: number;
+  skipRecentPushCheck?: boolean; // Para Pull automático post-Push
 }
 
 export class SyncService {
@@ -43,7 +44,7 @@ export class SyncService {
     integrationId: number,
     options: SyncOptions = {}
   ): Promise<SyncResult> {
-    const { dryRun = false, limit } = options;
+    const { dryRun = false, limit, skipRecentPushCheck = false } = options;
     const startTime = Date.now();
 
     console.log(`[Sync] Iniciando Pull: Store ${storeId}, Integration ${integrationId}`);
@@ -297,18 +298,21 @@ export class SyncService {
               console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
 
               // 3.5. Verificar si hay pushes recientes (evitar sobrescribir cambios frescos)
-              const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
-              if (hasRecentPush) {
-                console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
-                results.skipped++;
+              // Solo si no es un Pull automático post-Push
+              if (!skipRecentPushCheck) {
+                const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
+                if (hasRecentPush) {
+                  console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
+                  results.skipped++;
 
-                // Guardar item omitido con razón
-                itemRecord.status = 'skipped';
-                itemRecord.errorCategory = 'recent_push';
-                itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
-                itemRecord.stockAfter = currentStock;
-                itemsToSave.push(itemRecord);
-                return;
+                  // Guardar item omitido con razón
+                  itemRecord.status = 'skipped';
+                  itemRecord.errorCategory = 'recent_push';
+                  itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
+                  itemRecord.stockAfter = currentStock;
+                  itemsToSave.push(itemRecord);
+                  return;
+                }
               }
 
               // 4. Actualizar stock en la tienda
@@ -588,7 +592,7 @@ export class SyncService {
     skus: string[],
     options: SyncOptions = {}
   ): Promise<SyncResult> {
-    const { dryRun = false } = options;
+    const { dryRun = false, skipRecentPushCheck = false } = options;
     const startTime = Date.now();
 
     console.log(`[Sync] Iniciando Pull Selectivo: Store ${storeId}, Integration ${integrationId}`);
@@ -817,17 +821,20 @@ export class SyncService {
               console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
 
               // Verificar si hay pushes recientes (evitar sobrescribir cambios frescos)
-              const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
-              if (hasRecentPush) {
-                console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
-                results.skipped++;
+              // Solo si no es un Pull automático post-Push
+              if (!skipRecentPushCheck) {
+                const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
+                if (hasRecentPush) {
+                  console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
+                  results.skipped++;
 
-                itemRecord.status = 'skipped';
-                itemRecord.errorCategory = 'recent_push';
-                itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
-                itemRecord.stockAfter = currentStock;
-                itemsToSave.push(itemRecord);
-                return;
+                  itemRecord.status = 'skipped';
+                  itemRecord.errorCategory = 'recent_push';
+                  itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
+                  itemRecord.stockAfter = currentStock;
+                  itemsToSave.push(itemRecord);
+                  return;
+                }
               }
 
               // Actualizar stock

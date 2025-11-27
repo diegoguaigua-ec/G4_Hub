@@ -1,6 +1,7 @@
 import { storage } from "../storage";
 import { ContificoMovementsAPI } from "./contificoMovementsAPI";
 import { Store, Integration, InsertInventoryMovement } from "@shared/schema";
+import { SyncService } from "./SyncService";
 
 /**
  * Datos del webhook event para queue
@@ -313,6 +314,30 @@ export class InventoryPushService {
         console.warn(
           `[InventoryPush] ⚠️ No se pudo actualizar cache para ${movement.sku}:`,
           cacheError.message,
+        );
+      }
+
+      // Ejecutar Pull automático para obtener datos actualizados de Contifico
+      // Esto asegura que la tabla de inventario muestre información real en lugar de "—"
+      try {
+        console.log(`[InventoryPush] Iniciando Pull automático para ${movement.sku}...`);
+
+        await SyncService.pullFromIntegrationSelective(
+          movement.storeId,
+          movement.integrationId,
+          [movement.sku],
+          {
+            dryRun: false,
+            skipRecentPushCheck: true // Omitir verificación porque este Pull es post-Push
+          }
+        );
+
+        console.log(`[InventoryPush] ✅ Pull automático completado para ${movement.sku}`);
+      } catch (pullError: any) {
+        // No fallar el movimiento si el Pull automático falla
+        console.warn(
+          `[InventoryPush] ⚠️ No se pudo ejecutar Pull automático para ${movement.sku}:`,
+          pullError.message,
         );
       }
 
