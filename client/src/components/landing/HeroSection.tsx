@@ -28,7 +28,7 @@ export default function HeroSection() {
   return (
     <section
       id="hero"
-      className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 pb-16 lg:pt-24 lg:pb-20 bg-[hsl(207,11%,11%)]"
+      className="relative min-h-screen flex items-center justify-center overflow-hidden pt-20 pb-16 lg:pt-24 lg:pb-20 bg-black"
     >
       {/* Decorative Elements */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
@@ -90,12 +90,12 @@ export default function HeroSection() {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
             >
-              <Link href="/auth?tab=register">
-                <Button variant="glass-primary" size="lg" className="text-base px-8 glass-shimmer w-full sm:w-auto">
+              <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer">
+                <Button variant="glass-primary" size="lg" className="text-base px-8 glass-shimmer w-full sm:w-auto text-white">
                   <Zap className="mr-2 h-5 w-5" />
-                  Comenzar Ahora
+                  Agendar Demo
                 </Button>
-              </Link>
+              </a>
               <Button
                 variant="glass"
                 size="lg"

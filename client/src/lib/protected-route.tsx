@@ -29,5 +29,23 @@ export function ProtectedRoute({
     );
   }
 
+  // Check if tenant account is pending (except for admins who can approve accounts)
+  if (user.role !== "admin" && user.tenant?.accountStatus === "pending") {
+    return (
+      <Route path={path}>
+        <Redirect to="/pending" />
+      </Route>
+    );
+  }
+
+  // Check if tenant account is rejected or suspended
+  if (user.tenant?.accountStatus === "rejected" || user.tenant?.accountStatus === "suspended") {
+    return (
+      <Route path={path}>
+        <Redirect to="/pending" />
+      </Route>
+    );
+  }
+
   return <Component />
 }

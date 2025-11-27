@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Loader2, Eye, EyeOff } from "lucide-react";
+import { useLocation } from "wouter";
 
 const registerSchema = z.object({
   tenantName: z.string().min(2, "El nombre de la empresa debe tener al menos 2 caracteres"),
@@ -27,8 +28,15 @@ type RegisterData = z.infer<typeof registerSchema>;
 
 export default function RegisterForm() {
   const { registerMutation } = useAuth();
+  const [location] = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Extract plan from query params
+  const planType = useMemo(() => {
+    const params = new URLSearchParams(location.split("?")[1] || "");
+    return params.get("plan") || undefined;
+  }, [location]);
 
   const form = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
@@ -49,8 +57,18 @@ export default function RegisterForm() {
       name: data.name,
       email: data.email,
       password: data.password,
+      planType: planType,
     });
   };
+
+  // Reset form after successful registration
+  useEffect(() => {
+    if (registerMutation.isSuccess) {
+      form.reset();
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+    }
+  }, [registerMutation.isSuccess, form]);
 
   return (
     <Form {...form}>

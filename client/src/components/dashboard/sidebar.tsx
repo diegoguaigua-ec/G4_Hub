@@ -7,9 +7,13 @@ import {
   TrendingUp,
   Settings,
   LogOut,
+  Shield,
+  Users,
+  FileText,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link, useLocation } from "wouter";
+import { Separator } from "@/components/ui/separator";
 
 export default function Sidebar() {
   const { logoutMutation, user } = useAuth();
@@ -30,11 +34,28 @@ export default function Sidebar() {
     { path: "/dashboard/settings", label: "Configuración", icon: Settings },
   ];
 
+  const adminMenuItems = [
+    { path: "/dashboard/admin", label: "Panel Admin", icon: Shield },
+    { path: "/dashboard/admin/users", label: "Gestión de Usuarios", icon: Users },
+    { path: "/dashboard/admin/audit-logs", label: "Logs de Auditoría", icon: FileText },
+  ];
+
   const isActive = (path: string) => {
+    // Remove query params from location for matching
+    const currentPath = location.split("?")[0];
+
     if (path === "/dashboard") {
-      return location === "/dashboard" || location === "/";
+      return currentPath === "/dashboard" || currentPath === "/";
     }
-    return location.startsWith(path);
+
+    // For exact matches (like /dashboard/admin when on /dashboard/admin/users)
+    // we need to check if it's exactly the path, not just starts with it
+    if (path === "/dashboard/admin") {
+      return currentPath === "/dashboard/admin";
+    }
+
+    // For other paths, use startsWith
+    return currentPath.startsWith(path);
   };
 
   return (
@@ -48,7 +69,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);
@@ -74,6 +95,38 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Admin Section - Only visible to admins */}
+        {user?.role === "admin" && (
+          <>
+            <Separator className="my-4" />
+            <div className="px-3 py-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Administración
+              </p>
+            </div>
+            {adminMenuItems.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(item.path);
+
+              return (
+                <Link key={item.path} href={item.path}>
+                  <Button
+                    variant={active ? "default" : "ghost"}
+                    className={`w-full justify-start ${
+                      active
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5 mr-3" />
+                    {item.label}
+                  </Button>
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       <div className="p-4 border-t border-border">

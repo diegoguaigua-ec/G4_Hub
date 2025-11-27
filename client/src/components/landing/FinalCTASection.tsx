@@ -68,21 +68,18 @@ export default function FinalCTASection() {
               para gestionar su inventario automáticamente
             </p>
 
-            {/* CTA Button */}
+            {/* CTA Button - Green lime with liquid glass */}
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="inline-block"
             >
-              <Link href="/auth?tab=register">
-                <Button
-                  size="lg"
-                  className="px-10 py-6 h-auto bg-white text-primary hover:bg-white/90 shadow-2xl"
-                >
-                  <Zap className="mr-2 h-5 w-5" />
-                  Solicitar Demo
-                </Button>
-              </Link>
+              <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer">
+                <button className="px-10 py-6 bg-[#D2FF3D]/90 backdrop-blur-sm border border-[#D2FF3D]/50 rounded-lg text-black font-semibold text-lg hover:bg-[#D2FF3D] hover:text-black hover:shadow-2xl hover:shadow-[#D2FF3D]/50 active:scale-95 transition-all duration-300 shadow-xl shadow-[#D2FF3D]/30 flex items-center gap-3">
+                  <Zap className="h-5 w-5" />
+                  Agendar Demo
+                </button>
+              </a>
             </motion.div>
 
             {/* Benefits List */}
@@ -106,33 +103,6 @@ export default function FinalCTASection() {
                   <span>{benefit}</span>
                 </motion.div>
               ))}
-            </motion.div>
-
-            {/* Trust Indicators (placeholder for logos) */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.6, duration: 0.6 }}
-              className="pt-8 border-t border-white/20"
-            >
-              <p className="text-sm text-white/80 mb-4">
-                Empresas de confianza en toda Latinoamérica
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-8 opacity-70">
-                <div className="w-24 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xs font-semibold">Ecuador</span>
-                </div>
-                <div className="w-24 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xs font-semibold">Colombia</span>
-                </div>
-                <div className="w-24 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xs font-semibold">México</span>
-                </div>
-                <div className="w-24 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                  <span className="text-white text-xs font-semibold">Perú</span>
-                </div>
-              </div>
             </motion.div>
           </motion.div>
         </div>

@@ -54,7 +54,7 @@ export default function HowItWorksSection() {
     <section
       id="how-it-works"
       ref={containerRef}
-      className="py-20 lg:py-28 bg-[hsl(207,11%,13%)] relative overflow-hidden"
+      className="py-20 lg:py-28 bg-black relative overflow-hidden"
     >
       {/* Background decoration */}
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-secondary/5 -z-10" />
@@ -110,7 +110,7 @@ export default function HowItWorksSection() {
                   >
                     {/* Step number */}
                     <div className="inline-block mb-4">
-                      <span className="text-6xl lg:text-7xl font-bold text-primary/20">
+                      <span className="text-6xl lg:text-7xl font-bold text-white opacity-90 font-extrabold">
                         {step.number}
                       </span>
                     </div>

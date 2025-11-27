@@ -57,6 +57,21 @@ router.get("/stats", async (req, res) => {
         .where(eq(tenants.accountStatus, "suspended"));
       const suspendedAccounts = suspendedResult[0]?.count || 0;
 
+      // Total users
+      const totalUsersResult = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(users);
+      const totalUsers = totalUsersResult[0]?.count || 0;
+
+      // Recent actions (last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const recentActionsResult = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(adminActions)
+        .where(sql`created_at >= ${sevenDaysAgo.toISOString()}`);
+      const recentActions = recentActionsResult[0]?.count || 0;
+
       // Distribution by plan
       const planDistribution = await tx
         .select({
@@ -68,6 +83,13 @@ router.get("/stats", async (req, res) => {
 
       return {
         totalTenants,
+        pendingTenants: pendingApprovals,
+        approvedTenants: approvedAccounts,
+        rejectedTenants: rejectedAccounts,
+        suspendedTenants: suspendedAccounts,
+        totalUsers,
+        recentActions,
+        // Keep legacy names for backwards compatibility
         pendingApprovals,
         approvedAccounts,
         rejectedAccounts,
@@ -100,10 +122,13 @@ router.get("/users", async (req, res) => {
       search, // search in name, subdomain, email
       limit = "50",
       offset = "0",
+      page = "1", // page number (1-indexed)
     } = req.query;
 
     const limitNum = parseInt(limit as string, 10);
-    const offsetNum = parseInt(offset as string, 10);
+    const pageNum = parseInt(page as string, 10);
+    // Calculate offset from page number (page is 1-indexed)
+    const offsetNum = page !== "1" ? (pageNum - 1) * limitNum : parseInt(offset as string, 10);
 
     // Build where conditions
     const conditions: any[] = [];
@@ -156,12 +181,10 @@ router.get("/users", async (req, res) => {
     );
 
     res.json({
-      users: tenantsWithOwners,
-      pagination: {
-        total,
-        limit: limitNum,
-        offset: offsetNum,
-      },
+      tenants: tenantsWithOwners,
+      total,
+      page: pageNum,
+      limit: limitNum,
     });
   } catch (error) {
     console.error("Error fetching users:", error);
@@ -250,12 +273,6 @@ router.put("/users/:id/approve", async (req, res) => {
     // Update tenant status
     await storage.updateTenantAccountStatus(tenantId, "approved");
 
-    // Promote owner user to admin role
-    const ownerUser = await storage.getTenantOwnerUser(tenantId);
-    if (ownerUser && ownerUser.role !== "admin") {
-      await storage.updateUserRole(ownerUser.id, "admin");
-    }
-
     // Log admin action
     await storage.createAdminAction({
       adminUserId: adminUser.id,
@@ -265,7 +282,6 @@ router.put("/users/:id/approve", async (req, res) => {
       metadata: {
         previousStatus: tenant.accountStatus,
         newStatus: "approved",
-        ownerPromotedToAdmin: !!ownerUser,
       },
     });
 
@@ -389,6 +405,63 @@ router.put("/users/:id/activate", async (req, res) => {
 });
 
 /**
+ * PUT /api/admin/users/:tenantId/role/:userId
+ * Change a user's role (user <-> admin)
+ */
+router.put("/users/:tenantId/role/:userId", async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.tenantId, 10);
+    const userId = parseInt(req.params.userId, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+    const { role } = req.body;
+
+    // Validate role
+    if (!role || !["user", "admin"].includes(role)) {
+      return res.status(400).json({ message: "Invalid role. Must be 'user' or 'admin'" });
+    }
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ message: "Tenant not found" });
+    }
+
+    // Get the user to update
+    const targetUser = await storage.getUser(userId);
+    if (!targetUser || targetUser.tenantId !== tenantId) {
+      return res.status(404).json({ message: "User not found in this tenant" });
+    }
+
+    if (targetUser.role === role) {
+      return res.status(400).json({ message: `User already has role '${role}'` });
+    }
+
+    const oldRole = targetUser.role;
+
+    // Update user role
+    await storage.updateUserRole(userId, role);
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: tenantId,
+      actionType: "change_user_role",
+      description: `Rol de usuario ${targetUser.email} cambiado de ${oldRole} a ${role} por ${adminUser.name}`,
+      metadata: {
+        userId,
+        userEmail: targetUser.email,
+        oldRole,
+        newRole: role,
+      },
+    });
+
+    res.json({ message: "User role updated successfully", user: { id: userId, role } });
+  } catch (error) {
+    console.error("Error updating user role:", error);
+    res.status(500).json({ message: "Failed to update user role" });
+  }
+});
+
+/**
  * PUT /api/admin/users/:id/plan
  * Change tenant's plan
  */
@@ -430,6 +503,48 @@ router.put("/users/:id/plan", async (req, res) => {
   } catch (error) {
     console.error("Error updating plan:", error);
     res.status(500).json({ message: "Failed to update plan" });
+  }
+});
+
+/**
+ * PUT /api/admin/users/:id/expires-at
+ * Update tenant expiration date
+ */
+router.put("/users/:id/expires-at", async (req, res) => {
+  try {
+    const tenantId = parseInt(req.params.id, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+    const { expiresAt } = req.body;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ message: "Tenant not found" });
+    }
+
+    // expiresAt can be a date string or null to remove expiration
+    const expirationDate = expiresAt ? new Date(expiresAt) : null;
+
+    // Update tenant expiration
+    await storage.updateTenantExpiresAt(tenantId, expirationDate);
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: tenantId,
+      actionType: "update_expiration",
+      description: expirationDate
+        ? `Fecha de vencimiento actualizada a ${expirationDate.toLocaleDateString()} por ${adminUser.name}`
+        : `Fecha de vencimiento eliminada por ${adminUser.name}`,
+      metadata: {
+        oldExpiresAt: tenant.expiresAt,
+        newExpiresAt: expirationDate,
+      },
+    });
+
+    res.json({ message: "Expiration date updated successfully" });
+  } catch (error) {
+    console.error("Error updating expiration:", error);
+    res.status(500).json({ message: "Failed to update expiration date" });
   }
 });
 
@@ -516,6 +631,208 @@ router.get("/actions", async (req, res) => {
   } catch (error) {
     console.error("Error fetching admin actions:", error);
     res.status(500).json({ message: "Failed to fetch admin actions" });
+  }
+});
+
+/**
+ * GET /api/admin/webhooks/:storeId
+ * List all webhooks for a specific store from the platform (Shopify, etc.)
+ */
+router.get("/webhooks/:storeId", async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId, 10);
+
+    const store = await storage.getStore(storeId);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    if (store.platform !== "shopify") {
+      return res.status(400).json({ message: "Webhook management only supported for Shopify stores" });
+    }
+
+    // Import connector dynamically to avoid circular dependencies
+    const { getConnector } = await import("../connectors/index");
+    const connector = getConnector(store);
+    const shopifyConnector = connector as any;
+
+    if (!shopifyConnector.listWebhooks) {
+      return res.status(400).json({ message: "Store connector does not support webhook listing" });
+    }
+
+    // Get webhooks from Shopify
+    const result = await shopifyConnector.listWebhooks();
+
+    if (!result.success) {
+      return res.status(500).json({ message: "Failed to fetch webhooks from Shopify", error: result.error });
+    }
+
+    // Get webhooks from our database (new table)
+    const dbWebhooks = await storage.getWebhooksByStore(storeId);
+
+    res.json({
+      store: {
+        id: store.id,
+        name: store.name,
+        platform: store.platform,
+      },
+      webhooks: {
+        live: result.webhooks, // Webhooks actually in Shopify
+        database: dbWebhooks, // Webhooks registered in our database table
+      },
+      orphaned: result.webhooks.filter(
+        (liveWh: any) => !dbWebhooks.find((dbWh: any) => dbWh.platformWebhookId === liveWh.id.toString())
+      ),
+    });
+  } catch (error: any) {
+    console.error("Error fetching webhooks:", error);
+    res.status(500).json({ message: "Failed to fetch webhooks", error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/webhooks/:storeId/:webhookId
+ * Delete a specific webhook from the platform
+ */
+router.delete("/webhooks/:storeId/:webhookId", async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId, 10);
+    const webhookId = parseInt(req.params.webhookId, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+
+    const store = await storage.getStore(storeId);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    if (store.platform !== "shopify") {
+      return res.status(400).json({ message: "Webhook management only supported for Shopify stores" });
+    }
+
+    // Import connector dynamically
+    const { getConnector } = await import("../connectors/index");
+    const connector = getConnector(store);
+    const shopifyConnector = connector as any;
+
+    // Delete the webhook from Shopify
+    const result = await shopifyConnector.deleteWebhooks([webhookId]);
+
+    if (!result.success && result.deleted === 0) {
+      return res.status(500).json({
+        message: "Failed to delete webhook",
+        errors: result.errors,
+      });
+    }
+
+    // Mark webhook as deleted in our database
+    const dbWebhook = await storage.getWebhookByPlatformId("shopify", webhookId.toString());
+    if (dbWebhook) {
+      await storage.markWebhookAsDeleted(dbWebhook.id);
+    }
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: store.tenantId,
+      actionType: "delete_webhook",
+      description: `Webhook ${webhookId} eliminado manualmente por ${adminUser.name} de tienda ${store.name}`,
+      metadata: {
+        storeId: store.id,
+        webhookId,
+        storeName: store.name,
+      },
+    });
+
+    res.json({
+      message: "Webhook deleted successfully",
+      webhookId,
+      storeId,
+    });
+  } catch (error: any) {
+    console.error("Error deleting webhook:", error);
+    res.status(500).json({ message: "Failed to delete webhook", error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/webhooks/:storeId/cleanup
+ * Clean up all orphaned webhooks for a store
+ */
+router.post("/webhooks/:storeId/cleanup", async (req, res) => {
+  try {
+    const storeId = parseInt(req.params.storeId, 10);
+    const adminUser = (req as AuthenticatedRequest).user;
+
+    const store = await storage.getStore(storeId);
+    if (!store) {
+      return res.status(404).json({ message: "Store not found" });
+    }
+
+    if (store.platform !== "shopify") {
+      return res.status(400).json({ message: "Webhook cleanup only supported for Shopify stores" });
+    }
+
+    // Import connector dynamically
+    const { getConnector } = await import("../connectors/index");
+    const connector = getConnector(store);
+    const shopifyConnector = connector as any;
+
+    // Get all webhooks from Shopify
+    const listResult = await shopifyConnector.listWebhooks();
+    if (!listResult.success) {
+      return res.status(500).json({ message: "Failed to list webhooks", error: listResult.error });
+    }
+
+    // Get webhooks from our database
+    const dbWebhooks = await storage.getWebhooksByStore(storeId);
+
+    // Find orphaned webhooks (in Shopify but not in our DB)
+    const orphanedWebhooks = listResult.webhooks.filter(
+      (liveWh: any) => !dbWebhooks.find((dbWh: any) => dbWh.platformWebhookId === liveWh.id.toString())
+    );
+
+    if (orphanedWebhooks.length === 0) {
+      return res.json({
+        message: "No orphaned webhooks found",
+        deleted: 0,
+      });
+    }
+
+    // Delete all orphaned webhooks from Shopify
+    const webhookIds = orphanedWebhooks.map((wh: any) => wh.id);
+    const deleteResult = await shopifyConnector.deleteWebhooks(webhookIds);
+
+    // Note: No need to mark as deleted in DB since they don't exist there (orphaned)
+
+    // Log admin action
+    await storage.createAdminAction({
+      adminUserId: adminUser.id,
+      targetTenantId: store.tenantId,
+      actionType: "cleanup_webhooks",
+      description: `${deleteResult.deleted} webhooks huérfanos eliminados por ${adminUser.name} de tienda ${store.name}`,
+      metadata: {
+        storeId: store.id,
+        storeName: store.name,
+        totalOrphaned: orphanedWebhooks.length,
+        deleted: deleteResult.deleted,
+        errors: deleteResult.errors,
+        webhookIds,
+      },
+    });
+
+    res.json({
+      message: `Cleaned up ${deleteResult.deleted} orphaned webhooks`,
+      deleted: deleteResult.deleted,
+      errors: deleteResult.errors,
+      orphanedWebhooks: orphanedWebhooks.map((wh: any) => ({
+        id: wh.id,
+        address: wh.address,
+        topic: wh.topic,
+      })),
+    });
+  } catch (error: any) {
+    console.error("Error cleaning up webhooks:", error);
+    res.status(500).json({ message: "Failed to cleanup webhooks", error: error.message });
   }
 });
 

@@ -18,7 +18,7 @@ type AuthContextType = {
 };
 
 type LoginData = { username: string; password: string; };
-type RegisterData = { tenantName: string; subdomain: string; name: string; email: string; password: string; };
+type RegisterData = { tenantName: string; subdomain: string; name: string; email: string; password: string; planType?: string; };
 
 export const AuthContext = createContext<AuthContextType | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -45,10 +45,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       queryClient.invalidateQueries();
     },
     onError: (error: Error) => {
+      // Show user-friendly error messages
+      const message = error.message.includes("pendiente de aprobación")
+        ? "Tu cuenta está pendiente de aprobación. Recibirás un correo cuando sea aprobada."
+        : error.message.includes("no disponible")
+        ? "Tu cuenta no está disponible. Por favor contacta al administrador."
+        : error.message.includes("incorrectas")
+        ? "Credenciales incorrectas. Verifica tu email y contraseña."
+        : error.message;
+
       toast({
-        title: "Login failed",
-        description: error.message,
+        title: "Error al Iniciar Sesión",
+        description: message,
         variant: "destructive",
+        duration: 6000,
       });
     },
   });
@@ -58,16 +68,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiRequest("POST", "/api/register", credentials);
       return await res.json();
     },
-    onSuccess: (user: SelectUser) => {
-      // CRITICAL: Clear all cached data to prevent showing previous user's data
-      queryClient.clear();
-      queryClient.setQueryData(["/api/user"], user);
-      // Invalidate all queries to refetch with new user context
-      queryClient.invalidateQueries();
+    onSuccess: (data: any) => {
+      // Check if registration requires approval
+      if (data.requiresApproval) {
+        toast({
+          title: "¡Registro Exitoso!",
+          description: data.message || "Tu cuenta está pendiente de aprobación. Recibirás un correo cuando sea aprobada.",
+          duration: 8000,
+        });
+        // Don't set user data - account needs approval first
+        return;
+      }
+
+      // If user is auto-logged in (legacy flow - shouldn't happen anymore)
+      if (data.user) {
+        queryClient.clear();
+        queryClient.setQueryData(["/api/user"], data.user);
+        queryClient.invalidateQueries();
+      }
     },
     onError: (error: Error) => {
       toast({
-        title: "Registration failed",
+        title: "Error en el Registro",
         description: error.message,
         variant: "destructive",
       });

@@ -70,6 +70,18 @@ export class Scheduler {
       const tenants = await storage.getAllTenants();
 
       for (const tenant of tenants) {
+        // Skip expired accounts - automatic syncs are suspended
+        if (tenant.expiresAt && new Date(tenant.expiresAt) < new Date()) {
+          console.log(`[Scheduler] ⏸️  Tenant ${tenant.id} (${tenant.name}) - cuenta expirada, sincronizaciones suspendidas`);
+          continue;
+        }
+
+        // Skip non-approved accounts
+        if (tenant.accountStatus !== 'approved') {
+          console.log(`[Scheduler] ⏸️  Tenant ${tenant.id} (${tenant.name}) - cuenta no aprobada`);
+          continue;
+        }
+
         const stores = await storage.getStoresByTenant(tenant.id);
 
         for (const store of stores) {

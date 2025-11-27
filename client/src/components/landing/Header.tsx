@@ -56,7 +56,7 @@ export default function Header() {
       transition={{ duration: 0.5, ease: [0.21, 0.47, 0.32, 0.98] }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         isScrolled
-          ? "bg-[hsl(207,11%,11%)]/95 backdrop-blur-md shadow-lg border-b border-white/10"
+          ? "bg-black/95 backdrop-blur-md shadow-lg border-b border-white/10"
           : "bg-transparent"
       }`}
     >
@@ -90,15 +90,15 @@ export default function Header() {
           {/* Desktop CTAs */}
           <div className="hidden lg:flex items-center gap-4">
             <Link href="/auth">
-              <Button variant="ghost" size="default">
+              <button className="px-6 py-2.5 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg text-white font-medium hover:bg-white/20 hover:border-white/30 transition-all duration-300 shadow-md shadow-black/20">
                 Iniciar Sesión
-              </Button>
+              </button>
             </Link>
-            <Link href="/auth?tab=register">
-              <Button size="default" className="shadow-lg hover:shadow-xl transition-shadow">
-                Comenzar Ahora
-              </Button>
-            </Link>
+            <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer">
+              <button className="px-6 py-2.5 bg-[#D2FF3D]/90 backdrop-blur-sm border border-[#D2FF3D]/50 rounded-lg text-black font-semibold hover:bg-[#D2FF3D] hover:text-black hover:shadow-xl hover:shadow-[#D2FF3D]/50 active:scale-95 transition-all duration-300 shadow-lg shadow-[#D2FF3D]/30">
+                Agendar Demo
+              </button>
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
@@ -136,17 +136,17 @@ export default function Header() {
                 <div className="mt-auto flex flex-col gap-3">
                   <SheetClose asChild>
                     <Link href="/auth">
-                      <Button variant="outline" size="lg" className="w-full">
+                      <button className="w-full px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg text-white font-medium hover:bg-white/20 hover:border-white/30 transition-all duration-300 shadow-md">
                         Iniciar Sesión
-                      </Button>
+                      </button>
                     </Link>
                   </SheetClose>
                   <SheetClose asChild>
-                    <Link href="/auth?tab=register">
-                      <Button size="lg" className="w-full">
-                        Comenzar Ahora
-                      </Button>
-                    </Link>
+                    <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer" className="w-full">
+                      <button className="w-full px-6 py-3 bg-[#D2FF3D]/90 backdrop-blur-sm border border-[#D2FF3D]/50 rounded-lg text-black font-semibold hover:bg-[#D2FF3D] hover:text-black hover:shadow-xl hover:shadow-[#D2FF3D]/50 active:scale-95 transition-all duration-300 shadow-lg shadow-[#D2FF3D]/30">
+                        Agendar Demo
+                      </button>
+                    </a>
                   </SheetClose>
                 </div>
               </div>

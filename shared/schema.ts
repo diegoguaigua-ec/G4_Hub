@@ -43,6 +43,7 @@ export const tenants = pgTable("tenants", {
   contificoEnvironment: varchar("contifico_environment", {
     length: 20,
   }).default("test"),
+  expiresAt: timestamp("expires_at"), // Account expiration date
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -344,6 +345,35 @@ export const adminActions = pgTable(
   ],
 );
 
+// Webhooks - independent registry of platform webhooks (Shopify, WooCommerce, etc.)
+export const webhooks = pgTable(
+  "webhooks",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    tenantId: integer("tenant_id")
+      .references(() => tenants.id, { onDelete: "cascade" })
+      .notNull(),
+    storeId: integer("store_id")
+      .references(() => stores.id, { onDelete: "cascade" })
+      .notNull(),
+    platform: varchar("platform", { length: 20 }).notNull(), // 'shopify', 'woocommerce'
+    platformWebhookId: varchar("platform_webhook_id", { length: 255 }).notNull(), // ID from the platform
+    topic: varchar("topic", { length: 100 }).notNull(), // 'orders/paid', 'orders/cancelled', etc.
+    address: text("address").notNull(), // Webhook URL
+    status: varchar("status", { length: 20 }).notNull().default("active"), // 'active', 'deleted', 'failed'
+    metadata: jsonb("metadata").default({}), // Additional platform-specific data
+    createdAt: timestamp("created_at").defaultNow(),
+    deletedAt: timestamp("deleted_at"), // Soft delete tracking
+  },
+  (table) => [
+    index("idx_webhooks_tenant").on(table.tenantId),
+    index("idx_webhooks_store").on(table.storeId),
+    index("idx_webhooks_platform_id").on(table.platformWebhookId),
+    index("idx_webhooks_status").on(table.status),
+    unique("uq_webhooks_platform_id").on(table.platform, table.platformWebhookId),
+  ],
+);
+
 // Relations
 export const tenantsRelations = relations(tenants, ({ many }) => ({
   users: many(users),
@@ -351,6 +381,7 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   syncLogs: many(syncLogs),
   integrations: many(integrations),
   notifications: many(notifications),
+  webhooks: many(webhooks),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -370,6 +401,18 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
   products: many(storeProducts),
   storeIntegrations: many(storeIntegrations),
   notifications: many(notifications),
+  webhooks: many(webhooks),
+}));
+
+export const webhooksRelations = relations(webhooks, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [webhooks.tenantId],
+    references: [tenants.id],
+  }),
+  store: one(stores, {
+    fields: [webhooks.storeId],
+    references: [stores.id],
+  }),
 }));
 
 export const storeProductsRelations = relations(storeProducts, ({ one }) => ({
@@ -820,6 +863,14 @@ export const insertAdminActionSchema = createInsertSchema(adminActions, {
   createdAt: true,
 });
 
+export const insertWebhookSchema = createInsertSchema(webhooks, {
+  createdAt: () => z.date().optional(),
+  deletedAt: () => z.date().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -836,6 +887,7 @@ export type InsertInventoryMovement = z.infer<
 export type InsertUnmappedSku = z.infer<typeof insertUnmappedSkuSchema>;
 export type InsertSyncLock = z.infer<typeof insertSyncLockSchema>;
 export type InsertAdminAction = z.infer<typeof insertAdminActionSchema>;
+export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -849,3 +901,4 @@ export type InventoryMovement = typeof inventoryMovementsQueue.$inferSelect;
 export type UnmappedSku = typeof unmappedSkus.$inferSelect;
 export type SyncLock = typeof syncLocks.$inferSelect;
 export type AdminAction = typeof adminActions.$inferSelect;
+export type Webhook = typeof webhooks.$inferSelect;

@@ -12,6 +12,7 @@ import {
   unmappedSkus,
   syncLocks,
   adminActions,
+  webhooks,
   type User,
   type InsertUser,
   type Tenant,
@@ -34,6 +35,8 @@ import {
   type InsertUnmappedSku,
   type SyncLock,
   type InsertSyncLock,
+  type Webhook,
+  type InsertWebhook,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, desc, sql } from "drizzle-orm";
@@ -70,6 +73,7 @@ export interface IStorage {
   updateTenant(id: number, updates: Partial<{ name: string }>): Promise<Tenant>;
   updateTenantAccountStatus(id: number, accountStatus: string): Promise<Tenant>;
   updateTenantPlan(id: number, planType: string): Promise<Tenant>;
+  updateTenantExpiresAt(id: number, expiresAt: Date | null): Promise<Tenant>;
   getTenantOwnerUser(tenantId: number): Promise<User | undefined>;
   deleteTenant(id: number): Promise<void>;
   createAdminAction(action: { adminUserId: number; targetTenantId: number; actionType: string; description: string; metadata?: any }): Promise<void>;
@@ -555,6 +559,30 @@ export class DatabaseStorage implements IStorage {
       .limit(limit);
   }
 
+  /**
+   * Get latest pull-type sync logs for a store (includes both 'pull' and 'pull_selective')
+   * Useful for getting the most recent inventory sync regardless of whether it was full or selective
+   */
+  async getLatestPullSyncLogs(
+    storeId: number,
+    limit: number = 1,
+  ): Promise<SyncLog[]> {
+    return await db
+      .select()
+      .from(syncLogs)
+      .where(
+        and(
+          eq(syncLogs.storeId, storeId),
+          or(
+            eq(syncLogs.syncType, 'pull'),
+            eq(syncLogs.syncType, 'pull_selective')
+          )
+        )
+      )
+      .orderBy(desc(syncLogs.createdAt))  // Order by most recent first
+      .limit(limit);
+  }
+
   async updateStoreSyncStatus(
     storeId: number,
     productsCount: number,
@@ -796,6 +824,15 @@ export class DatabaseStorage implements IStorage {
     return tenant;
   }
 
+  async updateTenantExpiresAt(id: number, expiresAt: Date | null): Promise<Tenant> {
+    const [tenant] = await db
+      .update(tenants)
+      .set({ expiresAt, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+    return tenant;
+  }
+
   async getTenantOwnerUser(tenantId: number): Promise<User | undefined> {
     const allUsers = await db
       .select()
@@ -811,6 +848,58 @@ export class DatabaseStorage implements IStorage {
 
   async createAdminAction(action: { adminUserId: number; targetTenantId: number; actionType: string; description: string; metadata?: any }): Promise<void> {
     await db.insert(adminActions).values(action);
+  }
+
+  // Webhooks operations
+  async registerWebhook(webhook: InsertWebhook): Promise<Webhook> {
+    const [created] = await db.insert(webhooks).values(webhook).returning();
+    return created;
+  }
+
+  async getWebhooksByStore(storeId: number): Promise<Webhook[]> {
+    return await db
+      .select()
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.storeId, storeId),
+          eq(webhooks.status, "active")
+        )
+      );
+  }
+
+  async getWebhookByPlatformId(platform: string, platformWebhookId: string): Promise<Webhook | undefined> {
+    const [webhook] = await db
+      .select()
+      .from(webhooks)
+      .where(
+        and(
+          eq(webhooks.platform, platform),
+          eq(webhooks.platformWebhookId, platformWebhookId)
+        )
+      )
+      .limit(1);
+    return webhook;
+  }
+
+  async markWebhookAsDeleted(id: number): Promise<void> {
+    await db
+      .update(webhooks)
+      .set({
+        status: "deleted",
+        deletedAt: new Date()
+      })
+      .where(eq(webhooks.id, id));
+  }
+
+  async deleteWebhooksByStore(storeId: number): Promise<void> {
+    await db
+      .update(webhooks)
+      .set({
+        status: "deleted",
+        deletedAt: new Date()
+      })
+      .where(eq(webhooks.storeId, storeId));
   }
 
   // Inventory movements queue operations

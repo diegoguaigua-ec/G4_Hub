@@ -7,6 +7,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import { scheduler } from "./scheduler";
 import { inventoryPushWorker } from "./workers/inventoryPushWorker";
 import { runMigrations } from "./migrate";
+import { initializeExpirationScheduler } from "./services/expirationNotifications";
 
 // Validate critical environment variables before starting the app
 function validateEnv() {
@@ -148,6 +149,10 @@ app.use((req, res, next) => {
       // Start inventory push worker
       inventoryPushWorker.start();
       log('✓ Inventory push worker started');
+
+      // Start expiration check scheduler
+      initializeExpirationScheduler();
+      log('✓ Account expiration scheduler started');
     } else {
       log('✓ Background workers disabled (Autoscale mode). Set ENABLE_BACKGROUND_WORKERS=true for Reserved VM deployments.');
     }

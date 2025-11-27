@@ -56,7 +56,7 @@ const features: Feature[] = [
 
 export default function FeaturesSection() {
   return (
-    <section id="features" className="py-20 lg:py-28 bg-[hsl(207,11%,11%)]">
+    <section id="features" className="py-20 lg:py-28 bg-black">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <AnimatedSection className="text-center mb-16">
