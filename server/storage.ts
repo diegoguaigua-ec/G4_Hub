@@ -532,7 +532,17 @@ export class DatabaseStorage implements IStorage {
   async getLatestSyncItemPerSku(storeId: number): Promise<SyncLogItem[]> {
     const result = await db.execute(sql`
       SELECT DISTINCT ON (sli.sku)
-        sli.*
+        sli.id,
+        sli.sync_log_id as "syncLogId",
+        sli.sku,
+        sli.product_id as "productId",
+        sli.product_name as "productName",
+        sli.status,
+        sli.stock_before as "stockBefore",
+        sli.stock_after as "stockAfter",
+        sli.error_category as "errorCategory",
+        sli.error_message as "errorMessage",
+        sli.created_at as "createdAt"
       FROM sync_log_items sli
       INNER JOIN sync_logs sl ON sli.sync_log_id = sl.id
       WHERE sl.store_id = ${storeId}
