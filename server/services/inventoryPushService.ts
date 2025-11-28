@@ -329,7 +329,6 @@ export class InventoryPushService {
           {
             dryRun: false,
             skipRecentPushCheck: true, // Omitir verificación porque este Pull es post-Push
-            skipSyncLog: true // No crear sync_log porque el Push ya lo creó
           }
         );
 
@@ -534,7 +533,8 @@ export class InventoryPushService {
           const durationMs = Date.now() - startTime;
 
           try {
-            await storage.createSyncLog({
+            // Crear el sync_log
+            const syncLog = await storage.createSyncLog({
               tenantId,
               storeId,
               syncType: 'push',
@@ -556,8 +556,28 @@ export class InventoryPushService {
               },
             });
 
+            // Crear sync_log_items para cada movimiento
+            const syncLogItems = storeMovements.map(item => {
+              const movement = item.movement;
+
+              return {
+                syncLogId: syncLog.id,
+                sku: movement.sku,
+                productId: movement.productId,
+                productName: movement.productName || null,
+                status: item.success ? 'success' : 'failed',
+                stockBefore: movement.stockBefore || null,
+                stockAfter: movement.stockAfter || null,
+                errorCategory: item.success ? null : 'processing_error',
+                errorMessage: item.success ? null : 'Error al procesar movimiento de inventario',
+              };
+            });
+
+            // Insertar todos los items en bulk
+            await storage.createSyncLogItems(syncLogItems);
+
             console.log(
-              `[InventoryPush] ✅ Sync log creado para tienda ${storeId}: ${storeSuccessful} exitosos, ${storeFailed} fallidos`,
+              `[InventoryPush] ✅ Sync log creado para tienda ${storeId}: ${storeSuccessful} exitosos, ${storeFailed} fallidos, ${syncLogItems.length} items`,
             );
           } catch (logError: any) {
             console.error(

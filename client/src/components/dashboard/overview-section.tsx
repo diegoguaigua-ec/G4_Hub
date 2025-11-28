@@ -123,6 +123,9 @@ export default function OverviewSection() {
       if (!res.ok) throw new Error("Error al cargar actividad reciente");
       return res.json();
     },
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when user switches back to tab
+    staleTime: 30000, // Consider data stale after 30 seconds
   });
 
   const isLoading = storesLoading || statsLoading;

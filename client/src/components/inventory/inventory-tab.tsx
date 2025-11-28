@@ -125,6 +125,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     },
     // Ensure fresh data on refetch
     staleTime: 0,
+    refetchOnWindowFocus: true, // Refetch when user switches back to tab
+    refetchOnMount: true, // Always refetch when component mounts
   });
 
   // Sync mutation - triggers full pull from Contífico (all products)
