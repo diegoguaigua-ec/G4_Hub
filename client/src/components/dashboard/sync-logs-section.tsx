@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Download,
   RefreshCw,
+  Loader2,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -11,7 +12,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useIsFetching } from "@tanstack/react-query";
 import {
   Select,
   SelectContent,
@@ -59,6 +60,10 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
     limit: 20,
     offset: 0,
   });
+
+  // Detectar si las queries están actualizándose
+  const isFetchingLogs = useIsFetching({ queryKey: ["/api/sync/logs"] });
+  const isRefreshing = isFetchingLogs > 0;
 
   // Update filters when storeId prop changes
   useEffect(() => {
@@ -191,8 +196,12 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
           <h2 className="text-xl font-semibold text-foreground">Historial de Sincronizaciones</h2>
           <p className="text-muted-foreground">Revisa el detalle de todas las sincronizaciones realizadas</p>
         </div>
-        <Button onClick={() => refetch()} variant="outline" size="sm">
-          <RefreshCw className="h-4 w-4 mr-2" />
+        <Button onClick={() => refetch()} variant="outline" size="sm" disabled={isRefreshing}>
+          {isRefreshing ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
           Actualizar
         </Button>
       </div>
