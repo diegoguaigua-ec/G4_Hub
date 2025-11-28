@@ -1420,6 +1420,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply pagination
       const paginatedData = filteredData.slice(offset, offset + limitNum);
 
+      // Get the most recent sync date from the latest sync items
+      const lastSyncAt = latestSyncItems.length > 0
+        ? latestSyncItems.reduce((latest, item) => {
+            return !latest || item.createdAt > latest ? item.createdAt : latest;
+          }, null as Date | null)
+        : null;
+
       res.json({
         products: paginatedData,
         pagination: {
@@ -1429,7 +1436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(total / limitNum),
           hasMore: offset + limitNum < total,
         },
-        lastSyncAt: latestSyncLog?.createdAt || null,
+        lastSyncAt: lastSyncAt,
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);
