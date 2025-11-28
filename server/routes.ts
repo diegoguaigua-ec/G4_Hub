@@ -1336,21 +1336,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter products with SKU only
       const storeProductsWithSku = allStoreProducts.filter((p: any) => p.sku);
 
-      // Get the latest PULL sync log for this store (includes both 'pull' and 'pull_selective')
-      // This ensures we show the most recent inventory sync regardless of whether it was full or selective
-      const recentLogs = await storage.getLatestPullSyncLogs(parseInt(storeId), 1);
-      const latestSyncLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
+      // Get the latest sync_log_item for EACH SKU (not just from the latest sync_log)
+      // This ensures we show the most recent sync data for each product,
+      // regardless of which sync_log it came from (e.g., Pull 1 synced PT-0002-50ml,
+      // Pull 2 synced PT-0002-100ml → both products show their latest data)
+      const latestSyncItems = await storage.getLatestSyncItemPerSku(parseInt(storeId));
 
-      // Create a map of sync log items by SKU for quick lookup
+      // Create a map of sync items by SKU for quick lookup
       const syncLogItemsMap = new Map();
-      if (latestSyncLog) {
-        const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
-        syncItems.forEach((item: any) => {
-          if (item.sku) {
-            syncLogItemsMap.set(item.sku, item);
-          }
-        });
-      }
+      latestSyncItems.forEach((item: any) => {
+        if (item.sku) {
+          syncLogItemsMap.set(item.sku, item);
+        }
+      });
 
       // Build comparison data based on STORE products (what's in my store?)
       const comparisonData = storeProductsWithSku.map((storeProduct: any) => {

@@ -525,6 +525,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   /**
+   * Obtener el último sync_log_item de cada SKU para una tienda
+   * Esto asegura que siempre mostremos la información más reciente de cada producto,
+   * sin importar de qué sync_log provenga
+   */
+  async getLatestSyncItemPerSku(storeId: number): Promise<SyncLogItem[]> {
+    const result = await db.execute(sql`
+      SELECT DISTINCT ON (sli.sku)
+        sli.*
+      FROM sync_log_items sli
+      INNER JOIN sync_logs sl ON sli.sync_log_id = sl.id
+      WHERE sl.store_id = ${storeId}
+        AND sli.sku IS NOT NULL
+      ORDER BY sli.sku, sli.created_at DESC
+    `);
+
+    return result.rows as SyncLogItem[];
+  }
+
+  /**
    * Obtener un sync log por ID (método helper si no existe)
    */
   async getSyncLog(id: number): Promise<SyncLog | null> {
