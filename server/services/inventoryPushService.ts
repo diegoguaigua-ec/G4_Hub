@@ -328,7 +328,8 @@ export class InventoryPushService {
           [movement.sku],
           {
             dryRun: false,
-            skipRecentPushCheck: true // Omitir verificación porque este Pull es post-Push
+            skipRecentPushCheck: true, // Omitir verificación porque este Pull es post-Push
+            skipSyncLog: true // No crear sync_log porque el Push ya lo creó
           }
         );
 
@@ -475,6 +476,7 @@ export class InventoryPushService {
     successful: number;
     failed: number;
   }> {
+    const startTime = Date.now();
     try {
       const pendingMovements = await storage.getPendingMovements(limit);
 
@@ -484,6 +486,7 @@ export class InventoryPushService {
 
       let successful = 0;
       let failed = 0;
+      const processedMovements: Array<{ movement: any; success: boolean }> = [];
 
       for (const movement of pendingMovements) {
         // Check if tenant account is expired
@@ -497,6 +500,7 @@ export class InventoryPushService {
         }
 
         const result = await this.processMovement(movement.id);
+        processedMovements.push({ movement, success: result });
         if (result) {
           successful++;
         } else {
@@ -507,6 +511,62 @@ export class InventoryPushService {
       console.log(
         `[InventoryPush] ✅ Procesamiento completado: ${successful} exitosos, ${failed} fallidos`,
       );
+
+      // Crear sync_log de tipo "push" si se procesaron movimientos
+      if (processedMovements.length > 0) {
+        // Agrupar por storeId para crear un log por tienda
+        const movementsByStore = new Map<number, typeof processedMovements>();
+        for (const item of processedMovements) {
+          const storeId = item.movement.storeId;
+          if (!movementsByStore.has(storeId)) {
+            movementsByStore.set(storeId, []);
+          }
+          movementsByStore.get(storeId)!.push(item);
+        }
+
+        // Crear un sync_log por cada tienda
+        for (const [storeId, storeMovements] of movementsByStore) {
+          const storeSuccessful = storeMovements.filter(m => m.success).length;
+          const storeFailed = storeMovements.filter(m => !m.success).length;
+
+          // Obtener tenantId del primer movimiento de esta tienda
+          const tenantId = storeMovements[0].movement.tenantId;
+          const durationMs = Date.now() - startTime;
+
+          try {
+            await storage.createSyncLog({
+              tenantId,
+              storeId,
+              syncType: 'push',
+              status: storeFailed === 0 ? 'success' : (storeSuccessful > 0 ? 'partial' : 'error'),
+              syncedCount: storeSuccessful,
+              errorCount: storeFailed,
+              durationMs,
+              details: {
+                totalMovements: storeMovements.length,
+                successful: storeSuccessful,
+                failed: storeFailed,
+                movements: storeMovements.map(m => ({
+                  sku: m.movement.sku,
+                  quantity: m.movement.quantity,
+                  type: m.movement.movementType,
+                  orderId: m.movement.orderId,
+                  success: m.success,
+                })),
+              },
+            });
+
+            console.log(
+              `[InventoryPush] ✅ Sync log creado para tienda ${storeId}: ${storeSuccessful} exitosos, ${storeFailed} fallidos`,
+            );
+          } catch (logError: any) {
+            console.error(
+              `[InventoryPush] ⚠️ Error creando sync log para tienda ${storeId}:`,
+              logError.message,
+            );
+          }
+        }
+      }
 
       return {
         processed: pendingMovements.length,

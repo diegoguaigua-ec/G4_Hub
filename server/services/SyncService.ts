@@ -18,6 +18,7 @@ interface SyncOptions {
   dryRun?: boolean;
   limit?: number;
   skipRecentPushCheck?: boolean; // Para Pull automático post-Push
+  skipSyncLog?: boolean; // No crear sync_log (para Pull automático post-Push)
 }
 
 export class SyncService {
@@ -592,7 +593,7 @@ export class SyncService {
     skus: string[],
     options: SyncOptions = {}
   ): Promise<SyncResult> {
-    const { dryRun = false, skipRecentPushCheck = false } = options;
+    const { dryRun = false, skipRecentPushCheck = false, skipSyncLog = false } = options;
     const startTime = Date.now();
 
     console.log(`[Sync] Iniciando Pull Selectivo: Store ${storeId}, Integration ${integrationId}`);
@@ -957,8 +958,8 @@ export class SyncService {
 
       const durationMs = Date.now() - startTime;
 
-      // Registrar sincronización
-      if (!dryRun) {
+      // Registrar sincronización (si no es Pull automático post-Push)
+      if (!dryRun && !skipSyncLog) {
         const syncLog = await storage.createSyncLog({
           tenantId: store.tenantId,
           storeId: store.id,
@@ -1043,7 +1044,7 @@ export class SyncService {
 
       try {
         const store = await storage.getStore(storeId);
-        if (store) {
+        if (store && !skipSyncLog) {
           const syncLog = await storage.createSyncLog({
             tenantId: store.tenantId,
             storeId,
