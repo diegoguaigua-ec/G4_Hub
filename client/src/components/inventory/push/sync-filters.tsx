@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RotateCw, Download } from "lucide-react";
+import { RefreshCw, Loader2, Download } from "lucide-react";
 import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { handleExportMovements } from "@/lib/exportHelpers";
 
@@ -115,8 +115,12 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
           onClick={handleRefresh}
           disabled={isRefreshing}
         >
-          <RotateCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Actualizando...' : 'Actualizar'}
+          {isRefreshing ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
+          Actualizar
         </Button>
         <Button
           variant="outline"
