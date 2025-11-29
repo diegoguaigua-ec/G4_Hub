@@ -804,6 +804,7 @@ export class ShopifyConnector extends BaseConnector {
 
       try {
         // Intentar obtener inventory levels existentes para este item
+        console.log(`[Shopify] 🔍 Paso 1: Obteniendo inventory_levels para inventory_item_id: ${inventoryItemId}`);
         const inventoryResponse = await this.makeRequest(
           "GET",
           `/admin/api/${this.apiVersion}/inventory_levels.json`,
@@ -817,22 +818,27 @@ export class ShopifyConnector extends BaseConnector {
         ) {
           // Usar la primera ubicación disponible
           locationId = inventoryResponse.data.inventory_levels[0].location_id;
-          console.log(`[Shopify] Usando location_id existente: ${locationId}`);
+          console.log(`[Shopify] ✅ Paso 1 exitoso: Usando location_id existente: ${locationId}`);
+        } else {
+          console.log(`[Shopify] ⚠️ Paso 1: No hay inventory_levels para este item`);
         }
       } catch (error: any) {
-        console.warn(
-          `[Shopify] No se pudo obtener inventory_levels, obteniendo location principal`,
+        console.error(
+          `[Shopify] ❌ Paso 1 falló: Error obteniendo inventory_levels:`,
+          error.response?.status,
+          error.response?.data || error.message
         );
       }
 
       // 2. Si no hay location, obtener el location principal de la tienda
       if (!locationId) {
+        console.log(`[Shopify] 🔍 Paso 2: Obteniendo location principal de la tienda`);
         const shopResponse = await this.makeRequest(
           "GET",
           `/admin/api/${this.apiVersion}/shop.json`,
         );
         locationId = shopResponse.data.shop.primary_location_id;
-        console.log(`[Shopify] Usando primary_location_id: ${locationId}`);
+        console.log(`[Shopify] ✅ Paso 2 exitoso: Usando primary_location_id: ${locationId}`);
 
         if (!locationId) {
           throw new Error(
@@ -842,6 +848,7 @@ export class ShopifyConnector extends BaseConnector {
 
         // Conectar inventory item a esta ubicación
         try {
+          console.log(`[Shopify] 🔍 Paso 3: Conectando inventory_item ${inventoryItemId} a location ${locationId}`);
           await this.makeRequest(
             "POST",
             `/admin/api/${this.apiVersion}/inventory_levels/connect.json`,
@@ -851,17 +858,25 @@ export class ShopifyConnector extends BaseConnector {
             },
           );
           console.log(
-            `[Shopify] Inventory item ${inventoryItemId} conectado a location ${locationId}`,
+            `[Shopify] ✅ Paso 3 exitoso: Inventory item ${inventoryItemId} conectado a location ${locationId}`,
           );
         } catch (connectError: any) {
           // Si ya está conectado, ignorar el error
-          if (!connectError.message?.includes("422")) {
+          if (connectError.response?.status === 422 || connectError.message?.includes("422")) {
+            console.log(`[Shopify] ⚠️ Paso 3: Inventory item ya estaba conectado (422)`);
+          } else {
+            console.error(
+              `[Shopify] ❌ Paso 3 falló: Error conectando inventory item:`,
+              connectError.response?.status,
+              connectError.response?.data || connectError.message
+            );
             throw connectError;
           }
         }
       }
 
       // 3. Actualizar cantidad de inventario usando /inventory_levels/set.json
+      console.log(`[Shopify] 🔍 Paso 4: Actualizando inventario a ${quantity} unidades (location: ${locationId}, inventory_item: ${inventoryItemId})`);
       await this.makeRequest(
         "POST",
         `/admin/api/${this.apiVersion}/inventory_levels/set.json`,
@@ -873,14 +888,32 @@ export class ShopifyConnector extends BaseConnector {
       );
 
       console.log(
-        `[Shopify] ✅ Stock actualizado exitosamente a ${quantity} unidades`,
+        `[Shopify] ✅ Paso 4 exitoso: Stock actualizado exitosamente a ${quantity} unidades`,
       );
       return true;
     } catch (error: any) {
+      const status = error.response?.status;
+      const errorData = error.response?.data;
+
       console.error(
-        `[Shopify] Error actualizando stock de variante ${variantId}:`,
-        error,
+        `[Shopify] ❌ Error actualizando stock de variante ${variantId}:`,
+        {
+          status,
+          data: errorData,
+          message: error.message,
+          inventoryItemId,
+          variantId
+        }
       );
+
+      // Si es 404, el producto/variante probablemente fue eliminado
+      if (status === 404) {
+        throw new Error(
+          `Producto o variante ${variantId} no encontrado en Shopify (404). ` +
+          `Posiblemente fue eliminado. inventory_item_id: ${inventoryItemId}`
+        );
+      }
+
       throw new Error(`Error al actualizar stock en Shopify: ${error.message}`);
     }
   }
