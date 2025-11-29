@@ -63,7 +63,7 @@ export default function Footer() {
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         {/* Newsletter Section */}
         <div className="mb-16 max-w-2xl mx-auto text-center">
-          <h3 className="text-2xl font-bold mb-3">
+          <h3 className="text-2xl font-bold mb-3 text-white">
             Mantente Actualizado
           </h3>
           <p className="text-muted-foreground mb-6">
@@ -98,7 +98,7 @@ export default function Footer() {
                     >
                       {link.label}
                       {link.comingSoon && (
-                        <span className="text-xs bg-secondary/20 text-secondary-foreground px-2 py-0.5 rounded">
+                        <span className="text-[10px] bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold px-2 py-0.5 rounded-full shadow-md">
                           Pronto
                         </span>
                       )}
@@ -157,7 +157,7 @@ export default function Footer() {
                     >
                       {link.label}
                       {link.comingSoon && (
-                        <span className="text-xs bg-secondary/20 text-secondary-foreground px-2 py-0.5 rounded">
+                        <span className="text-[10px] bg-white/10 backdrop-blur-md border border-white/20 text-white font-semibold px-2 py-0.5 rounded-full shadow-md">
                           Pronto
                         </span>
                       )}
@@ -198,7 +198,7 @@ export default function Footer() {
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Box className="h-4 w-4 text-secondary" />
+                  <Box className="h-4 w-4 text-[hsl(207,11%,11%)]" />
                 </div>
                 <span className="font-semibold text-foreground">G4 Hub</span>
               </div>
