@@ -109,6 +109,8 @@ export const storeProducts = pgTable(
     manageStock: boolean("manage_stock").notNull().default(false),
     data: jsonb("data"),
     lastUpdated: timestamp("last_updated").defaultNow(),
+    lastModifiedAt: timestamp("last_modified_at").defaultNow(),
+    lastModifiedBy: varchar("last_modified_by", { length: 20 }), // 'pull', 'push', 'manual'
   },
   (table) => [
     index("idx_store_products_store_platform").on(
@@ -303,15 +305,15 @@ export const unmappedSkus = pgTable(
   ],
 );
 
-// Sync Locks - prevent concurrent sync operations
+// Sync Locks - prevent concurrent sync operations of the same type
+// Allows pull and push to run concurrently for the same store
 export const syncLocks = pgTable(
   "sync_locks",
   {
     id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
     storeId: integer("store_id")
       .references(() => stores.id, { onDelete: "cascade" })
-      .notNull()
-      .unique(),
+      .notNull(),
     lockType: varchar("lock_type", { length: 20 }).notNull(), // 'pull', 'push'
     lockedAt: timestamp("locked_at").defaultNow(),
     expiresAt: timestamp("expires_at").notNull(),
@@ -320,6 +322,7 @@ export const syncLocks = pgTable(
   (table) => [
     index("idx_sync_locks_store").on(table.storeId),
     index("idx_sync_locks_expires").on(table.expiresAt),
+    unique("uq_sync_locks_store_type").on(table.storeId, table.lockType),
   ],
 );
 

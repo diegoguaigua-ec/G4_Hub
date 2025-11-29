@@ -1336,21 +1336,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter products with SKU only
       const storeProductsWithSku = allStoreProducts.filter((p: any) => p.sku);
 
-      // Get the latest PULL sync log for this store (includes both 'pull' and 'pull_selective')
-      // This ensures we show the most recent inventory sync regardless of whether it was full or selective
-      const recentLogs = await storage.getLatestPullSyncLogs(parseInt(storeId), 1);
-      const latestSyncLog = recentLogs && recentLogs.length > 0 ? recentLogs[0] : null;
+      // Get the latest sync_log_item for EACH SKU (not just from the latest sync_log)
+      // This ensures we show the most recent sync data for each product,
+      // regardless of which sync_log it came from (e.g., Pull 1 synced PT-0002-50ml,
+      // Pull 2 synced PT-0002-100ml → both products show their latest data)
+      const latestSyncItems = await storage.getLatestSyncItemPerSku(parseInt(storeId));
 
-      // Create a map of sync log items by SKU for quick lookup
+      // Create a map of sync items by SKU for quick lookup
       const syncLogItemsMap = new Map();
-      if (latestSyncLog) {
-        const syncItems = await storage.getSyncLogItems(latestSyncLog.id);
-        syncItems.forEach((item: any) => {
-          if (item.sku) {
-            syncLogItemsMap.set(item.sku, item);
-          }
-        });
-      }
+      latestSyncItems.forEach((item: any) => {
+        if (item.sku) {
+          syncLogItemsMap.set(item.sku, item);
+        }
+      });
 
       // Build comparison data based on STORE products (what's in my store?)
       const comparisonData = storeProductsWithSku.map((storeProduct: any) => {
@@ -1396,6 +1394,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: syncStatus,
           lastSync: lastSync,
           platformProductId: storeProduct.platformProductId,
+          lastModifiedAt: storeProduct.lastModifiedAt,
+          lastModifiedBy: storeProduct.lastModifiedBy,
         };
       });
 
@@ -1420,6 +1420,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Apply pagination
       const paginatedData = filteredData.slice(offset, offset + limitNum);
 
+      // Get the most recent sync date from the latest sync items
+      const lastSyncAt = latestSyncItems.length > 0
+        ? latestSyncItems.reduce((latest, item) => {
+            return !latest || item.createdAt > latest ? item.createdAt : latest;
+          }, null as Date | null)
+        : null;
+
       res.json({
         products: paginatedData,
         pagination: {
@@ -1429,7 +1436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(total / limitNum),
           hasMore: offset + limitNum < total,
         },
-        lastSyncAt: latestSyncLog?.createdAt || null,
+        lastSyncAt: lastSyncAt,
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);
@@ -2073,6 +2080,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Obtener estadísticas de errores por categoría
       const errorStats = await storage.getSyncLogItemsErrorStats(parseInt(id));
 
+      // Para Push logs sin items, obtener summary desde details
+      let summary;
+      if (result.syncLog.syncType === 'push' && result.items.length === 0 && result.syncLog.details) {
+        const details = result.syncLog.details as any;
+        summary = {
+          total: details.totalMovements || 0,
+          success: details.successful || 0,
+          failed: details.failed || 0,
+          skipped: 0,
+        };
+      } else {
+        summary = {
+          total: result.items.length,
+          success: result.items.filter(i => i.status === 'success').length,
+          failed: result.items.filter(i => i.status === 'failed').length,
+          skipped: result.items.filter(i => i.status === 'skipped').length,
+        };
+      }
+
       res.json({
         syncLog: {
           ...result.syncLog,
@@ -2081,12 +2107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         items: result.items,
         errorStats,
-        summary: {
-          total: result.items.length,
-          success: result.items.filter(i => i.status === 'success').length,
-          failed: result.items.filter(i => i.status === 'failed').length,
-          skipped: result.items.filter(i => i.status === 'skipped').length,
-        }
+        summary
       });
 
     } catch (error: any) {

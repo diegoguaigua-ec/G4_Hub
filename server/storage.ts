@@ -154,7 +154,7 @@ export interface IStorage {
 
   // Sync lock operations
   acquireLock(storeId: number, lockType: 'pull' | 'push', processId: string, durationMs: number): Promise<SyncLock | null>;
-  releaseLock(storeId: number): Promise<void>;
+  releaseLock(storeId: number, lockType?: "pull" | "push"): Promise<void>;
   hasActiveLock(storeId: number): Promise<boolean>;
   cleanExpiredLocks(): Promise<void>;
 
@@ -289,10 +289,59 @@ export class DatabaseStorage implements IStorage {
           manageStock: product.manageStock,
           data: product.data,
           lastUpdated: new Date(),
+          lastModifiedAt: product.lastModifiedAt || new Date(),
+          lastModifiedBy: product.lastModifiedBy || null,
         },
       })
       .returning();
     return upsertedProduct;
+  }
+
+  /**
+   * Actualiza el stock de un producto de forma optimista (incremento/decremento)
+   * Útil para actualizar el cache después de movimientos push sin tener que hacer pull
+   */
+  async updateProductStockOptimistic(
+    storeId: number,
+    sku: string,
+    delta: number,
+    modifiedBy: 'pull' | 'push' | 'manual' = 'push'
+  ): Promise<StoreProduct | null> {
+    const [updatedProduct] = await db
+      .update(storeProducts)
+      .set({
+        stockQuantity: sql`GREATEST(0, COALESCE(${storeProducts.stockQuantity}, 0) + ${delta})`,
+        lastUpdated: new Date(),
+        lastModifiedAt: new Date(),
+        lastModifiedBy: modifiedBy,
+      })
+      .where(
+        and(
+          eq(storeProducts.storeId, storeId),
+          eq(storeProducts.sku, sku)
+        )
+      )
+      .returning();
+
+    return updatedProduct || null;
+  }
+
+  /**
+   * Obtiene un producto por storeId y SKU
+   */
+  async getProductBySku(storeId: number, sku: string): Promise<StoreProduct | null> {
+    const [product] = await db
+      .select()
+      .from(storeProducts)
+      .where(
+        and(
+          eq(storeProducts.storeId, storeId),
+          eq(storeProducts.sku, sku)
+        )
+      )
+      .limit(1);
+
+    return product || null;
   }
 
   async deleteProductsByStore(storeId: number): Promise<void> {
@@ -383,9 +432,25 @@ export class DatabaseStorage implements IStorage {
   async createSyncLogItems(
     items: Omit<SyncLogItem, "id" | "createdAt">[],
   ): Promise<void> {
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      console.log('[Storage] ⚠️ createSyncLogItems llamado con array vacío');
+      return;
+    }
 
-    await db.insert(syncLogItems).values(items);
+    console.log(`[Storage] 📝 Insertando ${items.length} sync_log_items en la base de datos`);
+    console.log(`[Storage] Primera item:`, JSON.stringify(items[0], null, 2));
+
+    try {
+      const result = await db.insert(syncLogItems).values(items).returning();
+      console.log(`[Storage] ✅ ${result.length} sync_log_items insertados exitosamente`);
+      if (result.length > 0) {
+        console.log(`[Storage] IDs insertados: ${result.map(r => r.id).join(', ')}`);
+      }
+    } catch (error: any) {
+      console.error(`[Storage] ❌ Error insertando sync_log_items:`, error.message);
+      console.error(`[Storage] Items que intentamos insertar:`, JSON.stringify(items, null, 2));
+      throw error;
+    }
   }
 
   /**
@@ -473,6 +538,35 @@ export class DatabaseStorage implements IStorage {
     const items = await this.getSyncLogItems(syncLogId);
 
     return { syncLog, items };
+  }
+
+  /**
+   * Obtener el último sync_log_item de cada SKU para una tienda
+   * Esto asegura que siempre mostremos la información más reciente de cada producto,
+   * sin importar de qué sync_log provenga
+   */
+  async getLatestSyncItemPerSku(storeId: number): Promise<SyncLogItem[]> {
+    const result = await db.execute(sql`
+      SELECT DISTINCT ON (sli.sku)
+        sli.id,
+        sli.sync_log_id as "syncLogId",
+        sli.sku,
+        sli.product_id as "productId",
+        sli.product_name as "productName",
+        sli.status,
+        sli.stock_before as "stockBefore",
+        sli.stock_after as "stockAfter",
+        sli.error_category as "errorCategory",
+        sli.error_message as "errorMessage",
+        sli.created_at as "createdAt"
+      FROM sync_log_items sli
+      INNER JOIN sync_logs sl ON sli.sync_log_id = sl.id
+      WHERE sl.store_id = ${storeId}
+        AND sli.sku IS NOT NULL
+      ORDER BY sli.sku, sli.created_at DESC
+    `);
+
+    return result.rows as SyncLogItem[];
   }
 
   /**
@@ -1140,18 +1234,57 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async releaseLock(storeId: number): Promise<void> {
-    await db.delete(syncLocks).where(eq(syncLocks.storeId, storeId));
+  async releaseLock(storeId: number, lockType?: "pull" | "push"): Promise<void> {
+    if (lockType) {
+      // Release specific lock type
+      await db
+        .delete(syncLocks)
+        .where(
+          and(
+            eq(syncLocks.storeId, storeId),
+            eq(syncLocks.lockType, lockType)
+          )
+        );
+    } else {
+      // Release all locks for backward compatibility
+      await db.delete(syncLocks).where(eq(syncLocks.storeId, storeId));
+    }
   }
 
-  async hasActiveLock(storeId: number): Promise<boolean> {
+  async hasActiveLock(storeId: number, lockType?: "pull" | "push"): Promise<boolean> {
     await this.cleanExpiredLocks();
+    const conditions = lockType
+      ? and(eq(syncLocks.storeId, storeId), eq(syncLocks.lockType, lockType))
+      : eq(syncLocks.storeId, storeId);
+
     const locks = await db
       .select()
       .from(syncLocks)
-      .where(eq(syncLocks.storeId, storeId))
+      .where(conditions)
       .limit(1);
     return locks.length > 0;
+  }
+
+  async hasRecentPushMovements(
+    storeId: number,
+    sku: string,
+    withinMinutes: number = 5
+  ): Promise<boolean> {
+    const cutoffTime = new Date(Date.now() - withinMinutes * 60 * 1000);
+    const recentMovements = await db
+      .select()
+      .from(inventoryMovementsQueue)
+      .where(
+        and(
+          eq(inventoryMovementsQueue.storeId, storeId),
+          eq(inventoryMovementsQueue.sku, sku),
+          eq(inventoryMovementsQueue.status, "completed"),
+          sql`${inventoryMovementsQueue.processedAt} > ${cutoffTime}`
+        )
+      )
+      .limit(1);
+
+    return recentMovements.length > 0;
   }
 
   async cleanExpiredLocks(): Promise<void> {

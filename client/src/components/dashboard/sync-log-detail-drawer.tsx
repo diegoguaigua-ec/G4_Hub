@@ -110,13 +110,14 @@ export function SyncLogDetailDrawer({
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat("es-ES", {
+    return new Intl.DateTimeFormat("es-EC", {
       day: "2-digit",
       month: "long",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
+      timeZone: "America/Guayaquil", // Ecuador timezone (UTC-5)
     }).format(date);
   };
 

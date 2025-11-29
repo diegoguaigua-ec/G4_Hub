@@ -7,8 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RotateCw, Download } from "lucide-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { RefreshCw, Loader2, Download } from "lucide-react";
+import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { handleExportMovements } from "@/lib/exportHelpers";
 
 interface SyncFiltersProps {
@@ -26,6 +26,11 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
   const queryClient = useQueryClient();
   const [isExporting, setIsExporting] = useState(false);
 
+  // Detectar si las queries de movimientos están actualizándose
+  const isFetchingMovements = useIsFetching({ queryKey: ['movements', storeId] });
+  const isFetchingStats = useIsFetching({ queryKey: ['sync-stats', storeId] });
+  const isRefreshing = isFetchingMovements > 0 || isFetchingStats > 0;
+
   // Guardar filtros en localStorage cuando cambien
   useEffect(() => {
     if (storeId) {
@@ -39,6 +44,8 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['movements', storeId] });
     queryClient.invalidateQueries({ queryKey: ['sync-stats', storeId] });
+    // También invalidar detalles de movimientos para que se actualicen los modales abiertos
+    queryClient.invalidateQueries({ queryKey: ['movement-detail', storeId] });
   };
 
   const handleExport = async () => {
@@ -102,8 +109,17 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
       </div>
 
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={handleRefresh}>
-          <RotateCw className="h-4 w-4 mr-2" />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+        >
+          {isRefreshing ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4 mr-2" />
+          )}
           Actualizar
         </Button>
         <Button

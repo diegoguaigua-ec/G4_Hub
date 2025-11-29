@@ -17,6 +17,8 @@ interface SyncResult {
 interface SyncOptions {
   dryRun?: boolean;
   limit?: number;
+  skipRecentPushCheck?: boolean; // Para Pull automático post-Push
+  skipSyncLog?: boolean; // No crear sync_log (para Pull automático post-Push)
 }
 
 export class SyncService {
@@ -43,7 +45,7 @@ export class SyncService {
     integrationId: number,
     options: SyncOptions = {}
   ): Promise<SyncResult> {
-    const { dryRun = false, limit } = options;
+    const { dryRun = false, limit, skipRecentPushCheck = false } = options;
     const startTime = Date.now();
 
     console.log(`[Sync] Iniciando Pull: Store ${storeId}, Integration ${integrationId}`);
@@ -194,7 +196,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -221,7 +225,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -275,7 +281,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -289,6 +297,24 @@ export class SyncService {
               }
 
               console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
+
+              // 3.5. Verificar si hay pushes recientes (evitar sobrescribir cambios frescos)
+              // Solo si no es un Pull automático post-Push
+              if (!skipRecentPushCheck) {
+                const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
+                if (hasRecentPush) {
+                  console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
+                  results.skipped++;
+
+                  // Guardar item omitido con razón
+                  itemRecord.status = 'skipped';
+                  itemRecord.errorCategory = 'recent_push';
+                  itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
+                  itemRecord.stockAfter = currentStock;
+                  itemsToSave.push(itemRecord);
+                  return;
+                }
+              }
 
               // 4. Actualizar stock en la tienda
               if (!dryRun) {
@@ -322,7 +348,9 @@ export class SyncService {
                     stockQuantity: contificoStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                   console.log(`[Sync] 💾 Cache actualizado para ${sku}`);
 
@@ -351,7 +379,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
 
                   // ✅ Guardar item fallido
@@ -544,8 +574,8 @@ export class SyncService {
       // Liberar lock si fue adquirido
       if (lockAcquired) {
         try {
-          await storage.releaseLock(storeId);
-          console.log(`[Sync] ✅ Lock liberado para tienda ${storeId}`);
+          await storage.releaseLock(storeId, 'pull');
+          console.log(`[Sync] Lock liberado para tienda ${storeId}`);
         } catch (unlockError) {
           console.error(`[Sync] Error liberando lock:`, unlockError);
         }
@@ -563,7 +593,7 @@ export class SyncService {
     skus: string[],
     options: SyncOptions = {}
   ): Promise<SyncResult> {
-    const { dryRun = false } = options;
+    const { dryRun = false, skipRecentPushCheck = false, skipSyncLog = false } = options;
     const startTime = Date.now();
 
     console.log(`[Sync] Iniciando Pull Selectivo: Store ${storeId}, Integration ${integrationId}`);
@@ -701,7 +731,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -726,7 +758,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -771,7 +805,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
                 }
 
@@ -784,6 +820,23 @@ export class SyncService {
               }
 
               console.log(`[Sync] Stock diferente: Tienda=${currentStock}, Contífico=${contificoStock}`);
+
+              // Verificar si hay pushes recientes (evitar sobrescribir cambios frescos)
+              // Solo si no es un Pull automático post-Push
+              if (!skipRecentPushCheck) {
+                const hasRecentPush = await storage.hasRecentPushMovements(store.id, sku, 5);
+                if (hasRecentPush) {
+                  console.log(`[Sync] Push reciente detectado para ${sku}, omitiendo actualización para evitar conflicto`);
+                  results.skipped++;
+
+                  itemRecord.status = 'skipped';
+                  itemRecord.errorCategory = 'recent_push';
+                  itemRecord.errorMessage = 'Push reciente detectado, omitiendo para evitar conflicto';
+                  itemRecord.stockAfter = currentStock;
+                  itemsToSave.push(itemRecord);
+                  return;
+                }
+              }
 
               // Actualizar stock
               if (!dryRun) {
@@ -814,7 +867,9 @@ export class SyncService {
                     stockQuantity: contificoStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
 
                   results.success++;
@@ -840,7 +895,9 @@ export class SyncService {
                     stockQuantity: currentStock,
                     manageStock: true,
                     price: null,
-                    data: storeProduct
+                    data: storeProduct,
+                    lastModifiedAt: new Date(),
+                    lastModifiedBy: 'pull'
                   });
 
                   itemRecord.status = 'failed';
@@ -901,8 +958,8 @@ export class SyncService {
 
       const durationMs = Date.now() - startTime;
 
-      // Registrar sincronización
-      if (!dryRun) {
+      // Registrar sincronización (si no es Pull automático post-Push)
+      if (!dryRun && !skipSyncLog) {
         const syncLog = await storage.createSyncLog({
           tenantId: store.tenantId,
           storeId: store.id,
@@ -934,8 +991,16 @@ export class SyncService {
             syncLogId: syncLog.id
           }));
 
-          await storage.createSyncLogItems(itemsWithLogId);
-          console.log(`[Sync] ✅ Guardados ${itemsWithLogId.length} items en sync_log_items`);
+          console.log(`[Sync] 📝 Items a guardar:`, JSON.stringify(itemsWithLogId, null, 2));
+
+          try {
+            await storage.createSyncLogItems(itemsWithLogId);
+            console.log(`[Sync] ✅ Guardados ${itemsWithLogId.length} items en sync_log_items con sync_log_id=${syncLog.id}`);
+          } catch (saveError: any) {
+            console.error(`[Sync] ❌ Error guardando sync_log_items:`, saveError.message);
+            console.error(`[Sync] Stack:`, saveError.stack);
+            throw saveError;
+          }
         }
 
         await storage.updateStore(storeId, {
@@ -987,7 +1052,7 @@ export class SyncService {
 
       try {
         const store = await storage.getStore(storeId);
-        if (store) {
+        if (store && !skipSyncLog) {
           const syncLog = await storage.createSyncLog({
             tenantId: store.tenantId,
             storeId,

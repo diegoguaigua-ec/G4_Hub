@@ -45,10 +45,10 @@ export const PLANS: Record<PlanType, Plan> = {
     },
     limits: {
       maxStores: 1,
-      maxProducts: 100,
+      maxProducts: 50,
       maxIntegrations: 1,
       maxMonthlyOrders: 50,
-      maxMonthlySyncs: 30, // 30 manual syncs per month
+      maxMonthlySyncs: 1000, // 1,000 manual syncs per month
       syncInterval: 60, // 1 hour
       supportLevel: "email",
       customBranding: false,
@@ -67,8 +67,8 @@ export const PLANS: Record<PlanType, Plan> = {
         included: true,
       },
       {
-        name: "Hasta 100 Productos",
-        description: "Sincroniza hasta 100 productos",
+        name: "Hasta 50 Productos",
+        description: "Sincroniza hasta 50 productos",
         included: true,
       },
       {
@@ -108,11 +108,11 @@ export const PLANS: Record<PlanType, Plan> = {
       annual: 490, // ~16% discount
     },
     limits: {
-      maxStores: 5,
-      maxProducts: 5000,
+      maxStores: 3,
+      maxProducts: 500,
       maxIntegrations: 3,
       maxMonthlyOrders: 500,
-      maxMonthlySyncs: 300, // 300 manual syncs per month
+      maxMonthlySyncs: 10000, // 10,000 manual syncs per month
       syncInterval: 15, // 15 minutes
       supportLevel: "priority",
       customBranding: false,
@@ -121,7 +121,7 @@ export const PLANS: Record<PlanType, Plan> = {
     },
     features: [
       {
-        name: "Hasta 5 Tiendas",
+        name: "Hasta 3 Tiendas",
         description: "Gestiona múltiples tiendas desde un solo lugar",
         included: true,
       },
@@ -131,7 +131,7 @@ export const PLANS: Record<PlanType, Plan> = {
         included: true,
       },
       {
-        name: "Hasta 5,000 Productos",
+        name: "Hasta 500 Productos",
         description: "Sincroniza inventario extenso",
         included: true,
       },
@@ -277,10 +277,10 @@ export function getAllPlans(): Plan[] {
 // Plan comparison data for landing page
 export const PLAN_COMPARISON_FEATURES = [
   { category: "Límites", features: [
-    { name: "Tiendas Conectadas", starter: "1", professional: "5", enterprise: "Ilimitadas" },
-    { name: "Productos", starter: "100", professional: "5,000", enterprise: "Ilimitados" },
+    { name: "Tiendas Conectadas", starter: "1", professional: "3", enterprise: "Ilimitadas" },
+    { name: "Productos Sincronizados", starter: "50", professional: "500", enterprise: "Ilimitados" },
     { name: "Integraciones ERP", starter: "1", professional: "3", enterprise: "Ilimitadas" },
-    { name: "Órdenes Mensuales", starter: "50", professional: "500", enterprise: "Ilimitadas" },
+    { name: "Sincronizaciones/Mes", starter: "1,000", professional: "10,000", enterprise: "Ilimitadas" },
   ]},
   { category: "Sincronización", features: [
     { name: "Intervalo de Sync", starter: "60min", professional: "15min", enterprise: "5min" },

@@ -123,6 +123,9 @@ export default function OverviewSection() {
       if (!res.ok) throw new Error("Error al cargar actividad reciente");
       return res.json();
     },
+    refetchOnMount: true, // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when user switches back to tab
+    staleTime: 30000, // Consider data stale after 30 seconds
   });
 
   const isLoading = storesLoading || statsLoading;
@@ -289,9 +292,10 @@ export default function OverviewSection() {
     if (diffInDays < 7) return `Hace ${diffInDays}d`;
 
     // If more than 7 days, show date
-    return date.toLocaleDateString('es-ES', {
+    return date.toLocaleDateString('es-EC', {
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'America/Guayaquil', // Ecuador timezone (UTC-5)
     });
   };
 
