@@ -557,21 +557,30 @@ export class InventoryPushService {
             });
 
             // Crear sync_log_items para cada movimiento
-            const syncLogItems = storeMovements.map(item => {
+            const syncLogItems = await Promise.all(storeMovements.map(async item => {
               const movement = item.movement;
+
+              // Obtener el producto del cache para tener el stock de la tienda
+              let stockTienda = null;
+              try {
+                const product = await storage.getProductBySku(movement.storeId, movement.sku);
+                stockTienda = product?.stockQuantity || null;
+              } catch (err) {
+                console.warn(`[InventoryPush] No se pudo obtener stock para ${movement.sku}`);
+              }
 
               return {
                 syncLogId: syncLog.id,
                 sku: movement.sku,
-                productId: movement.productId,
-                productName: movement.productName || null,
+                productId: movement.productId || null,
+                productName: movement.productName || movement.sku,
                 status: item.success ? 'success' : 'failed',
-                stockBefore: movement.stockBefore || null,
-                stockAfter: movement.stockAfter || null,
+                stockBefore: null, // Push no consulta stock de Contifico antes
+                stockAfter: null,  // El Pull automático actualizará este valor
                 errorCategory: item.success ? null : 'processing_error',
                 errorMessage: item.success ? null : 'Error al procesar movimiento de inventario',
               };
-            });
+            }));
 
             console.log(`[InventoryPush] 📝 Items Push a guardar:`, JSON.stringify(syncLogItems, null, 2));
 
