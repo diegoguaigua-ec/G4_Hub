@@ -991,8 +991,16 @@ export class SyncService {
             syncLogId: syncLog.id
           }));
 
-          await storage.createSyncLogItems(itemsWithLogId);
-          console.log(`[Sync] ✅ Guardados ${itemsWithLogId.length} items en sync_log_items`);
+          console.log(`[Sync] 📝 Items a guardar:`, JSON.stringify(itemsWithLogId, null, 2));
+
+          try {
+            await storage.createSyncLogItems(itemsWithLogId);
+            console.log(`[Sync] ✅ Guardados ${itemsWithLogId.length} items en sync_log_items con sync_log_id=${syncLog.id}`);
+          } catch (saveError: any) {
+            console.error(`[Sync] ❌ Error guardando sync_log_items:`, saveError.message);
+            console.error(`[Sync] Stack:`, saveError.stack);
+            throw saveError;
+          }
         }
 
         await storage.updateStore(storeId, {

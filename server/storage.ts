@@ -432,9 +432,25 @@ export class DatabaseStorage implements IStorage {
   async createSyncLogItems(
     items: Omit<SyncLogItem, "id" | "createdAt">[],
   ): Promise<void> {
-    if (items.length === 0) return;
+    if (items.length === 0) {
+      console.log('[Storage] ⚠️ createSyncLogItems llamado con array vacío');
+      return;
+    }
 
-    await db.insert(syncLogItems).values(items);
+    console.log(`[Storage] 📝 Insertando ${items.length} sync_log_items en la base de datos`);
+    console.log(`[Storage] Primera item:`, JSON.stringify(items[0], null, 2));
+
+    try {
+      const result = await db.insert(syncLogItems).values(items).returning();
+      console.log(`[Storage] ✅ ${result.length} sync_log_items insertados exitosamente`);
+      if (result.length > 0) {
+        console.log(`[Storage] IDs insertados: ${result.map(r => r.id).join(', ')}`);
+      }
+    } catch (error: any) {
+      console.error(`[Storage] ❌ Error insertando sync_log_items:`, error.message);
+      console.error(`[Storage] Items que intentamos insertar:`, JSON.stringify(items, null, 2));
+      throw error;
+    }
   }
 
   /**

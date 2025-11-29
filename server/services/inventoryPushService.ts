@@ -573,12 +573,19 @@ export class InventoryPushService {
               };
             });
 
-            // Insertar todos los items en bulk
-            await storage.createSyncLogItems(syncLogItems);
+            console.log(`[InventoryPush] 📝 Items Push a guardar:`, JSON.stringify(syncLogItems, null, 2));
 
-            console.log(
-              `[InventoryPush] ✅ Sync log creado para tienda ${storeId}: ${storeSuccessful} exitosos, ${storeFailed} fallidos, ${syncLogItems.length} items`,
-            );
+            // Insertar todos los items en bulk
+            try {
+              await storage.createSyncLogItems(syncLogItems);
+              console.log(
+                `[InventoryPush] ✅ Sync log creado para tienda ${storeId}: ${storeSuccessful} exitosos, ${storeFailed} fallidos, ${syncLogItems.length} items guardados con sync_log_id=${syncLog.id}`,
+              );
+            } catch (saveError: any) {
+              console.error(`[InventoryPush] ❌ Error guardando sync_log_items:`, saveError.message);
+              console.error(`[InventoryPush] Stack:`, saveError.stack);
+              throw saveError;
+            }
           } catch (logError: any) {
             console.error(
               `[InventoryPush] ⚠️ Error creando sync log para tienda ${storeId}:`,
