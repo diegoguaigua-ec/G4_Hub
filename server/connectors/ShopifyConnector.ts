@@ -240,9 +240,19 @@ export class ShopifyConnector extends BaseConnector {
 
       let errorMessage = "Failed to connect to Shopify store";
 
+      // Check if using custom domain instead of myshopify.com
+      const isCustomDomain = !this.baseUrl.includes(".myshopify.com") &&
+                            !this.baseUrl.includes("shopify.com");
+
       if (error.status === 401 || error.status === 403) {
-        errorMessage =
-          "Invalid access token. Please check your Shopify private app credentials.";
+        if (isCustomDomain) {
+          errorMessage =
+            "La URL de la tienda debe ser el dominio de Shopify (*.myshopify.com), no un dominio personalizado. " +
+            "Encuentra tu dominio en: Admin Shopify → Configuración → Dominios";
+        } else {
+          errorMessage =
+            "Invalid access token. Please check your Shopify private app credentials.";
+        }
       } else if (error.status === 404) {
         errorMessage =
           "Shopify Admin API not found. Please ensure the store URL is correct.";
@@ -260,6 +270,7 @@ export class ShopifyConnector extends BaseConnector {
           original_error: error.message,
           status: error.status,
           code: error.code,
+          is_custom_domain: isCustomDomain,
         },
       };
     }
@@ -969,6 +980,15 @@ export class ShopifyConnector extends BaseConnector {
     ) {
       console.warn(
         `[Shopify] Store URL ${this.baseUrl} doesn't appear to be a Shopify domain`,
+      );
+      console.warn(
+        `[Shopify] ⚠️ IMPORTANTE: La API de Shopify requiere el dominio myshopify.com, no dominios personalizados`,
+      );
+      console.warn(
+        `[Shopify] Ejemplo correcto: https://tu-tienda.myshopify.com`,
+      );
+      console.warn(
+        `[Shopify] Encuentra tu dominio en: Admin Shopify → Configuración → Dominios`,
       );
     }
   }
