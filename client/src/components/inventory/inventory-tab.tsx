@@ -327,12 +327,13 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
   const formatDate = (dateString: string | null) => {
     if (!dateString) return "Nunca";
     const date = new Date(dateString);
-    return new Intl.DateTimeFormat("es-ES", {
+    return new Intl.DateTimeFormat("es-EC", {
       day: "2-digit",
       month: "short",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "America/Guayaquil", // Ecuador timezone (UTC-5)
     }).format(date);
   };
 

@@ -292,9 +292,10 @@ export default function OverviewSection() {
     if (diffInDays < 7) return `Hace ${diffInDays}d`;
 
     // If more than 7 days, show date
-    return date.toLocaleDateString('es-ES', {
+    return date.toLocaleDateString('es-EC', {
       month: 'short',
-      day: 'numeric'
+      day: 'numeric',
+      timeZone: 'America/Guayaquil', // Ecuador timezone (UTC-5)
     });
   };
 
