@@ -2080,6 +2080,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Obtener estadísticas de errores por categoría
       const errorStats = await storage.getSyncLogItemsErrorStats(parseInt(id));
 
+      // Para Push logs sin items, obtener summary desde details
+      let summary;
+      if (result.syncLog.syncType === 'push' && result.items.length === 0 && result.syncLog.details) {
+        const details = result.syncLog.details as any;
+        summary = {
+          total: details.totalMovements || 0,
+          success: details.successful || 0,
+          failed: details.failed || 0,
+          skipped: 0,
+        };
+      } else {
+        summary = {
+          total: result.items.length,
+          success: result.items.filter(i => i.status === 'success').length,
+          failed: result.items.filter(i => i.status === 'failed').length,
+          skipped: result.items.filter(i => i.status === 'skipped').length,
+        };
+      }
+
       res.json({
         syncLog: {
           ...result.syncLog,
@@ -2088,12 +2107,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         items: result.items,
         errorStats,
-        summary: {
-          total: result.items.length,
-          success: result.items.filter(i => i.status === 'success').length,
-          failed: result.items.filter(i => i.status === 'failed').length,
-          skipped: result.items.filter(i => i.status === 'skipped').length,
-        }
+        summary
       });
 
     } catch (error: any) {

@@ -556,45 +556,13 @@ export class InventoryPushService {
               },
             });
 
-            // Crear sync_log_items para cada movimiento
-            const syncLogItems = await Promise.all(storeMovements.map(async item => {
-              const movement = item.movement;
-
-              // Obtener el producto del cache para tener el stock de la tienda
-              let stockTienda = null;
-              try {
-                const product = await storage.getProductBySku(movement.storeId, movement.sku);
-                stockTienda = product?.stockQuantity || null;
-              } catch (err) {
-                console.warn(`[InventoryPush] No se pudo obtener stock para ${movement.sku}`);
-              }
-
-              return {
-                syncLogId: syncLog.id,
-                sku: movement.sku,
-                productId: movement.productId || null,
-                productName: movement.productName || movement.sku,
-                status: item.success ? 'success' : 'failed',
-                stockBefore: null, // Push no consulta stock de Contifico antes
-                stockAfter: null,  // El Pull automático actualizará este valor
-                errorCategory: item.success ? null : 'processing_error',
-                errorMessage: item.success ? null : 'Error al procesar movimiento de inventario',
-              };
-            }));
-
-            console.log(`[InventoryPush] 📝 Items Push a guardar:`, JSON.stringify(syncLogItems, null, 2));
-
-            // Insertar todos los items en bulk
-            try {
-              await storage.createSyncLogItems(syncLogItems);
-              console.log(
-                `[InventoryPush] ✅ Sync log creado para tienda ${storeId}: ${storeSuccessful} exitosos, ${storeFailed} fallidos, ${syncLogItems.length} items guardados con sync_log_id=${syncLog.id}`,
-              );
-            } catch (saveError: any) {
-              console.error(`[InventoryPush] ❌ Error guardando sync_log_items:`, saveError.message);
-              console.error(`[InventoryPush] Stack:`, saveError.stack);
-              throw saveError;
-            }
+            // NO crear sync_log_items para Push porque:
+            // 1. El sync_log ya tiene los detalles en el campo details.movements
+            // 2. El Pull automático post-Push crea items con stock_after correcto
+            // 3. Items de Push con stock_after=null contaminan los datos
+            console.log(
+              `[InventoryPush] ✅ Sync log creado para tienda ${storeId}: ${storeSuccessful} exitosos, ${storeFailed} fallidos (sin items - el Pull automático los crea)`,
+            );
           } catch (logError: any) {
             console.error(
               `[InventoryPush] ⚠️ Error creando sync log para tienda ${storeId}:`,
