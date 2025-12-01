@@ -411,7 +411,7 @@ export class InventoryPushService {
       const newAttempts = movement.attempts + 1;
 
       // Si alcanzó el máximo de intentos, marcar como fallido
-      if (newAttempts > movement.maxAttempts) {
+      if (newAttempts >= movement.maxAttempts) {
         await storage.updateMovementStatus(
           movementId,
           "failed",
