@@ -1846,7 +1846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as AuthenticatedRequest).user;
       const { storeId, integrationId } = req.params;
-      const { dryRun = false, limit = 1000 } = req.body;
+      const { dryRun = false, limit } = req.body; // Sin límite por defecto
 
       if (!user.tenantId) {
         return res.status(401).json({ message: "No autorizado: Sin tenant asociado al usuario" });
