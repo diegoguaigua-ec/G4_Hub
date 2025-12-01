@@ -220,10 +220,15 @@ export default function OverviewSection() {
 
       const data = await res.json();
 
-      // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ["/api/sync/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sync/logs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stores"] });
+      // Invalidate and refetch queries to refresh data immediately
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["/api/sync/stats"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/sync/logs"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/stores"] }),
+      ]);
+
+      // Force refetch stores to ensure UI updates
+      await queryClient.refetchQueries({ queryKey: ["/api/stores"] });
 
       toast({
         title: "Sincronización completada",
@@ -233,10 +238,15 @@ export default function OverviewSection() {
       setSyncDialogOpen(false);
       setSelectedStoreId("");
     } catch (error: any) {
+      // Better error message for lock conflicts
+      const isLockConflict = error.message?.includes('lock') || error.message?.includes('en progreso');
+
       toast({
-        title: "Error al sincronizar",
-        description: error.message,
-        variant: "destructive",
+        title: isLockConflict ? "Sincronización en progreso" : "Error al sincronizar",
+        description: isLockConflict
+          ? "Ya hay una sincronización en curso. Por favor espera a que termine e intenta nuevamente."
+          : error.message,
+        variant: isLockConflict ? "default" : "destructive",
       });
     } finally {
       setIsSyncing(false);
