@@ -88,12 +88,29 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
             </div>
           ) : movement ? (
             <div className="space-y-6">
+              {/* Pedido destacado si existe */}
+              {(movement.metadata?.originalEvent?.shopifyOrderName || movement.metadata?.originalEvent?.wooOrderNumber) && (
+                <div className="rounded-lg bg-primary/5 border-2 border-primary/20 p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Pedido:</span>
+                    <span className="text-xl font-bold text-primary">
+                      {movement.metadata.originalEvent.shopifyOrderName || movement.metadata.originalEvent.wooOrderNumber}
+                    </span>
+                  </div>
+                  {movement.metadata.originalEvent.customerEmail && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Cliente: {movement.metadata.originalEvent.customerEmail}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Información General */}
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Información General</h3>
                 <div className="grid grid-cols-2 gap-4 text-sm rounded-md border p-4">
                   <div><span className="text-muted-foreground">Tipo:</span> <Badge variant={movement.movementType === 'egreso' ? 'destructive' : 'default'}>{movement.movementType === 'egreso' ? 'Egreso' : 'Ingreso'}</Badge></div>
-                  <div><span className="text-muted-foreground">Orden:</span> <span className="font-medium">#{movement.orderId || movement.id}</span></div>
+                  <div><span className="text-muted-foreground">Orden ID:</span> <span className="font-medium">#{movement.orderId || movement.id}</span></div>
                   <div><span className="text-muted-foreground">Evento:</span> {movement.eventType}</div>
                   <div><span className="text-muted-foreground">SKU:</span> <span className="font-mono">{movement.sku}</span></div>
                   <div><span className="text-muted-foreground">Cantidad:</span> {movement.quantity}</div>

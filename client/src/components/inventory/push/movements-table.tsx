@@ -98,7 +98,8 @@ export function MovementsTable({
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha/Hora</TableHead>
-                <TableHead>Orden</TableHead>
+                <TableHead>Pedido</TableHead>
+                <TableHead>Orden ID</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead>Estado</TableHead>
@@ -110,6 +111,7 @@ export function MovementsTable({
               {[...Array(5)].map((_, i) => (
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-8" /></TableCell>
@@ -150,7 +152,8 @@ export function MovementsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Fecha/Hora</TableHead>
-              <TableHead>Orden</TableHead>
+              <TableHead>Pedido</TableHead>
+              <TableHead>Orden ID</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Items</TableHead>
               <TableHead>Estado</TableHead>
@@ -162,6 +165,10 @@ export function MovementsTable({
             {movements.map((movement) => {
               const statusInfo = getStatusInfo(movement.status);
               const StatusIcon = statusInfo.icon;
+
+              // Extract shopifyOrderName from metadata
+              const shopifyOrderName = movement.metadata?.originalEvent?.shopifyOrderName ||
+                                       movement.metadata?.originalEvent?.wooOrderNumber;
 
               return (
                 <TableRow key={movement.id}>
@@ -180,6 +187,13 @@ export function MovementsTable({
                     </TooltipProvider>
                   </TableCell>
                   <TableCell className="font-medium">
+                    {shopifyOrderName ? (
+                      <span className="text-primary">{shopifyOrderName}</span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
                     #{movement.orderId || movement.id}
                   </TableCell>
                   <TableCell>
@@ -246,11 +260,20 @@ export function MovementsTable({
           const statusInfo = getStatusInfo(movement.status);
           const StatusIcon = statusInfo.icon;
 
+          // Extract shopifyOrderName from metadata
+          const shopifyOrderName = movement.metadata?.originalEvent?.shopifyOrderName ||
+                                   movement.metadata?.originalEvent?.wooOrderNumber;
+
           return (
             <div key={movement.id} className="border rounded-lg p-4 space-y-3">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-sm font-medium">#{movement.orderId || movement.id}</p>
+                  {shopifyOrderName && (
+                    <p className="text-sm font-semibold text-primary">{shopifyOrderName}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    ID: #{movement.orderId || movement.id}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatTableDate(movement.createdAt)}
                   </p>

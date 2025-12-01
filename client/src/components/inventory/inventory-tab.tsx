@@ -146,7 +146,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
           },
           body: JSON.stringify({
             dryRun: false,
-            limit: 1000,
+            // Sin límite - sincronizar TODOS los productos
           }),
         }
       );
