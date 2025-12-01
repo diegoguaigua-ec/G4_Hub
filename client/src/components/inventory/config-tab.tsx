@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Settings, Clock, Database, TrendingUp, Loader2, Info } from "lucide-react";
+import { Settings, Clock, Database, Loader2, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ConfigTabProps {
@@ -36,12 +36,6 @@ interface StoreIntegration {
   isActive: boolean;
 }
 
-interface SyncStats {
-  lastSyncAt: string | null;
-  totalProducts: number;
-  successRate: number;
-}
-
 const SYNC_INTERVALS = [
   { value: "5min", label: "Cada 5 minutos", syncsPerMonth: "~8,640 syncs/mes" },
   { value: "30min", label: "Cada 30 minutos", syncsPerMonth: "~1,440 syncs/mes" },
@@ -56,18 +50,6 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
   const [autoSync, setAutoSync] = useState(false);
   const [interval, setInterval] = useState<'5min' | '30min' | 'hourly' | 'daily' | 'weekly'>("daily");
   const [warehouse, setWarehouse] = useState("");
-  const [, setCurrentTime] = useState(new Date());
-
-  // Update current time every minute to refresh next sync calculation
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-      // Also refresh stats to get updated lastSyncAt
-      queryClient.invalidateQueries({ queryKey: [`/api/stores/${storeId}/sync-stats`] });
-    }, 60000); // Update every minute
-
-    return () => clearInterval(timer);
-  }, [storeId, queryClient]);
 
   // Fetch store integrations (Contífico)
   const { data: integrations = [], isLoading: integrationsLoading } = useQuery<StoreIntegration[]>({
@@ -114,18 +96,6 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
   });
 
   const warehouses = warehousesData?.warehouses || [];
-
-  // Fetch sync stats
-  const { data: stats } = useQuery<SyncStats>({
-    queryKey: [`/api/stores/${storeId}/sync-stats`],
-    queryFn: async () => {
-      const res = await fetch(`/api/stores/${storeId}/sync-stats`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Error al cargar estadísticas");
-      return res.json();
-    },
-  });
 
   // Update configuration mutation
   const updateConfigMutation = useMutation({
@@ -175,47 +145,6 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
         warehouse,
       },
     });
-  };
-
-  const calculateNextSync = () => {
-    if (!autoSync || !stats?.lastSyncAt) return "N/A";
-    const lastSync = new Date(stats.lastSyncAt);
-
-    // Calculate interval in minutes
-    let intervalMinutes = 60; // default hourly
-    if (interval === '5min') intervalMinutes = 5;
-    if (interval === '30min') intervalMinutes = 30;
-    if (interval === 'hourly') intervalMinutes = 60;
-    if (interval === 'daily') intervalMinutes = 1440;
-    if (interval === 'weekly') intervalMinutes = 10080;
-
-    const nextSync = new Date(lastSync.getTime() + intervalMinutes * 60 * 1000);
-
-    const now = new Date();
-    const diff = nextSync.getTime() - now.getTime();
-    const hoursLeft = Math.floor(diff / (60 * 60 * 1000));
-    const minutesLeft = Math.floor((diff % (60 * 60 * 1000)) / (60 * 1000));
-
-    if (diff < 0) return "Ahora";
-    if (hoursLeft < 1) return `En ${minutesLeft} min`;
-    if (hoursLeft < 24) return `En ${hoursLeft}h ${minutesLeft}min`;
-    const daysLeft = Math.floor(hoursLeft / 24);
-    return `En ${daysLeft} día${daysLeft > 1 ? 's' : ''}`;
-  };
-
-  const formatLastSync = (dateString: string | null) => {
-    if (!dateString) return "Nunca";
-    const date = new Date(dateString);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / (60 * 1000));
-
-    if (minutes < 1) return "Hace un momento";
-    if (minutes < 60) return `Hace ${minutes} minutos`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `Hace ${hours} horas`;
-    const days = Math.floor(hours / 24);
-    return `Hace ${days} días`;
   };
 
   if (integrationsLoading) {
@@ -314,13 +243,6 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
                   </SelectContent>
                 </Select>
               </div>
-
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertDescription>
-                  Próxima sincronización: {calculateNextSync()}
-                </AlertDescription>
-              </Alert>
             </>
           )}
         </CardContent>
@@ -369,38 +291,6 @@ export function ConfigTab({ storeId }: ConfigTabProps) {
             <p className="text-sm text-muted-foreground">
               Los stocks se sincronizarán desde esta bodega
             </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Statistics */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            Estadísticas
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Última sincronización</p>
-              <p className="text-lg font-semibold text-foreground">
-                {formatLastSync(stats?.lastSyncAt || null)}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Productos sincronizados</p>
-              <p className="text-lg font-semibold text-foreground">
-                {stats?.totalProducts || 0}
-              </p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Tasa de éxito</p>
-              <p className="text-lg font-semibold text-foreground">
-                {stats?.successRate || 0}%
-              </p>
-            </div>
           </div>
         </CardContent>
       </Card>
