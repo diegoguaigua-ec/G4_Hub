@@ -6,19 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, CheckCircle, Clock, Zap, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDetailDate } from "@/lib/dateFormatters";
-import { useRetryMovement } from "@/hooks/use-retry-movement";
 import type { Movement } from "@/hooks/use-movements";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useState } from "react";
 
 interface MovementDetailModalProps {
   storeId: number | null;
@@ -28,8 +16,6 @@ interface MovementDetailModalProps {
 }
 
 export function MovementDetailModal({ storeId, movementId, open, onOpenChange }: MovementDetailModalProps) {
-  const [showRetryDialog, setShowRetryDialog] = useState(false);
-  const retryMutation = useRetryMovement(storeId);
 
   const { data, isLoading } = useQuery<{ movement: Movement }>({
     queryKey: ['movement-detail', storeId, movementId],
@@ -45,13 +31,6 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
   });
 
   const movement = data?.movement;
-
-  const handleRetry = async () => {
-    if (!movementId) return;
-    await retryMutation.mutateAsync(movementId);
-    setShowRetryDialog(false);
-    onOpenChange(false);
-  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -162,29 +141,9 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
 
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
-            {movement?.status === 'failed' && (
-              <Button onClick={() => setShowRetryDialog(true)} disabled={retryMutation.isPending}>
-                {retryMutation.isPending ? 'Reintentando...' : 'Reintentar'}
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={showRetryDialog} onOpenChange={setShowRetryDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Reintentar movimiento?</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que deseas reintentar este movimiento? Se enviará nuevamente a la cola de procesamiento.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRetry}>Reintentar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

@@ -226,26 +226,14 @@ export function MovementsTable({
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onViewDetails(movement)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Ver
-                      </Button>
-                      {movement.status === 'failed' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onRetry(movement.id)}
-                        >
-                          <RotateCw className="h-4 w-4 mr-1" />
-                          Reintentar
-                        </Button>
-                      )}
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onViewDetails(movement)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Ver
+                    </Button>
                   </TableCell>
                 </TableRow>
               );
@@ -309,23 +297,12 @@ export function MovementsTable({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1"
+                  className="w-full"
                   onClick={() => onViewDetails(movement)}
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   Ver
                 </Button>
-                {movement.status === 'failed' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => onRetry(movement.id)}
-                  >
-                    <RotateCw className="h-4 w-4 mr-1" />
-                    Reintentar
-                  </Button>
-                )}
               </div>
             </div>
           );
