@@ -208,7 +208,7 @@ export default function OverviewSection() {
           },
           body: JSON.stringify({
             dryRun: false,
-            limit: 1000,
+            // Sin límite - sincronizar TODOS los productos
           }),
         }
       );
