@@ -260,14 +260,10 @@ export class InventoryPushService {
         );
 
         if (!hasStock) {
+          // Lanzar error para que el catch maneje los reintentos correctamente
           const errorMsg = `Stock insuficiente en Contífico para SKU ${movement.sku} (requerido: ${movement.quantity})`;
           console.warn(`[InventoryPush] ⚠️ ${errorMsg}`);
-          await storage.updateMovementStatus(
-            movementId,
-            "failed",
-            errorMsg,
-          );
-          return false;
+          throw new Error(errorMsg);
         }
       }
 
