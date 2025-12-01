@@ -186,9 +186,9 @@ export function MovementsTable({
                       </Tooltip>
                     </TooltipProvider>
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-semibold text-foreground">
                     {shopifyOrderName ? (
-                      <span className="text-primary">{shopifyOrderName}</span>
+                      <span>{shopifyOrderName}</span>
                     ) : (
                       <span className="text-muted-foreground text-sm">—</span>
                     )}
@@ -269,7 +269,7 @@ export function MovementsTable({
               <div className="flex justify-between items-start">
                 <div>
                   {shopifyOrderName && (
-                    <p className="text-sm font-semibold text-primary">{shopifyOrderName}</p>
+                    <p className="text-sm font-semibold text-foreground">{shopifyOrderName}</p>
                   )}
                   <p className="text-xs text-muted-foreground">
                     ID: #{movement.orderId || movement.id}

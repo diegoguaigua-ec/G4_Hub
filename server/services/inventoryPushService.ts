@@ -272,6 +272,12 @@ export class InventoryPushService {
       }
 
       // Enviar el movimiento a Contífico
+      // Extraer el nombre del pedido desde metadata si está disponible
+      const metadata = movement.metadata as any;
+      const orderName = metadata?.originalEvent?.shopifyOrderName ||
+                        metadata?.originalEvent?.wooOrderNumber ||
+                        `#${movement.orderId}`;
+
       let response;
       if (movement.movementType === "egreso") {
         response = await contificoAPI.sendEgreso(
@@ -279,7 +285,7 @@ export class InventoryPushService {
           movement.sku,
           movement.quantity,
           movement.orderId || undefined,
-          `Orden ${movement.orderId} - ${movement.eventType}`,
+          `Pedido ${orderName} - ${movement.eventType}`,
         );
       } else {
         response = await contificoAPI.sendIngreso(
@@ -287,7 +293,7 @@ export class InventoryPushService {
           movement.sku,
           movement.quantity,
           movement.orderId || undefined,
-          `Orden ${movement.orderId} - ${movement.eventType}`,
+          `Pedido ${orderName} - ${movement.eventType}`,
         );
       }
 

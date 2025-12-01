@@ -90,10 +90,10 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
             <div className="space-y-6">
               {/* Pedido destacado si existe */}
               {(movement.metadata?.originalEvent?.shopifyOrderName || movement.metadata?.originalEvent?.wooOrderNumber) && (
-                <div className="rounded-lg bg-primary/5 border-2 border-primary/20 p-4">
+                <div className="rounded-lg bg-muted/50 border-2 border-border p-4">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-muted-foreground">Pedido:</span>
-                    <span className="text-xl font-bold text-primary">
+                    <span className="text-xl font-bold text-foreground">
                       {movement.metadata.originalEvent.shopifyOrderName || movement.metadata.originalEvent.wooOrderNumber}
                     </span>
                   </div>
