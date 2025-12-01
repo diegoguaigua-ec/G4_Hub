@@ -485,10 +485,14 @@ export class SyncService {
           console.log(`[Sync] ✅ Guardados ${itemsWithLogId.length} items en sync_log_items`);
         }
 
-        // Actualizar última sincronización
-        await storage.updateStore(storeId, {
-          lastSyncAt: new Date()
-        });
+        // Actualizar última sincronización y contador de productos
+        const currentProducts = await storage.getProductsByStore(storeId);
+        await storage.updateStoreSyncStatus(
+          storeId,
+          currentProducts.length,
+          new Date()
+        );
+        console.log(`[Sync] ✅ Store actualizada: ${currentProducts.length} productos, lastSyncAt=${new Date().toISOString()}`);
 
         // Crear notificación para sincronización manual exitosa
         if (results.success > 0 || results.failed === 0) {
@@ -1003,9 +1007,14 @@ export class SyncService {
           }
         }
 
-        await storage.updateStore(storeId, {
-          lastSyncAt: new Date()
-        });
+        // Actualizar última sincronización y contador de productos
+        const currentProducts = await storage.getProductsByStore(storeId);
+        await storage.updateStoreSyncStatus(
+          storeId,
+          currentProducts.length,
+          new Date()
+        );
+        console.log(`[Sync] ✅ Store actualizada: ${currentProducts.length} productos, lastSyncAt=${new Date().toISOString()}`);
 
         // Crear notificación para sincronización selectiva manual exitosa
         if (results.success > 0 || results.failed === 0) {

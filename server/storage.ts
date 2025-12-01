@@ -1027,6 +1027,8 @@ export class DatabaseStorage implements IStorage {
             eq(inventoryMovementsQueue.status, "processing"),
           ),
           sql`${inventoryMovementsQueue.nextAttemptAt} IS NULL OR ${inventoryMovementsQueue.nextAttemptAt} <= NOW()`,
+          // CRÍTICO: Solo procesar movimientos que NO han alcanzado el máximo de intentos
+          sql`${inventoryMovementsQueue.attempts} < ${inventoryMovementsQueue.maxAttempts}`,
         ),
       )
       .orderBy(inventoryMovementsQueue.createdAt)

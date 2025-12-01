@@ -98,7 +98,8 @@ export function MovementsTable({
             <TableHeader>
               <TableRow>
                 <TableHead>Fecha/Hora</TableHead>
-                <TableHead>Orden</TableHead>
+                <TableHead>Pedido</TableHead>
+                <TableHead>Orden ID</TableHead>
                 <TableHead>Tipo</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead>Estado</TableHead>
@@ -110,6 +111,7 @@ export function MovementsTable({
               {[...Array(5)].map((_, i) => (
                 <TableRow key={i}>
                   <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-16" /></TableCell>
                   <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                   <TableCell><Skeleton className="h-4 w-8" /></TableCell>
@@ -150,7 +152,8 @@ export function MovementsTable({
           <TableHeader>
             <TableRow>
               <TableHead>Fecha/Hora</TableHead>
-              <TableHead>Orden</TableHead>
+              <TableHead>Pedido</TableHead>
+              <TableHead>Orden ID</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead>Items</TableHead>
               <TableHead>Estado</TableHead>
@@ -162,6 +165,10 @@ export function MovementsTable({
             {movements.map((movement) => {
               const statusInfo = getStatusInfo(movement.status);
               const StatusIcon = statusInfo.icon;
+
+              // Extract shopifyOrderName from metadata
+              const shopifyOrderName = movement.metadata?.originalEvent?.shopifyOrderName ||
+                                       movement.metadata?.originalEvent?.wooOrderNumber;
 
               return (
                 <TableRow key={movement.id}>
@@ -179,7 +186,14 @@ export function MovementsTable({
                       </Tooltip>
                     </TooltipProvider>
                   </TableCell>
-                  <TableCell className="font-medium">
+                  <TableCell className="font-semibold text-foreground">
+                    {shopifyOrderName ? (
+                      <span>{shopifyOrderName}</span>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
                     #{movement.orderId || movement.id}
                   </TableCell>
                   <TableCell>
@@ -212,26 +226,14 @@ export function MovementsTable({
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onViewDetails(movement)}
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        Ver
-                      </Button>
-                      {movement.status === 'failed' && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => onRetry(movement.id)}
-                        >
-                          <RotateCw className="h-4 w-4 mr-1" />
-                          Reintentar
-                        </Button>
-                      )}
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onViewDetails(movement)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      Ver
+                    </Button>
                   </TableCell>
                 </TableRow>
               );
@@ -246,11 +248,20 @@ export function MovementsTable({
           const statusInfo = getStatusInfo(movement.status);
           const StatusIcon = statusInfo.icon;
 
+          // Extract shopifyOrderName from metadata
+          const shopifyOrderName = movement.metadata?.originalEvent?.shopifyOrderName ||
+                                   movement.metadata?.originalEvent?.wooOrderNumber;
+
           return (
             <div key={movement.id} className="border rounded-lg p-4 space-y-3">
               <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-sm font-medium">#{movement.orderId || movement.id}</p>
+                  {shopifyOrderName && (
+                    <p className="text-sm font-semibold text-foreground">{shopifyOrderName}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    ID: #{movement.orderId || movement.id}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     {formatTableDate(movement.createdAt)}
                   </p>
@@ -286,23 +297,12 @@ export function MovementsTable({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1"
+                  className="w-full"
                   onClick={() => onViewDetails(movement)}
                 >
                   <Eye className="h-4 w-4 mr-1" />
                   Ver
                 </Button>
-                {movement.status === 'failed' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => onRetry(movement.id)}
-                  >
-                    <RotateCw className="h-4 w-4 mr-1" />
-                    Reintentar
-                  </Button>
-                )}
               </div>
             </div>
           );

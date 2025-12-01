@@ -6,19 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, CheckCircle, Clock, Zap, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { formatDetailDate } from "@/lib/dateFormatters";
-import { useRetryMovement } from "@/hooks/use-retry-movement";
 import type { Movement } from "@/hooks/use-movements";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { useState } from "react";
 
 interface MovementDetailModalProps {
   storeId: number | null;
@@ -28,8 +16,6 @@ interface MovementDetailModalProps {
 }
 
 export function MovementDetailModal({ storeId, movementId, open, onOpenChange }: MovementDetailModalProps) {
-  const [showRetryDialog, setShowRetryDialog] = useState(false);
-  const retryMutation = useRetryMovement(storeId);
 
   const { data, isLoading } = useQuery<{ movement: Movement }>({
     queryKey: ['movement-detail', storeId, movementId],
@@ -45,13 +31,6 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
   });
 
   const movement = data?.movement;
-
-  const handleRetry = async () => {
-    if (!movementId) return;
-    await retryMutation.mutateAsync(movementId);
-    setShowRetryDialog(false);
-    onOpenChange(false);
-  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -88,12 +67,29 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
             </div>
           ) : movement ? (
             <div className="space-y-6">
+              {/* Pedido destacado si existe */}
+              {(movement.metadata?.originalEvent?.shopifyOrderName || movement.metadata?.originalEvent?.wooOrderNumber) && (
+                <div className="rounded-lg bg-muted/50 border-2 border-border p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Pedido:</span>
+                    <span className="text-xl font-bold text-foreground">
+                      {movement.metadata.originalEvent.shopifyOrderName || movement.metadata.originalEvent.wooOrderNumber}
+                    </span>
+                  </div>
+                  {movement.metadata.originalEvent.customerEmail && (
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Cliente: {movement.metadata.originalEvent.customerEmail}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Información General */}
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Información General</h3>
                 <div className="grid grid-cols-2 gap-4 text-sm rounded-md border p-4">
                   <div><span className="text-muted-foreground">Tipo:</span> <Badge variant={movement.movementType === 'egreso' ? 'destructive' : 'default'}>{movement.movementType === 'egreso' ? 'Egreso' : 'Ingreso'}</Badge></div>
-                  <div><span className="text-muted-foreground">Orden:</span> <span className="font-medium">#{movement.orderId || movement.id}</span></div>
+                  <div><span className="text-muted-foreground">Orden ID:</span> <span className="font-medium">#{movement.orderId || movement.id}</span></div>
                   <div><span className="text-muted-foreground">Evento:</span> {movement.eventType}</div>
                   <div><span className="text-muted-foreground">SKU:</span> <span className="font-mono">{movement.sku}</span></div>
                   <div><span className="text-muted-foreground">Cantidad:</span> {movement.quantity}</div>
@@ -145,29 +141,9 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
 
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cerrar</Button>
-            {movement?.status === 'failed' && (
-              <Button onClick={() => setShowRetryDialog(true)} disabled={retryMutation.isPending}>
-                {retryMutation.isPending ? 'Reintentando...' : 'Reintentar'}
-              </Button>
-            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <AlertDialog open={showRetryDialog} onOpenChange={setShowRetryDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Reintentar movimiento?</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que deseas reintentar este movimiento? Se enviará nuevamente a la cola de procesamiento.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRetry}>Reintentar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }

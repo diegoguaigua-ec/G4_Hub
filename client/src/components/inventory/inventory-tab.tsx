@@ -146,7 +146,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
           },
           body: JSON.stringify({
             dryRun: false,
-            limit: 1000,
+            // Sin límite - sincronizar TODOS los productos
           }),
         }
       );
@@ -158,10 +158,18 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
 
       return res.json();
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: [`/api/stores/${storeId}/products/sync-status`],
-      });
+    onSuccess: async (data) => {
+      // Invalidate and refetch to update product counts
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [`/api/stores/${storeId}/products/sync-status`],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["/api/stores"] }),
+      ]);
+
+      // Force refetch stores to ensure UI updates
+      await queryClient.refetchQueries({ queryKey: ["/api/stores"] });
+
       toast({
         title: "Sincronización completada",
         description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
@@ -170,10 +178,15 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
       refetch(); // Refresh the product list
     },
     onError: (error: Error) => {
+      // Better error message for lock conflicts
+      const isLockConflict = error.message?.includes('lock') || error.message?.includes('en progreso');
+
       toast({
-        title: "Error al sincronizar",
-        description: error.message,
-        variant: "destructive",
+        title: isLockConflict ? "Sincronización en progreso" : "Error al sincronizar",
+        description: isLockConflict
+          ? "Ya hay una sincronización en curso. Por favor espera a que termine e intenta nuevamente."
+          : error.message,
+        variant: isLockConflict ? "default" : "destructive",
       });
     },
   });
@@ -207,10 +220,18 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
 
       return res.json();
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: [`/api/stores/${storeId}/products/sync-status`],
-      });
+    onSuccess: async (data) => {
+      // Invalidate and refetch to update product counts
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: [`/api/stores/${storeId}/products/sync-status`],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["/api/stores"] }),
+      ]);
+
+      // Force refetch stores to ensure UI updates
+      await queryClient.refetchQueries({ queryKey: ["/api/stores"] });
+
       toast({
         title: "Sincronización selectiva completada",
         description: `${data.result.success} productos actualizados, ${data.result.skipped} omitidos, ${data.result.failed} fallidos`,
@@ -219,10 +240,15 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
       refetch(); // Refresh the product list
     },
     onError: (error: Error) => {
+      // Better error message for lock conflicts
+      const isLockConflict = error.message?.includes('lock') || error.message?.includes('en progreso');
+
       toast({
-        title: "Error al sincronizar",
-        description: error.message,
-        variant: "destructive",
+        title: isLockConflict ? "Sincronización en progreso" : "Error al sincronizar",
+        description: isLockConflict
+          ? "Ya hay una sincronización en curso. Por favor espera a que termine e intenta nuevamente."
+          : error.message,
+        variant: isLockConflict ? "default" : "destructive",
       });
     },
   });

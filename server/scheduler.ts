@@ -145,7 +145,7 @@ export class Scheduler {
         const result = await SyncService.pullFromIntegration(
           store.id,
           integration.id,
-          { dryRun: false, limit: 1000 }
+          { dryRun: false } // Sin límite - sincronizar TODOS los productos
         );
 
         console.log(`[Scheduler] ✅ Sincronización completada para store ${store.id}`);

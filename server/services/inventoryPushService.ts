@@ -260,18 +260,20 @@ export class InventoryPushService {
         );
 
         if (!hasStock) {
+          // Lanzar error para que el catch maneje los reintentos correctamente
           const errorMsg = `Stock insuficiente en Contífico para SKU ${movement.sku} (requerido: ${movement.quantity})`;
           console.warn(`[InventoryPush] ⚠️ ${errorMsg}`);
-          await storage.updateMovementStatus(
-            movementId,
-            "failed",
-            errorMsg,
-          );
-          return false;
+          throw new Error(errorMsg);
         }
       }
 
       // Enviar el movimiento a Contífico
+      // Extraer el nombre del pedido desde metadata si está disponible
+      const metadata = movement.metadata as any;
+      const orderName = metadata?.originalEvent?.shopifyOrderName ||
+                        metadata?.originalEvent?.wooOrderNumber ||
+                        `#${movement.orderId}`;
+
       let response;
       if (movement.movementType === "egreso") {
         response = await contificoAPI.sendEgreso(
@@ -279,7 +281,7 @@ export class InventoryPushService {
           movement.sku,
           movement.quantity,
           movement.orderId || undefined,
-          `Orden ${movement.orderId} - ${movement.eventType}`,
+          `Pedido ${orderName} - ${movement.eventType}`,
         );
       } else {
         response = await contificoAPI.sendIngreso(
@@ -287,7 +289,7 @@ export class InventoryPushService {
           movement.sku,
           movement.quantity,
           movement.orderId || undefined,
-          `Orden ${movement.orderId} - ${movement.eventType}`,
+          `Pedido ${orderName} - ${movement.eventType}`,
         );
       }
 
@@ -409,7 +411,7 @@ export class InventoryPushService {
       const newAttempts = movement.attempts + 1;
 
       // Si alcanzó el máximo de intentos, marcar como fallido
-      if (newAttempts > movement.maxAttempts) {
+      if (newAttempts >= movement.maxAttempts) {
         await storage.updateMovementStatus(
           movementId,
           "failed",
