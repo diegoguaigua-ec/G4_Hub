@@ -107,7 +107,7 @@ function extractWooCommerceLineItems(payload: any): {
 /**
  * Webhook endpoint para Shopify
  * Eventos soportados:
- * - orders/paid: Orden pagada (egreso)
+ * - orders/create: Orden creada (egreso)
  * - orders/cancelled: Orden cancelada (ingreso)
  * - refunds/create: Reembolso creado (ingreso)
  */
@@ -126,16 +126,16 @@ router.post("/shopify/:storeId", async (req: Request, res: Response) => {
     // Validar que sea un evento soportado
     // Eventos soportados para procesamiento de inventario
     // NOTA: inventory_levels/update NO se soporta intencionalmente para evitar duplicados
-    // - Las órdenes actualizan el inventario vía orders/paid (para egresos) y orders/cancelled (para ingresos)
+    // - Las órdenes actualizan el inventario vía orders/create (para egresos) y orders/cancelled (para ingresos)
     // - inventory_levels/update podría causar doble conteo si se procesa junto con eventos de órdenes
     // - Para soportar en el futuro: implementar sistema de deltas con snapshots de stock por ubicación
-    const supportedEvents = ["orders/paid", "orders/cancelled", "refunds/create"];
-    const ignoredEvents = ["orders/create", "orders/updated"]; // Ignorados para evitar duplicados
+    const supportedEvents = ["orders/create", "orders/cancelled", "refunds/create"];
+    const ignoredEvents = ["orders/paid", "orders/updated"]; // Ignorados para evitar duplicados
 
     if (!supportedEvents.includes(topic)) {
       // Logging estructurado para eventos no soportados (telemetría)
       if (ignoredEvents.includes(topic)) {
-        console.log(`[Webhook][Shopify] ℹ️ ${topic} recibido pero ignorado (solo orders/paid genera egresos para evitar duplicados)`);
+        console.log(`[Webhook][Shopify] ℹ️ ${topic} recibido pero ignorado (solo orders/create genera egresos para evitar duplicados)`);
       } else if (topic === "inventory_levels/update") {
         console.log(`[Webhook][Shopify] ℹ️ inventory_levels/update recibido pero ignorado (evita duplicados con orders/*)`);
       } else {
@@ -386,7 +386,7 @@ router.get("/health", (req: Request, res: Response) => {
 router.post("/shopify/:storeId/test", async (req: Request, res: Response) => {
   try {
     const { storeId } = req.params;
-    const topic = "orders/paid"; // Siempre simula orden pagada
+    const topic = "orders/create"; // Siempre simula orden creada
 
     console.log(`[Webhook][Test] 🧪 Prueba de webhook para tienda ${storeId}`);
 

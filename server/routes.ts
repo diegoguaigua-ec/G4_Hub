@@ -2851,6 +2851,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Cleanup stuck movements (admin endpoint)
+  protectedRouter.post("/stores/:storeId/inventory-push/cleanup-stuck", async (req, res) => {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = (req as AuthenticatedRequest).user;
+      const { storeId } = req.params;
+      const { dryRun = true, daysOld = 7 } = req.body;
+
+      const store = await storage.getStore(parseInt(storeId));
+      if (!store || store.tenantId !== user.tenantId) {
+        return res.status(404).json({ message: "Store not found" });
+      }
+
+      console.log(`[API] Cleanup stuck movements for store ${storeId} (dry run: ${dryRun})`);
+
+      const stats = {
+        duplicates: 0,
+        stuckPending: 0,
+        insufficientStock: 0,
+        total: 0,
+      };
+
+      // 1. Find and handle duplicates
+      const allMovements = await storage.getMovementsByStore(parseInt(storeId), 10000);
+      const movementGroups = new Map<string, typeof allMovements>();
+
+      for (const movement of allMovements) {
+        const key = `${movement.orderId}-${movement.sku}-${movement.movementType}`;
+        if (!movementGroups.has(key)) {
+          movementGroups.set(key, []);
+        }
+        movementGroups.get(key)!.push(movement);
+      }
+
+      for (const [key, movements] of movementGroups) {
+        if (movements.length > 1) {
+          // Keep the oldest one (first created), delete the rest
+          const sorted = movements.sort((a, b) =>
+            new Date(a.createdAt!).getTime() - new Date(b.createdAt!).getTime()
+          );
+          const [_first, ...duplicates] = sorted;
+
+          console.log(`   Duplicate found: ${key} (${movements.length} movements)`);
+
+          if (!dryRun) {
+            for (const dup of duplicates) {
+              await storage.updateMovementStatus(dup.id, "failed", "Movimiento duplicado - eliminado por limpieza automática");
+              stats.duplicates++;
+            }
+          } else {
+            stats.duplicates += duplicates.length;
+          }
+        }
+      }
+
+      // 2. Find stuck movements (2-3 attempts, old)
+      const cutoffDate = new Date();
+      cutoffDate.setDate(cutoffDate.getDate() - daysOld);
+
+      const stuckMovements = allMovements.filter(m =>
+        (m.status === "pending" || m.status === "processing") &&
+        m.attempts >= 2 &&
+        new Date(m.createdAt!) < cutoffDate
+      );
+
+      console.log(`   Found ${stuckMovements.length} stuck movements`);
+
+      if (!dryRun) {
+        for (const movement of stuckMovements) {
+          await storage.updateMovementStatus(
+            movement.id,
+            "failed",
+            movement.errorMessage || `Movimiento atascado - marcado como fallido después de ${daysOld} días`
+          );
+          stats.stuckPending++;
+        }
+      } else {
+        stats.stuckPending = stuckMovements.length;
+      }
+
+      // 3. Find movements with insufficient stock error
+      const insufficientStockMovements = allMovements.filter(m =>
+        (m.status === "pending" || m.status === "processing") &&
+        m.errorMessage?.includes("Stock insuficiente")
+      );
+
+      console.log(`   Found ${insufficientStockMovements.length} movements with insufficient stock`);
+
+      if (!dryRun) {
+        for (const movement of insufficientStockMovements) {
+          await storage.updateMovementStatus(movement.id, "failed");
+          stats.insufficientStock++;
+        }
+      } else {
+        stats.insufficientStock = insufficientStockMovements.length;
+      }
+
+      stats.total = stats.duplicates + stats.stuckPending + stats.insufficientStock;
+
+      res.json({
+        success: true,
+        dryRun,
+        stats,
+        message: dryRun
+          ? `Dry run: ${stats.total} movimientos serían procesados`
+          : `${stats.total} movimientos procesados exitosamente`
+      });
+    } catch (error: any) {
+      console.error("Error cleaning up stuck movements:", error);
+      res.status(500).json({ message: "Failed to cleanup stuck movements", error: error.message });
+    }
+  });
+
   // Get unmapped SKUs
   protectedRouter.get("/stores/:storeId/unmapped-skus", async (req, res) => {
     if (!req.isAuthenticated()) {

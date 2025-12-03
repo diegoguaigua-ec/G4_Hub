@@ -135,6 +135,12 @@ export interface IStorage {
   getMovementById(id: number): Promise<InventoryMovement | undefined>;
   getPendingMovements(limit?: number): Promise<InventoryMovement[]>;
   getMovementsByStore(storeId: number, limit?: number): Promise<InventoryMovement[]>;
+  findDuplicateMovement(
+    storeId: number,
+    orderId: string,
+    sku: string,
+    movementType: string,
+  ): Promise<InventoryMovement | undefined>;
   updateMovementStatus(
     id: number,
     status: string,
@@ -1045,6 +1051,27 @@ export class DatabaseStorage implements IStorage {
       .where(eq(inventoryMovementsQueue.storeId, storeId))
       .orderBy(desc(inventoryMovementsQueue.createdAt))
       .limit(limit);
+  }
+
+  async findDuplicateMovement(
+    storeId: number,
+    orderId: string,
+    sku: string,
+    movementType: string,
+  ): Promise<InventoryMovement | undefined> {
+    const [movement] = await db
+      .select()
+      .from(inventoryMovementsQueue)
+      .where(
+        and(
+          eq(inventoryMovementsQueue.storeId, storeId),
+          eq(inventoryMovementsQueue.orderId, orderId),
+          eq(inventoryMovementsQueue.sku, sku),
+          eq(inventoryMovementsQueue.movementType, movementType),
+        ),
+      )
+      .limit(1);
+    return movement;
   }
 
   async updateMovementStatus(

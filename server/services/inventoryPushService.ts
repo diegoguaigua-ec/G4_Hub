@@ -30,18 +30,18 @@ export class InventoryPushService {
    * @param eventType - Tipo de evento del webhook
    * @returns Tipo de movimiento ('egreso' o 'ingreso')
    *
-   * IMPORTANTE: Solo orders/paid genera egresos para evitar duplicados.
-   * - orders/create y orders/updated ya NO generan egresos automáticamente
+   * IMPORTANTE: Solo orders/create genera egresos para evitar duplicados.
+   * - orders/paid y orders/updated se ignoran en el webhook handler
    * - Esto previene egresos duplicados cuando Shopify envía múltiples webhooks
    */
   private static determineMovementType(
     eventType: string,
   ): "egreso" | "ingreso" {
-    // Solo órdenes PAGADAS generan egresos (salidas de inventario)
-    // Esto evita duplicados de orders/create y orders/updated
+    // Solo órdenes CREADAS generan egresos (salidas de inventario)
+    // Esto evita duplicados de orders/paid y orders/updated
     if (
-      eventType === "order_paid" ||
-      eventType === "orders/paid" ||
+      eventType === "order_create" ||
+      eventType === "orders/create" ||
       eventType === "order.completed" // WooCommerce
     ) {
       return "egreso";
@@ -89,19 +89,19 @@ export class InventoryPushService {
         }
 
         // Verificar idempotencia: evitar duplicados del mismo orderId+SKU+movementType
-        // Solo procesamos si NO existe ya un movimiento de egreso para la misma orden+SKU
-        // (independientemente si vino de orders/create, orders/paid u orders/updated)
-        const existingMovements = await storage.getMovementsByStore(data.storeId, 1000);
-        const duplicateMovement = existingMovements.find(
-          (m) => 
-            m.orderId === data.orderId && 
-            m.sku === item.sku &&
-            m.movementType === movementType
+        // Busca directamente en la base de datos usando un índice eficiente
+        // (independientemente del estado: pending, processing, completed, failed)
+        const duplicateMovement = await storage.findDuplicateMovement(
+          data.storeId,
+          data.orderId,
+          item.sku,
+          movementType,
         );
 
         if (duplicateMovement) {
           console.log(
-            `[InventoryPush] ⚠️ Movimiento duplicado detectado para orden ${data.orderId}, SKU ${item.sku}, tipo ${movementType} (evento anterior: ${duplicateMovement.eventType}), saltando`,
+            `[InventoryPush] ⚠️ Movimiento duplicado detectado para orden ${data.orderId}, SKU ${item.sku}, tipo ${movementType}`,
+            `(movimiento existente: #${duplicateMovement.id}, estado: ${duplicateMovement.status}, evento: ${duplicateMovement.eventType}), saltando`,
           );
           continue;
         }
@@ -263,10 +263,31 @@ export class InventoryPushService {
         );
 
         if (!hasStock) {
-          // Lanzar error para que el catch maneje los reintentos correctamente
-          const errorMsg = `Stock insuficiente en Contífico para SKU ${movement.sku} (requerido: ${movement.quantity})`;
+          // Stock insuficiente: marcar como fallido inmediatamente (sin reintentos)
+          // Los reintentos no tienen sentido si el stock sigue insuficiente
+          const errorMsg = `Stock insuficiente en Contífico para SKU ${movement.sku} (requerido: ${movement.quantity}). Agregue stock manualmente o verifique el mapeo del producto.`;
           console.warn(`[InventoryPush] ⚠️ ${errorMsg}`);
-          throw new Error(errorMsg);
+
+          await storage.updateMovementStatus(
+            movementId,
+            "failed",
+            errorMsg,
+          );
+
+          // Rastrear como SKU sin stock para visibilidad
+          const metadata = movement.metadata as { productName?: string } | undefined;
+          await storage.trackUnmappedSku({
+            tenantId: movement.tenantId,
+            storeId: movement.storeId,
+            sku: movement.sku,
+            productName: metadata?.productName || `Producto ${movement.sku}`,
+          });
+
+          console.log(
+            `[InventoryPush] ❌ Movimiento ${movementId} marcado como fallido (stock insuficiente)`,
+          );
+
+          return false;
         }
       }
 
