@@ -3,33 +3,45 @@ import { motion } from "framer-motion";
 const platforms = [
   {
     name: "Shopify",
-    textLogo: "Shopify",
+    logo: "/images/brands/shopify.png",
     highlighted: false,
+    width: 120,
+    height: 40,
   },
   {
     name: "WooCommerce",
-    textLogo: "WooCommerce",
+    logo: "/images/brands/woocommerce.png",
     highlighted: false,
+    width: 150,
+    height: 40,
   },
   {
     name: "Contífico",
-    textLogo: "CONTÍFICO",
+    logo: "/images/brands/contifico.png",
     highlighted: true,
+    width: 140,
+    height: 40,
   },
   {
     name: "SAP",
-    textLogo: "SAP",
+    logo: "/images/brands/sap.png",
     comingSoon: true,
+    width: 80,
+    height: 40,
   },
   {
     name: "Dátil",
-    textLogo: "Dátil",
+    logo: "/images/brands/datil.png",
     comingSoon: true,
+    width: 100,
+    height: 40,
   },
   {
     name: "Servientrega",
-    textLogo: "Servientrega",
+    logo: "/images/brands/servientrega.png",
     comingSoon: true,
+    width: 140,
+    height: 40,
   },
 ];
 
@@ -42,16 +54,21 @@ function LogoGroup() {
           className="flex-shrink-0 flex items-center justify-center px-12"
         >
           <div className="relative">
-            {/* Text-based logo placeholder */}
-            <div
-              className={`text-xl font-bold tracking-wider transition-all duration-300 ${
+            {/* Logo image */}
+            <img
+              src={platform.logo}
+              alt={platform.name}
+              style={{
+                width: `${platform.width}px`,
+                height: `${platform.height}px`,
+                objectFit: "contain",
+              }}
+              className={`transition-all duration-300 ${
                 platform.highlighted
-                  ? "text-white opacity-100"
-                  : "text-white/60 hover:text-white/95"
+                  ? "opacity-100 brightness-100"
+                  : "opacity-60 brightness-100 hover:opacity-95"
               }`}
-            >
-              {platform.textLogo}
-            </div>
+            />
 
             {/* Badge for highlighted or coming soon */}
             {platform.highlighted && (

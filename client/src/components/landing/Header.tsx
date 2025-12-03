@@ -104,18 +104,18 @@ export default function Header() {
           {/* Mobile Menu Button */}
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild className="lg:hidden">
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="text-white hover:text-white hover:bg-white/10">
                 <Menu className="h-6 w-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+            <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-black/95 backdrop-blur-md border-l border-white/10">
               <div className="flex flex-col h-full">
                 {/* Mobile Logo */}
                 <div className="flex items-center gap-2 mb-8">
                   <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                    <Box className="h-5 w-5 text-secondary" />
+                    <Box className="h-5 w-5 text-[hsl(207,11%,11%)]" />
                   </div>
-                  <span className="text-xl font-bold">G4 Hub</span>
+                  <span className="text-xl font-bold text-white">G4 Hub</span>
                 </div>
 
                 {/* Mobile Navigation */}
@@ -124,7 +124,7 @@ export default function Header() {
                     <SheetClose asChild key={item.href}>
                       <button
                         onClick={() => scrollToSection(item.href)}
-                        className="text-left text-lg font-medium text-foreground hover:text-primary transition-colors py-2"
+                        className="text-left text-lg font-medium text-gray-300 hover:text-white transition-colors py-2"
                       >
                         {item.label}
                       </button>
@@ -136,7 +136,7 @@ export default function Header() {
                 <div className="mt-auto flex flex-col gap-3">
                   <SheetClose asChild>
                     <Link href="/auth">
-                      <button className="w-full px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg text-white font-medium hover:bg-white/20 hover:border-white/30 transition-all duration-300 shadow-md">
+                      <button className="w-full px-6 py-3 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg text-white font-medium hover:bg-white/20 hover:border-white/30 transition-all duration-300 shadow-md shadow-black/20">
                         Iniciar Sesión
                       </button>
                     </Link>
