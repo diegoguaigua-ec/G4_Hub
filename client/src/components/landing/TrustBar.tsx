@@ -23,13 +23,6 @@ const platforms = [
     height: 40,
   },
   {
-    name: "SAP",
-    logo: "/images/brands/sap.png",
-    comingSoon: true,
-    width: 80,
-    height: 40,
-  },
-  {
     name: "Dátil",
     logo: "/images/brands/datil.png",
     comingSoon: true,
