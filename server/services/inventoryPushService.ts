@@ -29,17 +29,20 @@ export class InventoryPushService {
    * Determina el tipo de movimiento según el tipo de evento
    * @param eventType - Tipo de evento del webhook
    * @returns Tipo de movimiento ('egreso' o 'ingreso')
+   *
+   * IMPORTANTE: Solo orders/paid genera egresos para evitar duplicados.
+   * - orders/create y orders/updated ya NO generan egresos automáticamente
+   * - Esto previene egresos duplicados cuando Shopify envía múltiples webhooks
    */
   private static determineMovementType(
     eventType: string,
   ): "egreso" | "ingreso" {
-    // Órdenes creadas, actualizadas y pagadas generan egresos (salidas de inventario)
+    // Solo órdenes PAGADAS generan egresos (salidas de inventario)
+    // Esto evita duplicados de orders/create y orders/updated
     if (
       eventType === "order_paid" ||
       eventType === "orders/paid" ||
-      eventType === "orders/create" ||
-      eventType === "orders/updated" ||
-      eventType === "order.completed"
+      eventType === "order.completed" // WooCommerce
     ) {
       return "egreso";
     }

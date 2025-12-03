@@ -126,14 +126,17 @@ router.post("/shopify/:storeId", async (req: Request, res: Response) => {
     // Validar que sea un evento soportado
     // Eventos soportados para procesamiento de inventario
     // NOTA: inventory_levels/update NO se soporta intencionalmente para evitar duplicados
-    // - Las órdenes ya actualizan el inventario vía orders/create, orders/paid, orders/updated
+    // - Las órdenes actualizan el inventario vía orders/paid (para egresos) y orders/cancelled (para ingresos)
     // - inventory_levels/update podría causar doble conteo si se procesa junto con eventos de órdenes
     // - Para soportar en el futuro: implementar sistema de deltas con snapshots de stock por ubicación
-    const supportedEvents = ["orders/create", "orders/paid", "orders/updated", "orders/cancelled", "refunds/create"];
-    
+    const supportedEvents = ["orders/paid", "orders/cancelled", "refunds/create"];
+    const ignoredEvents = ["orders/create", "orders/updated"]; // Ignorados para evitar duplicados
+
     if (!supportedEvents.includes(topic)) {
       // Logging estructurado para eventos no soportados (telemetría)
-      if (topic === "inventory_levels/update") {
+      if (ignoredEvents.includes(topic)) {
+        console.log(`[Webhook][Shopify] ℹ️ ${topic} recibido pero ignorado (solo orders/paid genera egresos para evitar duplicados)`);
+      } else if (topic === "inventory_levels/update") {
         console.log(`[Webhook][Shopify] ℹ️ inventory_levels/update recibido pero ignorado (evita duplicados con orders/*)`);
       } else {
         console.log(`[Webhook][Shopify] ⚠️ Evento ${topic} no reconocido, ignorando`);
