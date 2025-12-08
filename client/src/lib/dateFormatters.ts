@@ -2,6 +2,51 @@ import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 /**
+ * Timezone para Ecuador
+ */
+const ECUADOR_TIMEZONE = 'America/Guayaquil';
+const ECUADOR_LOCALE = 'es-EC';
+
+/**
+ * Formatea una fecha en formato Ecuador estándar
+ * @param dateString - Fecha en formato ISO string o Date object
+ * @returns Fecha formateada como "08/12/2025, 3:19 p. m."
+ */
+export function formatEcuadorDateTime(dateString: string | Date | null | undefined): string {
+  if (!dateString) return 'Nunca';
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+  return new Intl.DateTimeFormat(ECUADOR_LOCALE, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: ECUADOR_TIMEZONE,
+  }).format(date);
+}
+
+/**
+ * Formatea una fecha en formato Ecuador con segundos
+ * @param dateString - Fecha en formato ISO string o Date object
+ * @returns Fecha formateada como "08/12/2025, 3:19:45 p. m."
+ */
+export function formatEcuadorDateTimeWithSeconds(dateString: string | Date | null | undefined): string {
+  if (!dateString) return 'Nunca';
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+  return new Intl.DateTimeFormat(ECUADOR_LOCALE, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    timeZone: ECUADOR_TIMEZONE,
+  }).format(date);
+}
+
+/**
  * Formatea una fecha para mostrar en la tabla
  * @param dateString - Fecha en formato ISO string
  * @returns Fecha formateada como "15 Nov, 12:05"
@@ -13,14 +58,34 @@ export function formatTableDate(dateString: string | Date): string {
 }
 
 /**
- * Formatea una fecha de manera relativa
- * @param dateString - Fecha en formato ISO string
+ * Formatea una fecha de manera relativa (unificada)
+ * @param dateString - Fecha en formato ISO string o Date object
  * @returns Fecha formateada como "hace 2 horas"
  */
-export function formatRelativeDate(dateString: string | Date): string {
-  if (!dateString) return '';
+export function formatRelativeDate(dateString: string | Date | null | undefined): string {
+  if (!dateString) return 'Nunca';
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
   return formatDistanceToNow(date, { addSuffix: true, locale: es });
+}
+
+/**
+ * Formatea una fecha relativa de manera compacta (minutos, horas, días)
+ * @param dateString - Fecha en formato ISO string o Date object
+ * @returns Fecha formateada como "hace 3h", "hace 2d", etc.
+ */
+export function formatRelativeCompact(dateString: string | Date | null | undefined): string {
+  if (!dateString) return 'Nunca';
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+  if (diffMinutes < 1) return 'Ahora mismo';
+  if (diffMinutes < 60) return `hace ${diffMinutes}m`;
+  const diffHours = Math.floor(diffMinutes / 60);
+  if (diffHours < 24) return `hace ${diffHours}h`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `hace ${diffDays}d`;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -7,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, Loader2, Download } from "lucide-react";
+import { RefreshCw, Loader2, Download, X } from "lucide-react";
 import { useQueryClient, useIsFetching } from "@tanstack/react-query";
 import { handleExportMovements } from "@/lib/exportHelpers";
 
@@ -59,15 +60,52 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
     }
   };
 
+  // Helper functions to get filter labels
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'all': return 'Todos';
+      case 'pending': return 'Pendientes';
+      case 'processing': return 'En proceso';
+      case 'completed': return 'Completados';
+      case 'failed': return 'Fallidos';
+      default: return 'Todos';
+    }
+  };
+
+  const getTypeLabel = (type: string) => {
+    switch (type) {
+      case 'all': return 'Todos';
+      case 'egreso': return 'Egresos (Ventas)';
+      case 'ingreso': return 'Ingresos (Devoluciones)';
+      default: return 'Todos';
+    }
+  };
+
+  const getDateLabel = (dateRange: string) => {
+    switch (dateRange) {
+      case 'all': return 'Todo';
+      case 'today': return 'Hoy';
+      case 'last_7_days': return 'Últimos 7 días';
+      case 'last_30_days': return 'Últimos 30 días';
+      default: return 'Todo';
+    }
+  };
+
+  // Check if there are active filters
+  const hasActiveFilters = filters.status !== 'all' || filters.type !== 'all' || filters.dateRange !== 'all';
+
   return (
-    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <Select
           value={filters.status}
           onValueChange={(value) => onFiltersChange({ ...filters, status: value })}
         >
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Estado" />
+          <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectValue>
+              Estado: {getStatusLabel(filters.status)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
@@ -82,8 +120,10 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
           value={filters.type}
           onValueChange={(value) => onFiltersChange({ ...filters, type: value })}
         >
-          <SelectTrigger className="w-full sm:w-[200px]">
-            <SelectValue placeholder="Tipo" />
+          <SelectTrigger className="w-full sm:w-[240px]">
+            <SelectValue>
+              Tipo: {getTypeLabel(filters.type)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todos</SelectItem>
@@ -96,8 +136,10 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
           value={filters.dateRange}
           onValueChange={(value) => onFiltersChange({ ...filters, dateRange: value })}
         >
-          <SelectTrigger className="w-full sm:w-[180px]">
-            <SelectValue placeholder="Fecha" />
+          <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectValue>
+              Fecha: {getDateLabel(filters.dateRange)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Todo</SelectItem>
@@ -132,6 +174,52 @@ export function SyncFilters({ storeId, storeName, filters, onFiltersChange }: Sy
           {isExporting ? "Exportando..." : "Exportar"}
         </Button>
       </div>
+      </div>
+
+      {/* Active Filters Chips */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Filtros activos:</span>
+          {filters.status !== 'all' && (
+            <Badge
+              variant="secondary"
+              className="gap-1 pr-1 cursor-pointer hover:bg-secondary/80"
+              onClick={() => onFiltersChange({ ...filters, status: 'all' })}
+            >
+              Estado: {getStatusLabel(filters.status)}
+              <X className="h-3 w-3" />
+            </Badge>
+          )}
+          {filters.type !== 'all' && (
+            <Badge
+              variant="secondary"
+              className="gap-1 pr-1 cursor-pointer hover:bg-secondary/80"
+              onClick={() => onFiltersChange({ ...filters, type: 'all' })}
+            >
+              Tipo: {getTypeLabel(filters.type)}
+              <X className="h-3 w-3" />
+            </Badge>
+          )}
+          {filters.dateRange !== 'all' && (
+            <Badge
+              variant="secondary"
+              className="gap-1 pr-1 cursor-pointer hover:bg-secondary/80"
+              onClick={() => onFiltersChange({ ...filters, dateRange: 'all' })}
+            >
+              Fecha: {getDateLabel(filters.dateRange)}
+              <X className="h-3 w-3" />
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => onFiltersChange({ status: 'all', type: 'all', dateRange: 'all' })}
+          >
+            Limpiar todos
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
