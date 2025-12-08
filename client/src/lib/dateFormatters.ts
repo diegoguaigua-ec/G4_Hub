@@ -1,5 +1,6 @@
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toZonedTime } from 'date-fns-tz';
 
 /**
  * Timezone para Ecuador
@@ -15,6 +16,10 @@ const ECUADOR_LOCALE = 'es-EC';
 export function formatEcuadorDateTime(dateString: string | Date | null | undefined): string {
   if (!dateString) return 'Nunca';
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+
+  // Convertir la fecha a la zona horaria de Ecuador
+  const ecuadorDate = toZonedTime(date, ECUADOR_TIMEZONE);
+
   return new Intl.DateTimeFormat(ECUADOR_LOCALE, {
     day: '2-digit',
     month: '2-digit',
@@ -23,7 +28,7 @@ export function formatEcuadorDateTime(dateString: string | Date | null | undefin
     minute: '2-digit',
     hour12: true,
     timeZone: ECUADOR_TIMEZONE,
-  }).format(date);
+  }).format(ecuadorDate);
 }
 
 /**
@@ -34,6 +39,10 @@ export function formatEcuadorDateTime(dateString: string | Date | null | undefin
 export function formatEcuadorDateTimeWithSeconds(dateString: string | Date | null | undefined): string {
   if (!dateString) return 'Nunca';
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+
+  // Convertir la fecha a la zona horaria de Ecuador
+  const ecuadorDate = toZonedTime(date, ECUADOR_TIMEZONE);
+
   return new Intl.DateTimeFormat(ECUADOR_LOCALE, {
     day: '2-digit',
     month: '2-digit',
@@ -43,7 +52,7 @@ export function formatEcuadorDateTimeWithSeconds(dateString: string | Date | nul
     second: '2-digit',
     hour12: true,
     timeZone: ECUADOR_TIMEZONE,
-  }).format(date);
+  }).format(ecuadorDate);
 }
 
 /**
