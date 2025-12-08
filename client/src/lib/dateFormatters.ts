@@ -1,12 +1,11 @@
 import { format, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { toZonedTime } from 'date-fns-tz';
+import { formatInTimeZone } from 'date-fns-tz';
 
 /**
  * Timezone para Ecuador
  */
 const ECUADOR_TIMEZONE = 'America/Guayaquil';
-const ECUADOR_LOCALE = 'es-EC';
 
 /**
  * Formatea una fecha en formato Ecuador estándar
@@ -17,18 +16,8 @@ export function formatEcuadorDateTime(dateString: string | Date | null | undefin
   if (!dateString) return 'Nunca';
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
 
-  // Convertir la fecha a la zona horaria de Ecuador
-  const ecuadorDate = toZonedTime(date, ECUADOR_TIMEZONE);
-
-  return new Intl.DateTimeFormat(ECUADOR_LOCALE, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: ECUADOR_TIMEZONE,
-  }).format(ecuadorDate);
+  // Formatear directamente en la zona horaria de Ecuador
+  return formatInTimeZone(date, ECUADOR_TIMEZONE, "dd/MM/yyyy, h:mm aaa", { locale: es });
 }
 
 /**
@@ -40,19 +29,8 @@ export function formatEcuadorDateTimeWithSeconds(dateString: string | Date | nul
   if (!dateString) return 'Nunca';
   const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
 
-  // Convertir la fecha a la zona horaria de Ecuador
-  const ecuadorDate = toZonedTime(date, ECUADOR_TIMEZONE);
-
-  return new Intl.DateTimeFormat(ECUADOR_LOCALE, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: true,
-    timeZone: ECUADOR_TIMEZONE,
-  }).format(ecuadorDate);
+  // Formatear directamente en la zona horaria de Ecuador con segundos
+  return formatInTimeZone(date, ECUADOR_TIMEZONE, "dd/MM/yyyy, h:mm:ss aaa", { locale: es });
 }
 
 /**
