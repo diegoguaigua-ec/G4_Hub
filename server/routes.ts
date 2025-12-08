@@ -1392,9 +1392,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stockStore: Math.floor(Number(storeProduct.stockQuantity) || 0),
           stockContifico: stockContifico,
           status: syncStatus,
-          lastSync: lastSync,
+          lastSync: lastSync ? lastSync.toISOString() : null,
           platformProductId: storeProduct.platformProductId,
-          lastModifiedAt: storeProduct.lastModifiedAt,
+          lastModifiedAt: storeProduct.lastModifiedAt ? storeProduct.lastModifiedAt.toISOString() : null,
           lastModifiedBy: storeProduct.lastModifiedBy,
         };
       });
@@ -1436,7 +1436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(total / limitNum),
           hasMore: offset + limitNum < total,
         },
-        lastSyncAt: lastSyncAt,
+        lastSyncAt: lastSyncAt ? lastSyncAt.toISOString() : null,
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);
