@@ -143,7 +143,7 @@ export async function checkExpiringAccounts() {
           severity: "error",
           read: false,
           data: {
-            expiresAt: tenant.expiresAt?.toISOString(),
+            expiresAt: tenant.expiresAt ? (typeof tenant.expiresAt === 'string' ? tenant.expiresAt : tenant.expiresAt.toISOString()) : null,
           },
         });
 

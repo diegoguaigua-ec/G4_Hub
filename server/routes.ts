@@ -1425,7 +1425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lastSyncAt = latestSyncItems.length > 0
         ? latestSyncItems.reduce((latest, item) => {
             return !latest || item.createdAt > latest ? item.createdAt : latest;
-          }, null as Date | null)
+          }, null as string | null)
         : null;
 
       res.json({
@@ -1437,7 +1437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(total / limitNum),
           hasMore: offset + limitNum < total,
         },
-        lastSyncAt: lastSyncAt ? lastSyncAt.toISOString() : null,
+        lastSyncAt: lastSyncAt ? (typeof lastSyncAt === 'string' ? lastSyncAt : lastSyncAt.toISOString()) : null,
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);
