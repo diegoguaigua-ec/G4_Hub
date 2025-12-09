@@ -1393,9 +1393,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stockStore: Math.floor(Number(storeProduct.stockQuantity) || 0),
           stockContifico: stockContifico,
           status: syncStatus,
-          lastSync: lastSync ? lastSync.toISOString() : null,
+          lastSync: lastSync ? (typeof lastSync === 'string' ? lastSync : lastSync.toISOString()) : null,
           platformProductId: storeProduct.platformProductId,
-          lastModifiedAt: storeProduct.lastModifiedAt ? storeProduct.lastModifiedAt.toISOString() : null,
+          lastModifiedAt: storeProduct.lastModifiedAt ? (typeof storeProduct.lastModifiedAt === 'string' ? storeProduct.lastModifiedAt : storeProduct.lastModifiedAt.toISOString()) : null,
           lastModifiedBy: storeProduct.lastModifiedBy,
         };
       });
