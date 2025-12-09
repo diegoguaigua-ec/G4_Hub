@@ -34,6 +34,19 @@ export function formatEcuadorDateTimeWithSeconds(dateString: string | Date | nul
 }
 
 /**
+ * Formatea solo la fecha (sin hora) en formato Ecuador
+ * @param dateString - Fecha en formato ISO string o Date object
+ * @returns Fecha formateada como "08/12/2025"
+ */
+export function formatEcuadorDate(dateString: string | Date | null | undefined): string {
+  if (!dateString) return 'N/A';
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+
+  // Formatear directamente en la zona horaria de Ecuador
+  return formatInTimeZone(date, ECUADOR_TIMEZONE, "dd/MM/yyyy", { locale: es });
+}
+
+/**
  * Formatea una fecha para mostrar en la tabla
  * @param dateString - Fecha en formato ISO string
  * @returns Fecha formateada como "15 Nov, 12:05"

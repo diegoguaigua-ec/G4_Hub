@@ -5,6 +5,7 @@ import { User, adminActions, tenants, users } from "@shared/schema";
 import { db } from "../db";
 import { eq, sql, and, or, like, desc } from "drizzle-orm";
 import { getPlan, PlanType } from "@shared/plans";
+import { formatEcuadorDate } from "../utils/dateFormatters";
 
 const router = Router();
 
@@ -533,7 +534,7 @@ router.put("/users/:id/expires-at", async (req, res) => {
       targetTenantId: tenantId,
       actionType: "update_expiration",
       description: expirationDate
-        ? `Fecha de vencimiento actualizada a ${expirationDate.toLocaleDateString()} por ${adminUser.name}`
+        ? `Fecha de vencimiento actualizada a ${formatEcuadorDate(expirationDate)} por ${adminUser.name}`
         : `Fecha de vencimiento eliminada por ${adminUser.name}`,
       metadata: {
         oldExpiresAt: tenant.expiresAt,

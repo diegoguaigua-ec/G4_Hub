@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader2, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { formatEcuadorDateTimeWithSeconds } from "@/lib/dateFormatters";
 
 interface AdminAction {
   id: number;
@@ -138,14 +139,7 @@ export default function AuditLogsPage() {
                         data?.actions.map((action) => (
                           <TableRow key={action.id}>
                             <TableCell className="font-mono text-sm">
-                              {new Date(action.createdAt).toLocaleString("es-ES", {
-                                year: "numeric",
-                                month: "2-digit",
-                                day: "2-digit",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                                second: "2-digit",
-                              })}
+                              {formatEcuadorDateTimeWithSeconds(action.createdAt)}
                             </TableCell>
                             <TableCell>{getActionBadge(action.actionType)}</TableCell>
                             <TableCell>
@@ -255,14 +249,7 @@ export default function AuditLogsPage() {
                     Fecha y Hora
                   </label>
                   <p className="text-sm">
-                    {new Date(selectedAction.createdAt).toLocaleString("es-ES", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                      second: "2-digit",
-                    })}
+                    {formatEcuadorDateTimeWithSeconds(selectedAction.createdAt)}
                   </p>
                 </div>
                 <div>

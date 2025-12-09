@@ -65,6 +65,7 @@ import {
 } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
+import { formatEcuadorDate } from "@/lib/dateFormatters";
 
 interface Tenant {
   id: number;
@@ -523,7 +524,7 @@ export default function AdminUsersPage() {
                                       ? "text-yellow-500 font-medium"
                                       : "text-foreground"
                                   }>
-                                    {new Date(tenant.expiresAt).toLocaleDateString("es-ES")}
+                                    {formatEcuadorDate(tenant.expiresAt)}
                                   </div>
                                   {new Date(tenant.expiresAt) < new Date() && (
                                     <div className="text-xs text-red-500">Expirada</div>
@@ -534,7 +535,7 @@ export default function AdminUsersPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              {new Date(tenant.createdAt).toLocaleDateString("es-ES")}
+                              {formatEcuadorDate(tenant.createdAt)}
                             </TableCell>
                             <TableCell className="text-right">
                               <DropdownMenu>
