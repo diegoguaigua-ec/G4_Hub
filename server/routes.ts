@@ -1343,6 +1343,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Pull 2 synced PT-0002-100ml → both products show their latest data)
       const latestSyncItems = await storage.getLatestSyncItemPerSku(parseInt(storeId));
 
+      // DEBUG: Ver formato de fechas de la DB
+      if (latestSyncItems.length > 0) {
+        console.log('[DEBUG] Sample createdAt from DB:', {
+          raw: latestSyncItems[0].createdAt,
+          type: typeof latestSyncItems[0].createdAt,
+          isDate: latestSyncItems[0].createdAt instanceof Date,
+        });
+      }
+
       // Create a map of sync items by SKU for quick lookup
       const syncLogItemsMap = new Map();
       latestSyncItems.forEach((item: any) => {
