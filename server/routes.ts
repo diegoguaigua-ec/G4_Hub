@@ -1343,29 +1343,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Pull 2 synced PT-0002-100ml → both products show their latest data)
       const latestSyncItems = await storage.getLatestSyncItemPerSku(parseInt(storeId));
 
-      // Helper function to convert PostgreSQL timestamp (Ecuador timezone) to ISO UTC
-      const convertToUTC = (pgTimestamp: string | Date | null | undefined): string | null => {
-        if (!pgTimestamp) return null;
-
-        // If already a Date object, convert to ISO
-        if (pgTimestamp instanceof Date) {
-          return pgTimestamp.toISOString();
-        }
-
-        // PostgreSQL returns format: '2025-12-10 14:00:58.631886'
-        // This is in Ecuador timezone (America/Guayaquil = UTC-5)
-        // Need to convert to ISO UTC format
-
-        // Replace space with 'T' to make it ISO-like
-        const isoLike = pgTimestamp.replace(' ', 'T');
-
-        // Parse as Ecuador time and convert to UTC
-        // Ecuador is UTC-5, so we ADD 5 hours to get UTC
-        const date = new Date(isoLike + '-05:00'); // Specify Ecuador offset
-
-        return date.toISOString();
-      };
-
       // Create a map of sync items by SKU for quick lookup
       const syncLogItemsMap = new Map();
       latestSyncItems.forEach((item: any) => {
@@ -1380,13 +1357,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let syncStatus = 'pending'; // pending, synced, different, not_in_contifico, error
         let stockContifico: number | null = null;
-        let lastSync: string | null = null;
+        let lastSync: Date | null = null;
 
         if (!syncItem) {
           // Never synced with Contífico
           syncStatus = 'pending';
         } else {
-          lastSync = convertToUTC(syncItem.createdAt);
+          lastSync = syncItem.createdAt; // Now a Date object from storage
 
           if (syncItem.errorCategory === 'not_found_contifico') {
             // Product doesn't exist in Contífico
@@ -1416,9 +1393,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stockStore: Math.floor(Number(storeProduct.stockQuantity) || 0),
           stockContifico: stockContifico,
           status: syncStatus,
-          lastSync: lastSync, // Already converted to UTC ISO by convertToUTC
+          lastSync: lastSync, // Date object, will be serialized to ISO UTC automatically
           platformProductId: storeProduct.platformProductId,
-          lastModifiedAt: convertToUTC(storeProduct.lastModifiedAt),
+          lastModifiedAt: storeProduct.lastModifiedAt, // Date object, will be serialized automatically
           lastModifiedBy: storeProduct.lastModifiedBy,
         };
       });
@@ -1448,7 +1425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const lastSyncAt = latestSyncItems.length > 0
         ? latestSyncItems.reduce((latest, item) => {
             return !latest || item.createdAt > latest ? item.createdAt : latest;
-          }, null as string | null)
+          }, null as Date | null)
         : null;
 
       res.json({
@@ -1460,7 +1437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(total / limitNum),
           hasMore: offset + limitNum < total,
         },
-        lastSyncAt: convertToUTC(lastSyncAt),
+        lastSyncAt: lastSyncAt, // Date object, will be serialized to ISO UTC automatically
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);

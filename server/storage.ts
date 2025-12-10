@@ -572,7 +572,11 @@ export class DatabaseStorage implements IStorage {
       ORDER BY sli.sku, sli.created_at DESC
     `);
 
-    return result.rows as SyncLogItem[];
+    // Convert PostgreSQL timestamp strings to Date objects to match Drizzle's behavior
+    return result.rows.map((row: any) => ({
+      ...row,
+      createdAt: row.createdAt ? new Date(row.createdAt) : null,
+    })) as SyncLogItem[];
   }
 
   /**
