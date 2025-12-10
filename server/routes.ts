@@ -1343,14 +1343,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Pull 2 synced PT-0002-100ml → both products show their latest data)
       const latestSyncItems = await storage.getLatestSyncItemPerSku(parseInt(storeId));
 
-      // DEBUG: Ver formato de fechas de la DB
-      if (latestSyncItems.length > 0) {
-        console.log('[DEBUG] Sample createdAt from DB:', {
-          raw: latestSyncItems[0].createdAt,
-          type: typeof latestSyncItems[0].createdAt,
-          isDate: latestSyncItems[0].createdAt instanceof Date,
-        });
-      }
+      // Helper function to convert PostgreSQL timestamp (Ecuador timezone) to ISO UTC
+      const convertToUTC = (pgTimestamp: string | Date | null | undefined): string | null => {
+        if (!pgTimestamp) return null;
+
+        // If already a Date object, convert to ISO
+        if (pgTimestamp instanceof Date) {
+          return pgTimestamp.toISOString();
+        }
+
+        // PostgreSQL returns format: '2025-12-10 14:00:58.631886'
+        // This is in Ecuador timezone (America/Guayaquil = UTC-5)
+        // Need to convert to ISO UTC format
+
+        // Replace space with 'T' to make it ISO-like
+        const isoLike = pgTimestamp.replace(' ', 'T');
+
+        // Parse as Ecuador time and convert to UTC
+        // Ecuador is UTC-5, so we ADD 5 hours to get UTC
+        const date = new Date(isoLike + '-05:00'); // Specify Ecuador offset
+
+        return date.toISOString();
+      };
 
       // Create a map of sync items by SKU for quick lookup
       const syncLogItemsMap = new Map();
@@ -1366,13 +1380,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         let syncStatus = 'pending'; // pending, synced, different, not_in_contifico, error
         let stockContifico: number | null = null;
-        let lastSync: Date | null = null;
+        let lastSync: string | null = null;
 
         if (!syncItem) {
           // Never synced with Contífico
           syncStatus = 'pending';
         } else {
-          lastSync = syncItem.createdAt;
+          lastSync = convertToUTC(syncItem.createdAt);
 
           if (syncItem.errorCategory === 'not_found_contifico') {
             // Product doesn't exist in Contífico
@@ -1402,9 +1416,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stockStore: Math.floor(Number(storeProduct.stockQuantity) || 0),
           stockContifico: stockContifico,
           status: syncStatus,
-          lastSync: lastSync ? (typeof lastSync === 'string' ? lastSync : lastSync.toISOString()) : null,
+          lastSync: lastSync, // Already converted to UTC ISO by convertToUTC
           platformProductId: storeProduct.platformProductId,
-          lastModifiedAt: storeProduct.lastModifiedAt ? (typeof storeProduct.lastModifiedAt === 'string' ? storeProduct.lastModifiedAt : storeProduct.lastModifiedAt.toISOString()) : null,
+          lastModifiedAt: convertToUTC(storeProduct.lastModifiedAt),
           lastModifiedBy: storeProduct.lastModifiedBy,
         };
       });
@@ -1446,7 +1460,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(total / limitNum),
           hasMore: offset + limitNum < total,
         },
-        lastSyncAt: lastSyncAt ? (typeof lastSyncAt === 'string' ? lastSyncAt : lastSyncAt.toISOString()) : null,
+        lastSyncAt: convertToUTC(lastSyncAt),
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);
