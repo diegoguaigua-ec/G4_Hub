@@ -13,6 +13,8 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Loader2,
   MinusCircle,
@@ -78,6 +80,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     limit: 20,
   });
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [lastSyncAlertExpanded, setLastSyncAlertExpanded] = useState(true);
+  const [duplicateSkusAlertExpanded, setDuplicateSkusAlertExpanded] = useState(true);
 
   // Reset selections when page changes
   useEffect(() => {
@@ -434,45 +438,67 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
 
       {data?.lastSyncAt && (
         <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            <div className="space-y-1">
-              <p>
-                <strong>Última sincronización:</strong> {formatEcuadorDateTime(data.lastSyncAt)}
-              </p>
-              <p className="text-xs text-muted-foreground">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <AlertDescription className="flex-1">
+            <button
+              onClick={() => setLastSyncAlertExpanded(!lastSyncAlertExpanded)}
+              className="flex items-center justify-between w-full text-left hover:opacity-80 transition-opacity"
+            >
+              <span className="text-sm font-semibold">
+                Última sincronización: {formatEcuadorDateTime(data.lastSyncAt)}
+              </span>
+              {lastSyncAlertExpanded ? (
+                <ChevronUp className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              )}
+            </button>
+            {lastSyncAlertExpanded && (
+              <p className="text-sm text-muted-foreground mt-2">
                 Los datos mostrados son del último sync con Contífico. El stock de tu tienda puede haber cambiado después.
                 Para ver datos actualizados, haz clic en "Sincronizar Todo".
               </p>
-            </div>
+            )}
           </AlertDescription>
         </Alert>
       )}
 
       {data?.duplicateSkus && data.duplicateSkus.length > 0 && (
         <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            <div className="space-y-2">
-              <p className="font-semibold">
-                ⚠️ SKUs Duplicados Detectados
-              </p>
-              <p className="text-sm">
-                Los siguientes SKUs están asignados a múltiples productos en tu tienda.
-                Esto puede causar problemas de sincronización y comportamiento impredecible:
-              </p>
-              <ul className="text-sm list-disc list-inside space-y-1 ml-2">
-                {data.duplicateSkus.map((dup) => (
-                  <li key={dup.sku}>
-                    <strong>{dup.sku}</strong> - usado en {dup.count} productos
-                  </li>
-                ))}
-              </ul>
-              <p className="text-sm mt-2">
-                <strong>Recomendación:</strong> Por favor revisa tu configuración de productos
-                y asigna un SKU único a cada producto.
-              </p>
-            </div>
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <AlertDescription className="flex-1">
+            <button
+              onClick={() => setDuplicateSkusAlertExpanded(!duplicateSkusAlertExpanded)}
+              className="flex items-center justify-between w-full text-left hover:opacity-80 transition-opacity"
+            >
+              <span className="text-sm font-semibold">
+                SKUs Duplicados Detectados
+              </span>
+              {duplicateSkusAlertExpanded ? (
+                <ChevronUp className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              )}
+            </button>
+            {duplicateSkusAlertExpanded && (
+              <div className="mt-2 space-y-2">
+                <p className="text-sm">
+                  Los siguientes SKUs están asignados a múltiples productos en tu tienda.
+                  Esto puede causar problemas de sincronización y comportamiento impredecible:
+                </p>
+                <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+                  {data.duplicateSkus.map((dup) => (
+                    <li key={dup.sku}>
+                      <strong>{dup.sku}</strong> - usado en {dup.count} productos
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-sm">
+                  <strong>Recomendación:</strong> Por favor revisa tu configuración de productos
+                  y asigna un SKU único a cada producto.
+                </p>
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       )}
