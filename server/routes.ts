@@ -2769,15 +2769,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const paginatedMovements = movements.slice(offset, offset + limitNum);
 
-      // DEBUG: Compare date format from movements
-      if (paginatedMovements.length > 0) {
-        console.log('[DEBUG] Sample movement createdAt:', {
-          raw: paginatedMovements[0].createdAt,
-          type: typeof paginatedMovements[0].createdAt,
-          isDate: paginatedMovements[0].createdAt instanceof Date,
-        });
-      }
-
       res.json({
         movements: paginatedMovements,
         pagination: {
