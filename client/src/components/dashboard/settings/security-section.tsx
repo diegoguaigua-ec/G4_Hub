@@ -20,6 +20,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { formatEcuadorDateTime } from "@/lib/dateFormatters";
 
 interface Session {
   id: string;
@@ -141,14 +142,7 @@ export default function SecuritySection() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString("es-ES", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatEcuadorDateTime(dateString);
   };
 
   return (

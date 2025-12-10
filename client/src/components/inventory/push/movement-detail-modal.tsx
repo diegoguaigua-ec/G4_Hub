@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, CheckCircle, Clock, Zap, XCircle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { formatDetailDate } from "@/lib/dateFormatters";
+import { formatEcuadorDateTime } from "@/lib/dateFormatters";
 import type { Movement } from "@/hooks/use-movements";
 
 interface MovementDetailModalProps {
@@ -94,9 +94,9 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
                   <div><span className="text-muted-foreground">SKU:</span> <span className="font-mono">{movement.sku}</span></div>
                   <div><span className="text-muted-foreground">Cantidad:</span> {movement.quantity}</div>
                   <div><span className="text-muted-foreground">Estado:</span> {getStatusBadge(movement.status)}</div>
-                  <div><span className="text-muted-foreground">Creado:</span> {formatDetailDate(movement.createdAt)}</div>
+                  <div><span className="text-muted-foreground">Creado:</span> {formatEcuadorDateTime(movement.createdAt)}</div>
                   {movement.processedAt && (
-                    <div><span className="text-muted-foreground">Procesado:</span> {formatDetailDate(movement.processedAt)}</div>
+                    <div><span className="text-muted-foreground">Procesado:</span> {formatEcuadorDateTime(movement.processedAt)}</div>
                   )}
                 </div>
               </div>
@@ -109,7 +109,7 @@ export function MovementDetailModal({ storeId, movementId, open, onOpenChange }:
                     <p className="text-sm text-muted-foreground">Intentos: {movement.attempts}/{movement.maxAttempts}</p>
                     {movement.lastAttemptAt && (
                       <p className="text-sm text-muted-foreground mt-1">
-                        Último intento: {formatDetailDate(movement.lastAttemptAt)}
+                        Último intento: {formatEcuadorDateTime(movement.lastAttemptAt)}
                       </p>
                     )}
                   </div>

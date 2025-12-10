@@ -18,6 +18,7 @@ import {
   Package,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { formatEcuadorDateTimeWithSeconds } from "@/lib/dateFormatters";
 
 interface SyncLogDetailDrawerProps {
   logId: number | null;
@@ -108,19 +109,6 @@ export function SyncLogDetailDrawer({
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat("es-EC", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      timeZone: "America/Guayaquil", // Ecuador timezone (UTC-5)
-    }).format(date);
-  };
-
   const formatDuration = (ms: number | null) => {
     if (!ms) return "N/A";
     if (ms < 1000) return `${ms}ms`;
@@ -185,7 +173,7 @@ export function SyncLogDetailDrawer({
                     <div>
                       <p className="text-xs text-muted-foreground">Fecha</p>
                       <p className="text-sm font-medium text-foreground">
-                        {formatDate(data.syncLog.createdAt)}
+                        {formatEcuadorDateTimeWithSeconds(data.syncLog.createdAt)}
                       </p>
                     </div>
                   </div>

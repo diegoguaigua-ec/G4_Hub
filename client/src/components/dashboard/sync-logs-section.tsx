@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SyncLogDetailDrawer } from "./sync-log-detail-drawer";
+import { formatEcuadorDateTime } from "@/lib/dateFormatters";
 
 interface SyncLog {
   id: number;
@@ -168,18 +169,6 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat("es-EC", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "America/Guayaquil", // Ecuador timezone (UTC-5)
-    }).format(date);
-  };
-
   const formatDuration = (ms: number | null) => {
     if (!ms) return "N/A";
     if (ms < 1000) return `${ms}ms`;
@@ -318,7 +307,7 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
                       className="border-b border-border hover:bg-muted/50 transition-colors"
                     >
                       <td className="py-3 px-4 text-sm text-foreground">
-                        {formatDate(log.createdAt)}
+                        {formatEcuadorDateTime(log.createdAt)}
                       </td>
                       <td className="py-3 px-4">
                         <div>

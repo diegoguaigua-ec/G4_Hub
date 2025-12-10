@@ -8,6 +8,13 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { AddStoreDialog } from "./add-store-dialog";
 import { EditStoreDialog } from "./edit-store-dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { formatRelativeCompact, formatEcuadorDateTime } from "@/lib/dateFormatters";
 
 export default function StoresSection() {
   const [addStoreOpen, setAddStoreOpen] = useState(false);
@@ -64,21 +71,6 @@ export default function StoresSection() {
       default:
         return { letter: "?", bg: "bg-gray-100", text: "text-gray-600" };
     }
-  };
-
-  const formatLastSync = (lastSyncAt?: string | Date | null) => {
-    if (!lastSyncAt) return "Nunca";
-    const date = new Date(lastSyncAt);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    
-    if (diffMinutes < 1) return "Ahora mismo";
-    if (diffMinutes < 60) return `hace ${diffMinutes}m`;
-    const diffHours = Math.floor(diffMinutes / 60);
-    if (diffHours < 24) return `hace ${diffHours}h`;
-    const diffDays = Math.floor(diffHours / 24);
-    return `hace ${diffDays}d`;
   };
 
   if (isLoading) {
@@ -172,7 +164,18 @@ export default function StoresSection() {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Última Sinc.</p>
-                      <p className="font-semibold text-foreground">{formatLastSync(store.lastSyncAt)}</p>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <p className="font-semibold text-foreground cursor-help">
+                              {formatRelativeCompact(store.lastSyncAt)}
+                            </p>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{formatEcuadorDateTime(store.lastSyncAt)}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Estado</p>
@@ -180,8 +183,8 @@ export default function StoresSection() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      className="flex-1 bg-primary/10 text-primary hover:bg-primary/20" 
+                    <Button
+                      className="flex-1 bg-gray-100 text-gray-900 hover:bg-gray-200"
                       variant="secondary"
                       data-testid={`button-sync-${store.id}`}
                       disabled={testConnectionMutation.isPending}

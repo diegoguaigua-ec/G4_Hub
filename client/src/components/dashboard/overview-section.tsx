@@ -21,6 +21,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Store as StoreType } from "@shared/schema";
 import { NotificationsDropdown } from "@/components/notifications-dropdown";
 import { useLocation } from "wouter";
+import { formatRelativeDate, formatRelativeCompact } from "@/lib/dateFormatters";
 import {
   Dialog,
   DialogContent,
@@ -268,47 +269,6 @@ export default function OverviewSection() {
     { title: "Configuración", icon: Settings, onClick: handleSettings },
   ];
 
-  // Helper to format last sync time
-  const formatLastSync = (lastSyncAt?: Date | string | null) => {
-    if (!lastSyncAt) return "Nunca";
-    const date = new Date(lastSyncAt);
-    const now = new Date();
-    const diffInHours = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60 * 60),
-    );
-
-    if (diffInHours < 1) return "Hace menos de 1 hora";
-    if (diffInHours < 24)
-      return `Hace ${diffInHours} hora${diffInHours > 1 ? "s" : ""}`;
-    const diffInDays = Math.floor(diffInHours / 24);
-    return `Hace ${diffInDays} día${diffInDays > 1 ? "s" : ""}`;
-  };
-
-  // Helper to format activity timestamp
-  const formatActivityTime = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffInMinutes = Math.floor(
-      (now.getTime() - date.getTime()) / (1000 * 60)
-    );
-
-    if (diffInMinutes < 1) return "Hace un momento";
-    if (diffInMinutes < 60) return `Hace ${diffInMinutes} min`;
-
-    const diffInHours = Math.floor(diffInMinutes / 60);
-    if (diffInHours < 24) return `Hace ${diffInHours}h`;
-
-    const diffInDays = Math.floor(diffInHours / 24);
-    if (diffInDays < 7) return `Hace ${diffInDays}d`;
-
-    // If more than 7 days, show date
-    return date.toLocaleDateString('es-EC', {
-      month: 'short',
-      day: 'numeric',
-      timeZone: 'America/Guayaquil', // Ecuador timezone (UTC-5)
-    });
-  };
-
   // Helper to get sync type label
   const getSyncTypeLabel = (syncType: string) => {
     if (syncType === 'pull') return 'Desde Contífico';
@@ -488,7 +448,7 @@ export default function OverviewSection() {
                           <SyncIcon className="h-3 w-3" />
                           <span>{getSyncTypeLabel(log.syncType)}</span>
                           <span>•</span>
-                          <span>{formatActivityTime(log.createdAt)}</span>
+                          <span>{formatRelativeCompact(log.createdAt)}</span>
                         </div>
                         <div className="flex items-center gap-3 text-xs">
                           <span className="text-green-600">
@@ -579,7 +539,7 @@ export default function OverviewSection() {
                           Última sincronización
                         </p>
                         <p className="text-sm font-medium text-foreground">
-                          {formatLastSync(store.lastSyncAt)}
+                          {formatRelativeDate(store.lastSyncAt)}
                         </p>
                       </div>
                       {hasRecentSync && (

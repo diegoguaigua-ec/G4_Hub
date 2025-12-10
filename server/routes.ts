@@ -21,6 +21,7 @@ import adminRoutes from "./routes/admin";
 import { getPlan, PlanType } from "@shared/plans";
 import { requireApprovedTenant } from "./middleware/requireApprovedTenant";
 import { checkExpiration } from "./middleware/checkExpiration";
+import { formatEcuadorDateTime } from "./utils/dateFormatters";
 
 /**
  * Helper function to get the public URL for webhook callbacks
@@ -1362,7 +1363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Never synced with Contífico
           syncStatus = 'pending';
         } else {
-          lastSync = syncItem.createdAt;
+          lastSync = syncItem.createdAt; // Now a Date object from storage
 
           if (syncItem.errorCategory === 'not_found_contifico') {
             // Product doesn't exist in Contífico
@@ -1392,9 +1393,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           stockStore: Math.floor(Number(storeProduct.stockQuantity) || 0),
           stockContifico: stockContifico,
           status: syncStatus,
-          lastSync: lastSync,
+          lastSync: lastSync, // Date object, will be serialized to ISO UTC automatically
           platformProductId: storeProduct.platformProductId,
-          lastModifiedAt: storeProduct.lastModifiedAt,
+          lastModifiedAt: storeProduct.lastModifiedAt, // Date object, will be serialized automatically
           lastModifiedBy: storeProduct.lastModifiedBy,
         };
       });
@@ -1436,7 +1437,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalPages: Math.ceil(total / limitNum),
           hasMore: offset + limitNum < total,
         },
-        lastSyncAt: lastSyncAt,
+        lastSyncAt: lastSyncAt, // Date object, will be serialized to ISO UTC automatically
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);
@@ -2325,7 +2326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       summarySheet.addRow({ label: "Tienda", value: storeName });
       summarySheet.addRow({
         label: "Fecha de Sincronización",
-        value: new Date(result.syncLog.createdAt).toLocaleString("es-ES"),
+        value: formatEcuadorDateTime(result.syncLog.createdAt),
       });
       summarySheet.addRow({
         label: "Tipo de Sincronización",
@@ -3109,7 +3110,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Add data
       movements.forEach(movement => {
         worksheet.addRow({
-          date: movement.createdAt ? new Date(movement.createdAt).toLocaleString('es-ES') : '',
+          date: movement.createdAt ? formatEcuadorDateTime(movement.createdAt) : '',
           order: movement.orderId || '',
           type: movement.movementType === 'egreso' ? 'Egreso' : 'Ingreso',
           sku: movement.sku,
@@ -3171,8 +3172,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           sku: sku.sku,
           product: sku.productName || '',
           occurrences: sku.occurrences,
-          first_seen: sku.createdAt ? new Date(sku.createdAt).toLocaleString('es-ES') : '',
-          last_seen: sku.lastSeenAt ? new Date(sku.lastSeenAt).toLocaleString('es-ES') : '',
+          first_seen: sku.createdAt ? formatEcuadorDateTime(sku.createdAt) : '',
+          last_seen: sku.lastSeenAt ? formatEcuadorDateTime(sku.lastSeenAt) : '',
         });
       });
 

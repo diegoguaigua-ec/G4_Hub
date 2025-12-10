@@ -34,6 +34,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { formatEcuadorDateTime } from "@/lib/dateFormatters";
 
 interface InventoryTabProps {
   storeId: number;
@@ -350,19 +351,6 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     }
   };
 
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "Nunca";
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat("es-EC", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "America/Guayaquil", // Ecuador timezone (UTC-5)
-    }).format(date);
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -449,7 +437,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
           <AlertDescription>
             <div className="space-y-1">
               <p>
-                <strong>Última sincronización:</strong> {formatDate(data.lastSyncAt)}
+                <strong>Última sincronización:</strong> {formatEcuadorDateTime(data.lastSyncAt)}
               </p>
               <p className="text-xs text-muted-foreground">
                 Los datos mostrados son del último sync con Contífico. El stock de tu tienda puede haber cambiado después.
@@ -620,7 +608,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                       <td className="py-3 px-4 text-sm">
                         <div className="flex flex-col gap-1">
                           <span className="text-muted-foreground">
-                            {formatDate(product.lastSync)}
+                            {formatEcuadorDateTime(product.lastSync)}
                           </span>
                           {product.lastModifiedBy && (
                             <Badge

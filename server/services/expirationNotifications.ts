@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { tenants, notifications, users } from "@shared/schema";
 import { sql, and, lte, gte, eq } from "drizzle-orm";
+import { formatEcuadorDate } from "../utils/dateFormatters";
 
 /**
  * Check for accounts expiring within 10 days and create notifications
@@ -79,7 +80,7 @@ export async function checkExpiringAccounts() {
           userId: user.id,
           type: "account_expiring",
           title: "⏰ Tu cuenta está por vencer",
-          message: `Tu cuenta de G4 Hub vencerá en ${daysRemaining} ${daysRemaining === 1 ? "día" : "días"} (${expiresAt.toLocaleDateString("es-ES")}). Contacta con nosotros para renovar tu suscripción.`,
+          message: `Tu cuenta de G4 Hub vencerá en ${daysRemaining} ${daysRemaining === 1 ? "día" : "días"} (${formatEcuadorDate(expiresAt)}). Contacta con nosotros para renovar tu suscripción.`,
           severity,
           read: false,
           data: {
@@ -142,7 +143,7 @@ export async function checkExpiringAccounts() {
           severity: "error",
           read: false,
           data: {
-            expiresAt: tenant.expiresAt?.toISOString(),
+            expiresAt: tenant.expiresAt ? (typeof tenant.expiresAt === 'string' ? tenant.expiresAt : tenant.expiresAt.toISOString()) : null,
           },
         });
 

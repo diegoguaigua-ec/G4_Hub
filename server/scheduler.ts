@@ -1,5 +1,6 @@
 import { storage } from './storage';
 import { SyncService } from './services/SyncService';
+import { formatEcuadorDateTime } from './utils/dateFormatters';
 
 interface SyncConfig {
   pull?: {
@@ -62,7 +63,7 @@ export class Scheduler {
 
     this.isRunning = true;
     console.log('[Scheduler] ========================================');
-    console.log(`[Scheduler] Ejecutando sincronizaciones programadas - ${new Date().toLocaleString()}`);
+    console.log(`[Scheduler] Ejecutando sincronizaciones programadas - ${formatEcuadorDateTime(new Date())}`);
     console.log('[Scheduler] ========================================');
 
     try {

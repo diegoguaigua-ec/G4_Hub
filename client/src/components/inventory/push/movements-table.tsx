@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/tooltip";
 import { Eye, RotateCw, Package, CheckCircle, Clock, Zap, XCircle } from "lucide-react";
 import { useMovements, type Movement, type MovementsFilters } from "@/hooks/use-movements";
-import { formatTableDate, formatRelativeDate } from "@/lib/dateFormatters";
+import { formatEcuadorDateTime, formatRelativeDate } from "@/lib/dateFormatters";
 import { cn } from "@/lib/utils";
 
 interface MovementsTableProps {
@@ -177,7 +177,7 @@ export function MovementsTable({
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <span className="text-sm">
-                            {formatTableDate(movement.createdAt)}
+                            {formatEcuadorDateTime(movement.createdAt)}
                           </span>
                         </TooltipTrigger>
                         <TooltipContent>
@@ -263,7 +263,7 @@ export function MovementsTable({
                     ID: #{movement.orderId || movement.id}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {formatTableDate(movement.createdAt)}
+                    {formatEcuadorDateTime(movement.createdAt)}
                   </p>
                 </div>
                 <Badge variant={statusInfo.variant} className={statusInfo.className}>

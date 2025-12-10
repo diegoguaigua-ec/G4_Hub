@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { formatEcuadorDate } from "@/lib/dateFormatters";
 
 export function ExpirationBanner() {
   const { user } = useAuth();
@@ -62,7 +63,7 @@ export function ExpirationBanner() {
               ) : (
                 <>
                   Tu cuenta de G4 Hub expirará el{" "}
-                  <strong>{expiresAt.toLocaleDateString("es-ES")}</strong>.
+                  <strong>{formatEcuadorDate(expiresAt)}</strong>.
                   Contacta con nosotros para renovar tu suscripción y evitar la
                   suspensión de servicios.
                 </>
@@ -137,7 +138,7 @@ export function ExpirationBanner() {
                     {isExpired ? "Expiró el:" : "Expira el:"}
                   </span>
                   <span className={`font-medium ${isExpired ? "text-red-600" : "text-amber-600"}`}>
-                    {expiresAt.toLocaleDateString("es-ES")}
+                    {formatEcuadorDate(expiresAt)}
                   </span>
                 </div>
               </div>
