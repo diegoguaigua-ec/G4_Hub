@@ -145,10 +145,11 @@ export default function Footer() {
               {footerLinks.recursos.map((link) => (
                 <li key={link.label}>
                   {link.href === "/auth" ? (
-                    <Link href={link.href}>
-                      <a className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                        {link.label}
-                      </a>
+                    <Link
+                      href={link.href}
+                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {link.label}
                     </Link>
                   ) : (
                     <a

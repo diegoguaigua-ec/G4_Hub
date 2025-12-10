@@ -62,6 +62,7 @@ interface SyncStatusResponse {
     hasMore: boolean;
   };
   lastSyncAt: string | null;
+  duplicateSkus?: Array<{ sku: string; count: number }>;
 }
 
 export function InventoryTab({ storeId }: InventoryTabProps) {
@@ -448,13 +449,41 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
         </Alert>
       )}
 
+      {data?.duplicateSkus && data.duplicateSkus.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-semibold">
+                ⚠️ SKUs Duplicados Detectados
+              </p>
+              <p className="text-sm">
+                Los siguientes SKUs están asignados a múltiples productos en tu tienda.
+                Esto puede causar problemas de sincronización y comportamiento impredecible:
+              </p>
+              <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+                {data.duplicateSkus.map((dup) => (
+                  <li key={dup.sku}>
+                    <strong>{dup.sku}</strong> - usado en {dup.count} productos
+                  </li>
+                ))}
+              </ul>
+              <p className="text-sm mt-2">
+                <strong>Recomendación:</strong> Por favor revisa tu configuración de productos
+                y asigna un SKU único a cada producto.
+              </p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Filters */}
       <Card>
         <CardContent className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Status Filter */}
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
+              <label htmlFor="status-filter" className="text-sm font-medium text-foreground mb-2 block">
                 Estado
               </label>
               <Select
@@ -464,7 +493,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                   setPagination({ ...pagination, page: 1 });
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="status-filter" name="status-filter">
                   <SelectValue placeholder="Todos los estados" />
                 </SelectTrigger>
                 <SelectContent>
@@ -480,12 +509,14 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
 
             {/* Search */}
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
+              <label htmlFor="product-search" className="text-sm font-medium text-foreground mb-2 block">
                 Buscar
               </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="product-search"
+                  name="product-search"
                   placeholder="Buscar por SKU o nombre..."
                   value={filters.search}
                   onChange={(e) => {
@@ -572,7 +603,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                 <tbody>
                   {data.products.map((product) => (
                     <tr
-                      key={product.sku}
+                      key={product.platformProductId}
                       className="border-b border-border hover:bg-muted/50 transition-colors"
                     >
                       <td className="py-3 px-4">

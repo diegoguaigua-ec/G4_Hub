@@ -1400,6 +1400,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
       });
 
+      // Detect duplicate SKUs
+      const skuCounts = new Map<string, number>();
+      comparisonData.forEach((item: any) => {
+        const count = skuCounts.get(item.sku) || 0;
+        skuCounts.set(item.sku, count + 1);
+      });
+      const duplicateSkus = Array.from(skuCounts.entries())
+        .filter(([_, count]) => count > 1)
+        .map(([sku, count]) => ({ sku, count }));
+
       // Apply search filter
       let filteredData = comparisonData;
       if (search && typeof search === 'string' && search.trim() !== '') {
@@ -1438,6 +1448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           hasMore: offset + limitNum < total,
         },
         lastSyncAt: lastSyncAt, // Date object, will be serialized to ISO UTC automatically
+        duplicateSkus: duplicateSkus.length > 0 ? duplicateSkus : undefined, // Only include if there are duplicates
       });
     } catch (error: any) {
       console.error("Error fetching product sync status:", error);

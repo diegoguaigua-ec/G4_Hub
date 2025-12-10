@@ -565,8 +565,11 @@ export default function OverviewSection() {
           </DialogHeader>
 
           <div className="py-4">
+            <label htmlFor="manual-sync-store" className="text-sm font-medium text-foreground mb-2 block">
+              Tienda
+            </label>
             <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
-              <SelectTrigger>
+              <SelectTrigger id="manual-sync-store" name="manual-sync-store">
                 <SelectValue placeholder="Seleccionar tienda" />
               </SelectTrigger>
               <SelectContent>
