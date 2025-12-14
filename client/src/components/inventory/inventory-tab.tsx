@@ -13,6 +13,8 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Clock,
   Loader2,
   MinusCircle,
@@ -62,6 +64,7 @@ interface SyncStatusResponse {
     hasMore: boolean;
   };
   lastSyncAt: string | null;
+  duplicateSkus?: Array<{ sku: string; count: number }>;
 }
 
 export function InventoryTab({ storeId }: InventoryTabProps) {
@@ -77,6 +80,8 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
     limit: 20,
   });
   const [selectedProducts, setSelectedProducts] = useState<Set<string>>(new Set());
+  const [lastSyncAlertExpanded, setLastSyncAlertExpanded] = useState(true);
+  const [duplicateSkusAlertExpanded, setDuplicateSkusAlertExpanded] = useState(true);
 
   // Reset selections when page changes
   useEffect(() => {
@@ -433,17 +438,67 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
 
       {data?.lastSyncAt && (
         <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            <div className="space-y-1">
-              <p>
-                <strong>Última sincronización:</strong> {formatEcuadorDateTime(data.lastSyncAt)}
-              </p>
-              <p className="text-xs text-muted-foreground">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <AlertDescription className="flex-1">
+            <button
+              onClick={() => setLastSyncAlertExpanded(!lastSyncAlertExpanded)}
+              className="flex items-center justify-between w-full text-left hover:opacity-80 transition-opacity"
+            >
+              <span className="text-sm font-semibold">
+                Última sincronización: {formatEcuadorDateTime(data.lastSyncAt)}
+              </span>
+              {lastSyncAlertExpanded ? (
+                <ChevronUp className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              )}
+            </button>
+            {lastSyncAlertExpanded && (
+              <p className="text-sm text-muted-foreground mt-2">
                 Los datos mostrados son del último sync con Contífico. El stock de tu tienda puede haber cambiado después.
                 Para ver datos actualizados, haz clic en "Sincronizar Todo".
               </p>
-            </div>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {data?.duplicateSkus && data.duplicateSkus.length > 0 && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+          <AlertDescription className="flex-1">
+            <button
+              onClick={() => setDuplicateSkusAlertExpanded(!duplicateSkusAlertExpanded)}
+              className="flex items-center justify-between w-full text-left hover:opacity-80 transition-opacity"
+            >
+              <span className="text-sm font-semibold">
+                SKUs Duplicados Detectados
+              </span>
+              {duplicateSkusAlertExpanded ? (
+                <ChevronUp className="h-4 w-4 flex-shrink-0" />
+              ) : (
+                <ChevronDown className="h-4 w-4 flex-shrink-0" />
+              )}
+            </button>
+            {duplicateSkusAlertExpanded && (
+              <div className="mt-2 space-y-2">
+                <p className="text-sm">
+                  Los siguientes SKUs están asignados a múltiples productos en tu tienda.
+                  Esto puede causar problemas de sincronización y comportamiento impredecible:
+                </p>
+                <ul className="text-sm list-disc list-inside space-y-1 ml-2">
+                  {data.duplicateSkus.map((dup) => (
+                    <li key={dup.sku}>
+                      <strong>{dup.sku}</strong> - usado en {dup.count} productos
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-sm">
+                  <strong>Recomendación:</strong> Por favor revisa tu configuración de productos
+                  y asigna un SKU único a cada producto.
+                </p>
+              </div>
+            )}
           </AlertDescription>
         </Alert>
       )}
@@ -454,7 +509,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Status Filter */}
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
+              <label htmlFor="status-filter" className="text-sm font-medium text-foreground mb-2 block">
                 Estado
               </label>
               <Select
@@ -464,7 +519,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                   setPagination({ ...pagination, page: 1 });
                 }}
               >
-                <SelectTrigger>
+                <SelectTrigger id="status-filter" name="status-filter">
                   <SelectValue placeholder="Todos los estados" />
                 </SelectTrigger>
                 <SelectContent>
@@ -480,12 +535,14 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
 
             {/* Search */}
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
+              <label htmlFor="product-search" className="text-sm font-medium text-foreground mb-2 block">
                 Buscar
               </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  id="product-search"
+                  name="product-search"
                   placeholder="Buscar por SKU o nombre..."
                   value={filters.search}
                   onChange={(e) => {
@@ -572,7 +629,7 @@ export function InventoryTab({ storeId }: InventoryTabProps) {
                 <tbody>
                   {data.products.map((product) => (
                     <tr
-                      key={product.sku}
+                      key={product.platformProductId}
                       className="border-b border-border hover:bg-muted/50 transition-colors"
                     >
                       <td className="py-3 px-4">

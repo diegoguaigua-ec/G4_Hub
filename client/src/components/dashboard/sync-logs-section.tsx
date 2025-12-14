@@ -203,7 +203,7 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
             {/* Store Filter - only show if storeId is not provided */}
             {!storeId && (
               <div>
-                <label className="text-sm font-medium text-foreground mb-2 block">
+                <label htmlFor="sync-log-store-filter" className="text-sm font-medium text-foreground mb-2 block">
                   Tienda
                 </label>
                 <Select
@@ -212,7 +212,7 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
                     setFilters({ ...filters, storeId: value === "all" ? undefined : value })
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="sync-log-store-filter" name="sync-log-store-filter">
                     <SelectValue placeholder="Todas las tiendas" />
                   </SelectTrigger>
                   <SelectContent>
@@ -229,7 +229,7 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
 
             {/* Status Filter */}
             <div>
-              <label className="text-sm font-medium text-foreground mb-2 block">
+              <label htmlFor="sync-log-status-filter" className="text-sm font-medium text-foreground mb-2 block">
                 Estado
               </label>
               <Select
@@ -238,7 +238,7 @@ export default function SyncLogsSection({ storeId }: SyncLogsSectionProps = {}) 
                   setFilters({ ...filters, status: value === "all" ? undefined : value })
                 }
               >
-                <SelectTrigger>
+                <SelectTrigger id="sync-log-status-filter" name="sync-log-status-filter">
                   <SelectValue placeholder="Todos los estados" />
                 </SelectTrigger>
                 <SelectContent>
