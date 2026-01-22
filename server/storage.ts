@@ -145,10 +145,11 @@ export interface IStorage {
     id: number,
     status: string,
     errorMessage?: string,
+    tx?: any,
   ): Promise<InventoryMovement>;
   incrementMovementAttempts(id: number, nextAttemptAt: Date): Promise<InventoryMovement>;
-  resetMovementToPending(id: number, attempts: number, nextAttemptAt: Date, errorMessage: string): Promise<InventoryMovement>;
-  markMovementAsProcessed(id: number): Promise<InventoryMovement>;
+  resetMovementToPending(id: number, attempts: number, nextAttemptAt: Date, errorMessage: string, tx?: any): Promise<InventoryMovement>;
+  markMovementAsProcessed(id: number, tx?: any): Promise<InventoryMovement>;
   deleteOldMovements(beforeDate: Date): Promise<void>;
 
   // Unmapped SKUs operations
@@ -159,8 +160,8 @@ export interface IStorage {
   deleteUnmappedSku(id: number): Promise<void>;
 
   // Sync lock operations
-  acquireLock(storeId: number, lockType: 'pull' | 'push', processId: string, durationMs: number): Promise<SyncLock | null>;
-  releaseLock(storeId: number, lockType?: "pull" | "push"): Promise<void>;
+  acquireLock(storeId: number, lockType: 'pull' | 'push', processId: string, durationMs: number, tx?: any): Promise<SyncLock | null>;
+  releaseLock(storeId: number, lockType?: "pull" | "push", tx?: any): Promise<void>;
   hasActiveLock(storeId: number): Promise<boolean>;
   cleanExpiredLocks(): Promise<void>;
 
@@ -311,9 +312,11 @@ export class DatabaseStorage implements IStorage {
     storeId: number,
     sku: string,
     delta: number,
-    modifiedBy: 'pull' | 'push' | 'manual' = 'push'
+    modifiedBy: 'pull' | 'push' | 'manual' = 'push',
+    tx?: any
   ): Promise<StoreProduct | null> {
-    const [updatedProduct] = await db
+    const executor = tx || db;
+    const [updatedProduct] = await executor
       .update(storeProducts)
       .set({
         stockQuantity: sql`GREATEST(0, COALESCE(${storeProducts.stockQuantity}, 0) + ${delta})`,
@@ -1082,8 +1085,10 @@ export class DatabaseStorage implements IStorage {
     id: number,
     status: string,
     errorMessage?: string,
+    tx?: any,
   ): Promise<InventoryMovement> {
-    const [updated] = await db
+    const executor = tx || db;
+    const [updated] = await executor
       .update(inventoryMovementsQueue)
       .set({
         status,
@@ -1116,8 +1121,10 @@ export class DatabaseStorage implements IStorage {
     attempts: number,
     nextAttemptAt: Date,
     errorMessage: string,
+    tx?: any,
   ): Promise<InventoryMovement> {
-    const [updated] = await db
+    const executor = tx || db;
+    const [updated] = await executor
       .update(inventoryMovementsQueue)
       .set({
         status: "pending",
@@ -1131,8 +1138,9 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
-  async markMovementAsProcessed(id: number): Promise<InventoryMovement> {
-    const [updated] = await db
+  async markMovementAsProcessed(id: number, tx?: any): Promise<InventoryMovement> {
+    const executor = tx || db;
+    const [updated] = await executor
       .update(inventoryMovementsQueue)
       .set({
         status: "completed",
@@ -1241,14 +1249,16 @@ export class DatabaseStorage implements IStorage {
     lockType: "pull" | "push",
     processId: string,
     durationMs: number,
+    tx?: any,
   ): Promise<SyncLock | null> {
+    const executor = tx || db;
     try {
       // First, clean expired locks
       await this.cleanExpiredLocks();
 
       // Try to insert a new lock
       const expiresAt = new Date(Date.now() + durationMs);
-      const [lock] = await db
+      const [lock] = await executor
         .insert(syncLocks)
         .values({
           storeId,
@@ -1267,10 +1277,11 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async releaseLock(storeId: number, lockType?: "pull" | "push"): Promise<void> {
+  async releaseLock(storeId: number, lockType?: "pull" | "push", tx?: any): Promise<void> {
+    const executor = tx || db;
     if (lockType) {
       // Release specific lock type
-      await db
+      await executor
         .delete(syncLocks)
         .where(
           and(
@@ -1280,7 +1291,7 @@ export class DatabaseStorage implements IStorage {
         );
     } else {
       // Release all locks for backward compatibility
-      await db.delete(syncLocks).where(eq(syncLocks.storeId, storeId));
+      await executor.delete(syncLocks).where(eq(syncLocks.storeId, storeId));
     }
   }
 

@@ -445,7 +445,7 @@ export const syncLogsRelations = relations(syncLogs, ({ one, many }) => ({
     fields: [syncLogs.storeId],
     references: [stores.id],
   }),
-   items: many(syncLogItems),
+  items: many(syncLogItems),
 }));
 
 export const integrationsRelations = relations(
@@ -540,7 +540,6 @@ export const insertTenantSchema = createInsertSchema(tenants, {
   createdAt: () => z.date().optional(),
   updatedAt: () => z.date().optional(),
 }).omit({
-  id: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -551,7 +550,6 @@ export const insertUserSchema = createInsertSchema(users, {
   lastLoginAt: () => z.date().optional(),
 })
   .omit({
-    id: true,
     createdAt: true,
     updatedAt: true,
     lastLoginAt: true,
@@ -567,7 +565,6 @@ export const insertStoreSchema = createInsertSchema(stores, {
   lastSyncAt: () => z.date().optional(),
   lastConnectionTest: () => z.date().optional(),
 }).omit({
-  id: true,
   createdAt: true,
   updatedAt: true,
   lastSyncAt: true,
@@ -578,7 +575,6 @@ export const insertIntegrationSchema = createInsertSchema(integrations, {
   createdAt: () => z.date().optional(),
   updatedAt: () => z.date().optional(),
 }).omit({
-  id: true,
   createdAt: true,
   updatedAt: true,
 });
@@ -589,7 +585,6 @@ export const insertStoreIntegrationSchema = createInsertSchema(
     createdAt: () => z.date().optional(),
   },
 ).omit({
-  id: true,
   createdAt: true,
 });
 
@@ -820,14 +815,12 @@ export const updateStoreSchema = z
   });
 
 export const insertStoreProductSchema = createInsertSchema(storeProducts).omit({
-  id: true,
   lastUpdated: true,
 });
 
 export const insertNotificationSchema = createInsertSchema(notifications, {
   createdAt: () => z.date().optional(),
 }).omit({
-  id: true,
   createdAt: true,
 });
 
@@ -840,7 +833,6 @@ export const insertInventoryMovementSchema = createInsertSchema(
     processedAt: () => z.date().optional(),
   },
 ).omit({
-  id: true,
   createdAt: true,
 });
 
@@ -848,21 +840,18 @@ export const insertUnmappedSkuSchema = createInsertSchema(unmappedSkus, {
   createdAt: () => z.date().optional(),
   lastSeenAt: () => z.date().optional(),
 }).omit({
-  id: true,
   createdAt: true,
 });
 
 export const insertSyncLockSchema = createInsertSchema(syncLocks, {
   lockedAt: () => z.date().optional(),
 }).omit({
-  id: true,
   lockedAt: true,
 });
 
 export const insertAdminActionSchema = createInsertSchema(adminActions, {
   createdAt: () => z.date().optional(),
 }).omit({
-  id: true,
   createdAt: true,
 });
 
@@ -870,27 +859,22 @@ export const insertWebhookSchema = createInsertSchema(webhooks, {
   createdAt: () => z.date().optional(),
   deletedAt: () => z.date().optional(),
 }).omit({
-  id: true,
   createdAt: true,
 });
 
 // Types
-export type InsertTenant = z.infer<typeof insertTenantSchema>;
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type InsertStore = z.infer<typeof insertStoreSchema>;
-export type InsertStoreProduct = z.infer<typeof insertStoreProductSchema>;
-export type InsertIntegration = z.infer<typeof insertIntegrationSchema>;
-export type InsertStoreIntegration = z.infer<
-  typeof insertStoreIntegrationSchema
->;
-export type InsertNotification = z.infer<typeof insertNotificationSchema>;
-export type InsertInventoryMovement = z.infer<
-  typeof insertInventoryMovementSchema
->;
-export type InsertUnmappedSku = z.infer<typeof insertUnmappedSkuSchema>;
-export type InsertSyncLock = z.infer<typeof insertSyncLockSchema>;
-export type InsertAdminAction = z.infer<typeof insertAdminActionSchema>;
-export type InsertWebhook = z.infer<typeof insertWebhookSchema>;
+export type InsertTenant = typeof tenants.$inferInsert;
+export type InsertUser = typeof users.$inferInsert;
+export type InsertStore = typeof stores.$inferInsert;
+export type InsertStoreProduct = typeof storeProducts.$inferInsert;
+export type InsertIntegration = typeof integrations.$inferInsert;
+export type InsertStoreIntegration = typeof storeIntegrations.$inferInsert;
+export type InsertNotification = typeof notifications.$inferInsert;
+export type InsertInventoryMovement = typeof inventoryMovementsQueue.$inferInsert;
+export type InsertUnmappedSku = typeof unmappedSkus.$inferInsert;
+export type InsertSyncLock = typeof syncLocks.$inferInsert;
+export type InsertAdminAction = typeof adminActions.$inferInsert;
+export type InsertWebhook = typeof webhooks.$inferInsert;
 
 export type Tenant = typeof tenants.$inferSelect;
 export type User = typeof users.$inferSelect;

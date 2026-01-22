@@ -1,6 +1,7 @@
 import { storage } from "../storage";
+import { db } from "../db";
 import { ContificoMovementsAPI } from "./contificoMovementsAPI";
-import { Store, Integration, InsertInventoryMovement } from "@shared/schema";
+import { Store, Integration, InsertInventoryMovement, InventoryMovement } from "@shared/schema";
 import { SyncService } from "./SyncService";
 
 /**
@@ -153,97 +154,75 @@ export class InventoryPushService {
     let cachedStoreId: number | null = null; // Para liberar lock incluso si movimiento se borra
 
     try {
-      // Obtener el movimiento de la base de datos
-      const movement = await storage.getMovementById(movementId);
-
-      if (!movement) {
-        console.error(
-          `[InventoryPush] Movimiento ${movementId} no encontrado`,
-        );
+      // --------------------------------------------------------
+      // FASE 1: PREPARACIÓN (Transacción Atómica)
+      // Adquirir lock y marcar como processing
+      // --------------------------------------------------------
+      const movementCheck = await storage.getMovementById(movementId);
+      if (!movementCheck) {
+        console.error(`[InventoryPush] Movimiento ${movementId} no encontrado (pre-check)`);
         return false;
       }
+      cachedStoreId = movementCheck.storeId;
 
-      // Guardar storeId para liberar lock en finally
-      cachedStoreId = movement.storeId;
+      await db.transaction(async (tx) => {
+        const lockDuration = 5 * 60 * 1000; // 5 minutos
+        const processId = `push-movement-${movementId}-${Date.now()}`;
 
-      console.log(
-        `[InventoryPush] Procesando movimiento ${movementId}: ${movement.sku} x${movement.quantity} (${movement.movementType})`,
-      );
-
-      // Adquirir lock para prevenir conflictos con Pull sync
-      const lockDuration = 5 * 60 * 1000; // 5 minutos
-      const processId = `push-movement-${movementId}-${Date.now()}`;
-
-      const lock = await storage.acquireLock(
-        movement.storeId,
-        'push',
-        processId,
-        lockDuration,
-      );
-
-      if (!lock) {
-        // Si no se puede adquirir el lock, programar reintento
-        console.log(
-          `[InventoryPush] No se pudo adquirir lock para movimiento ${movementId}, reintentando más tarde`,
+        // Intentar adquirir lock dentro de la transacción
+        const lock = await storage.acquireLock(
+          movementCheck.storeId,
+          "push",
+          processId,
+          lockDuration,
+          tx // Pasar tx explícitamente
         );
-        const nextAttempt = new Date(Date.now() + 2 * 60 * 1000); // Reintentar en 2 minutos
-        await storage.incrementMovementAttempts(movementId, nextAttempt);
-        return false;
-      }
 
+        if (!lock) {
+          // Si no se puede adquirir, lanzamos error controlado para rollbackear
+          // y manejar el reintento fuera de la transacción
+          throw new Error("LOCK_FAILED_RETRY");
+        }
+
+        // Marcar como procesando dentro de la transacción
+        await storage.updateMovementStatus(
+          movementId,
+          "processing",
+          undefined,
+          tx
+        );
+      });
+
+      // Si llegamos aquí, la transacción 1 se comiteó exitosamente
       lockAcquired = true;
-      console.log(`[InventoryPush] ✅ Lock adquirido para movimiento ${movementId}`);
+      console.log(`[InventoryPush] ✅ Lock adquirido y estado processing para movimiento ${movementId}`);
 
-      // Marcar como procesando
-      await storage.updateMovementStatus(
-        movementId,
-        "processing",
-      );
+      // --------------------------------------------------------
+      // FASE 2: EJECUCIÓN (Sin Transacción de BD)
+      // Llamadas a API externa y lógica de negocio
+      // --------------------------------------------------------
 
-      // Obtener la tienda y la integración
+      // Re-obtener movimiento
+      const movement = movementCheck;
+
+      // Obtener datos necesarios
       const store = await storage.getStore(movement.storeId);
-      if (!store) {
-        throw new Error(`Tienda ${movement.storeId} no encontrada`);
-      }
+      if (!store) throw new Error(`Tienda ${movement.storeId} no encontrada`);
 
       const integration = await storage.getIntegration(movement.integrationId);
-      if (!integration) {
-        throw new Error(
-          `Integración ${movement.integrationId} no encontrada`,
-        );
-      }
+      if (!integration) throw new Error(`Integración ${movement.integrationId} no encontrada`);
 
-      // Obtener configuración de la integración
-      const storeIntegrations = await storage.getStoreIntegrations(
-        movement.storeId,
-      );
-      const storeIntegration = storeIntegrations.find(
-        (si) => si.integrationId === movement.integrationId,
-      );
+      const storeIntegrations = await storage.getStoreIntegrations(movement.storeId);
+      const storeIntegration = storeIntegrations.find((si) => si.integrationId === movement.integrationId);
+      if (!storeIntegration) throw new Error(`Integración ${movement.integrationId} no vinculada a tienda ${movement.storeId}`);
 
-      if (!storeIntegration) {
-        throw new Error(
-          `Integración ${movement.integrationId} no vinculada a tienda ${movement.storeId}`,
-        );
-      }
-
-      // Obtener warehouse de la configuración
-      // Prioridad 1: syncConfig (configuración específica de pull)
-      // Prioridad 2: integration.settings.warehouse_primary (configuración global de Contifico)
       const syncConfig: any = storeIntegration.syncConfig || {};
       const integrationSettings: any = integration.settings || {};
       const warehouseId = syncConfig.pull?.warehouse || integrationSettings.warehouse_primary;
-
-      if (!warehouseId) {
-        throw new Error(
-          `No se encontró bodega configurada para la tienda ${movement.storeId}. Configure una bodega en la integración de Contifico.`,
-        );
-      }
+      if (!warehouseId) throw new Error(`No se encontró bodega configurada para la tienda ${movement.storeId}`);
 
       console.log(`[InventoryPush] Usando bodega: ${warehouseId} para movimiento ${movementId}`);
 
-      // Crear una tienda temporal con las credenciales de la integración
-      // Usar la URL correcta de Contífico en lugar de la URL de la tienda
       const contificoStore: Store = {
         ...store,
         storeUrl: 'https://api.contifico.com',
@@ -251,10 +230,9 @@ export class InventoryPushService {
         platform: 'contifico',
       };
 
-      // Inicializar API de Contífico
       const contificoAPI = new ContificoMovementsAPI(contificoStore);
 
-      // Verificar stock disponible si es un egreso
+      // Verificación de stock para egresos
       if (movement.movementType === "egreso") {
         const hasStock = await contificoAPI.checkStockAvailability(
           warehouseId,
@@ -263,231 +241,158 @@ export class InventoryPushService {
         );
 
         if (!hasStock) {
-          // Stock insuficiente: marcar como fallido inmediatamente (sin reintentos)
-          // Los reintentos no tienen sentido si el stock sigue insuficiente
-          const errorMsg = `Stock insuficiente en Contífico para SKU ${movement.sku} (requerido: ${movement.quantity}). Agregue stock manualmente o verifique el mapeo del producto.`;
+          const errorMsg = `Stock insuficiente en Contífico para SKU ${movement.sku}`;
           console.warn(`[InventoryPush] ⚠️ ${errorMsg}`);
 
-          await storage.updateMovementStatus(
-            movementId,
-            "failed",
-            errorMsg,
-          );
-
-          // Rastrear como SKU sin stock para visibilidad
-          const metadata = movement.metadata as { productName?: string } | undefined;
-          await storage.trackUnmappedSku({
-            tenantId: movement.tenantId,
-            storeId: movement.storeId,
-            sku: movement.sku,
-            productName: metadata?.productName || `Producto ${movement.sku}`,
+          await db.transaction(async (tx) => {
+            await storage.updateMovementStatus(movementId, "failed", errorMsg, tx);
+            await storage.releaseLock(cachedStoreId!, 'push', tx);
           });
+          lockAcquired = false;
 
-          console.log(
-            `[InventoryPush] ❌ Movimiento ${movementId} marcado como fallido (stock insuficiente)`,
-          );
+          try {
+            const metadata = movement.metadata as { productName?: string } | undefined;
+            await storage.trackUnmappedSku({
+              tenantId: movement.tenantId,
+              storeId: movement.storeId,
+              sku: movement.sku,
+              productName: metadata?.productName || `Producto ${movement.sku}`,
+            });
+          } catch (e) { console.error("Error tracking unmapped sku", e); }
 
           return false;
         }
       }
 
-      // Enviar el movimiento a Contífico
-      // Extraer el nombre del pedido desde metadata si está disponible
+      // Enviar movimiento a Contífico
       const metadata = movement.metadata as any;
       const orderName = metadata?.originalEvent?.shopifyOrderName ||
-                        metadata?.originalEvent?.wooOrderNumber ||
-                        `#${movement.orderId}`;
+        metadata?.originalEvent?.wooOrderNumber ||
+        `#${movement.orderId}`;
+      const description = `Pedido ${orderName} - ${movement.eventType}`;
 
-      let response;
       if (movement.movementType === "egreso") {
-        response = await contificoAPI.sendEgreso(
-          warehouseId,
-          movement.sku,
-          movement.quantity,
-          movement.orderId || undefined,
-          `Pedido ${orderName} - ${movement.eventType}`,
-        );
+        await contificoAPI.sendEgreso(warehouseId, movement.sku, movement.quantity, movement.orderId || undefined, description);
       } else {
-        response = await contificoAPI.sendIngreso(
-          warehouseId,
-          movement.sku,
-          movement.quantity,
-          movement.orderId || undefined,
-          `Pedido ${orderName} - ${movement.eventType}`,
-        );
+        await contificoAPI.sendIngreso(warehouseId, movement.sku, movement.quantity, movement.orderId || undefined, description);
       }
 
-      // Marcar como completado
-      await storage.markMovementAsProcessed(movementId);
+      // --------------------------------------------------------
+      // FASE 3: COMPLETADO (Transacción Atómica)
+      // Marcar completado y liberar lock
+      // --------------------------------------------------------
+      await db.transaction(async (tx) => {
+        await storage.markMovementAsProcessed(movementId, tx);
 
-      // Actualizar cache de productos para reflejar el cambio inmediatamente en la UI
-      const delta = movement.movementType === "egreso"
-        ? -movement.quantity
-        : movement.quantity;
+        const delta = movement.movementType === "egreso" ? -movement.quantity : movement.quantity;
+        try {
+          await storage.updateProductStockOptimistic(movement.storeId, movement.sku, delta, 'push', tx);
+          console.log(`[InventoryPush] ✅ Cache actualizado para ${movement.sku}: ${delta}`);
+        } catch (cacheError: any) {
+          console.warn(`[InventoryPush] ⚠️ No se pudo actualizar cache (ignorable):`, cacheError.message);
+        }
 
-      try {
-        await storage.updateProductStockOptimistic(
-          movement.storeId,
-          movement.sku,
-          delta,
-          'push'
-        );
-        console.log(
-          `[InventoryPush] ✅ Cache actualizado para ${movement.sku}: ${delta > 0 ? '+' : ''}${delta}`,
-        );
-      } catch (cacheError: any) {
-        // No fallar el movimiento si el cache no se actualiza
-        console.warn(
-          `[InventoryPush] ⚠️ No se pudo actualizar cache para ${movement.sku}:`,
-          cacheError.message,
-        );
-      }
+        await storage.releaseLock(cachedStoreId!, 'push', tx);
+      });
+      lockAcquired = false;
 
-      // Ejecutar Pull automático para obtener datos actualizados de Contifico
-      // Esto asegura que la tabla de inventario muestre información real en lugar de "—"
-      try {
-        console.log(`[InventoryPush] Iniciando Pull automático para ${movement.sku}...`);
+      console.log(`[InventoryPush] ✅ Movimiento ${movementId} procesado exitosamente`);
 
-        await SyncService.pullFromIntegrationSelective(
-          movement.storeId,
-          movement.integrationId,
-          [movement.sku],
-          {
-            dryRun: false,
-            skipRecentPushCheck: true, // Omitir verificación porque este Pull es post-Push
-          }
-        );
-
-        console.log(`[InventoryPush] ✅ Pull automático completado para ${movement.sku}`);
-      } catch (pullError: any) {
-        // No fallar el movimiento si el Pull automático falla
-        console.warn(
-          `[InventoryPush] ⚠️ No se pudo ejecutar Pull automático para ${movement.sku}:`,
-          pullError.message,
-        );
-      }
-
-      console.log(
-        `[InventoryPush] ✅ Movimiento ${movementId} procesado exitosamente`,
-      );
+      // Post-procesamiento
+      this.triggerAutoPull(movement).catch(e => console.warn("AutoPull failed", e));
 
       return true;
+
     } catch (error: any) {
-      console.error(
-        `[InventoryPush] ❌ Error procesando movimiento ${movementId}:`,
-        error.message,
-      );
+      if (error.message === "LOCK_FAILED_RETRY") {
+        console.log(`[InventoryPush] Lock no adquirido, reintentando movimiento ${movementId}`);
+        const nextAttempt = new Date(Date.now() + 2 * 60 * 1000);
+        await storage.incrementMovementAttempts(movementId, nextAttempt);
+        return false;
+      }
 
-      // Manejar error 409 (Conflict) - el movimiento ya existe en Contífico
-      // En este caso, debemos marcar el movimiento como exitoso, no como fallido
-      const is409Error = 
-        error.response?.status === 409 ||
-        error.message.includes('409') || 
-        error.message.includes('Conflict');
-        
+      const is409Error = error.response?.status === 409 || error.message?.includes('409') || error.message?.includes('Conflict');
+
       if (is409Error) {
-        console.log(
-          `[InventoryPush] ✅ Movimiento ${movementId} ya existe en Contífico (409 Conflict), marcando como exitoso`,
-        );
-        await storage.markMovementAsProcessed(movementId);
+        console.log(`[InventoryPush] ✅ Movimiento ${movementId} ya existe (409), marcando exitoso`);
 
-        // Actualizar cache aunque el movimiento ya existía en Contifico
-        const movement = await storage.getMovementById(movementId);
-        if (movement) {
-          const delta = movement.movementType === "egreso"
-            ? -movement.quantity
-            : movement.quantity;
-
-          try {
-            await storage.updateProductStockOptimistic(
-              movement.storeId,
-              movement.sku,
-              delta,
-              'push'
-            );
-            console.log(
-              `[InventoryPush] ✅ Cache actualizado para ${movement.sku}: ${delta > 0 ? '+' : ''}${delta}`,
-            );
-          } catch (cacheError: any) {
-            console.warn(
-              `[InventoryPush] ⚠️ No se pudo actualizar cache para ${movement.sku}:`,
-              (cacheError as Error).message,
-            );
+        try {
+          if (lockAcquired && cachedStoreId) {
+            await db.transaction(async (tx) => {
+              await storage.markMovementAsProcessed(movementId, tx);
+              // Intentar actualizar cache
+              const movement = await storage.getMovementById(movementId);
+              if (movement) {
+                const delta = movement.movementType === "egreso" ? -movement.quantity : movement.quantity;
+                await storage.updateProductStockOptimistic(movement.storeId, movement.sku, delta, 'push', tx).catch(() => { });
+              }
+              await storage.releaseLock(cachedStoreId!, 'push', tx);
+            });
+            lockAcquired = false;
+          } else {
+            await storage.markMovementAsProcessed(movementId);
           }
+          return true;
+        } catch (e) {
+          console.error("Error recuperando de 409", e);
         }
-
-        return true;
       }
 
-      // Obtener el movimiento actual para verificar intentos
-      const movement = await storage.getMovementById(movementId);
+      console.error(`[InventoryPush] ❌ Error procesando movimiento ${movementId}:`, error.message);
 
-      if (!movement) {
-        console.error(`[InventoryPush] Movimiento ${movementId} no encontrado después de error`);
-        return false;
-      }
+      // FASE 4: MANEJO DE FALLO (Transacción Atómica)
+      if (lockAcquired && cachedStoreId) {
+        try {
+          await db.transaction(async (tx) => {
+            const movement = await storage.getMovementById(movementId);
+            if (!movement) throw new Error("Movimiento desapareció");
 
-      // Guardar storeId si no se había guardado antes
-      if (!cachedStoreId) {
-        cachedStoreId = movement.storeId;
-      }
+            const newAttempts = movement.attempts + 1;
 
-      const newAttempts = movement.attempts + 1;
+            if (newAttempts >= movement.maxAttempts) {
+              await storage.updateMovementStatus(movementId, "failed", error.message, tx);
+              console.log(`[InventoryPush] Movimiento ${movementId} marcado como failed (max attempts)`);
+            } else {
+              const backoffMinutes = Math.pow(2, newAttempts);
+              const nextAttempt = new Date(Date.now() + backoffMinutes * 60 * 1000);
+              await storage.resetMovementToPending(movementId, newAttempts, nextAttempt, error.message, tx);
+              console.log(`[InventoryPush] Movimiento ${movementId} a pending (intento ${newAttempts})`);
+            }
 
-      // Si alcanzó el máximo de intentos, marcar como fallido
-      if (newAttempts >= movement.maxAttempts) {
-        await storage.updateMovementStatus(
-          movementId,
-          "failed",
-          error.message,
-        );
-        console.log(
-          `[InventoryPush] Movimiento ${movementId} marcado como fallido después de ${movement.maxAttempts} intentos`,
-        );
-
-        // Rastrear SKU no mapeado si es ese el error
-        if (error.message.includes("no encontrado")) {
-          const metadata = movement.metadata as { productName?: string } | undefined;
-          await storage.trackUnmappedSku({
-            tenantId: movement.tenantId,
-            storeId: movement.storeId,
-            sku: movement.sku,
-            productName:
-              metadata?.productName || `Producto ${movement.sku}`,
+            await storage.releaseLock(cachedStoreId!, 'push', tx);
           });
+          lockAcquired = false;
+        } catch (cleanupError) {
+          console.error("Error crítico limpiando estado de fallo:", cleanupError);
         }
-
-        return false;
       }
-
-      // Calcular próximo intento con backoff exponencial
-      const backoffMinutes = Math.pow(2, newAttempts); // 2, 4, 8 minutos
-      const nextAttempt = new Date(Date.now() + backoffMinutes * 60 * 1000);
-
-      // CRÍTICO: Volver a estado "pending" para que el worker lo recoja
-      // Usar método storage para evitar condiciones de carrera y mantener invariantes
-      await storage.resetMovementToPending(
-        movementId,
-        newAttempts,
-        nextAttempt,
-        error.message,
-      );
-
-      console.log(
-        `[InventoryPush] Movimiento ${movementId} devuelto a 'pending' para reintento ${newAttempts} de ${movement.maxAttempts} en ${backoffMinutes} minutos`,
-      );
 
       return false;
     } finally {
-      // Liberar lock si fue adquirido, usando cachedStoreId para garantizar liberación
       if (lockAcquired && cachedStoreId) {
         try {
+          console.warn(`[InventoryPush] ⚠️ Liberando lock huérfano en finally para tienda ${cachedStoreId}`);
           await storage.releaseLock(cachedStoreId, 'push');
-          console.log(`[InventoryPush] Lock liberado para tienda ${cachedStoreId}`);
-        } catch (unlockError) {
-          console.error(`[InventoryPush] Error liberando lock:`, unlockError);
-        }
+        } catch (e) { /* ignore */ }
       }
+    }
+  }
+
+  /**
+   * Helper para auto pull
+   */
+  static async triggerAutoPull(movement: any) {
+    try {
+      console.log(`[InventoryPush] Iniciando Pull automático para ${movement.sku}...`);
+      await SyncService.pullFromIntegrationSelective(
+        movement.storeId,
+        movement.integrationId,
+        [movement.sku],
+        { dryRun: false, skipRecentPushCheck: true }
+      );
+      console.log(`[InventoryPush] ✅ Pull automático completado para ${movement.sku}`);
+    } catch (pullError: any) {
+      console.warn(`[InventoryPush] ⚠️ Pull automático falló:`, pullError.message);
     }
   }
 
@@ -511,7 +416,7 @@ export class InventoryPushService {
 
       let successful = 0;
       let failed = 0;
-      const processedMovements: Array<{ movement: any; success: boolean }> = [];
+      const processedMovements: Array<{ movement: InventoryMovement; success: boolean }> = [];
 
       for (const movement of pendingMovements) {
         // Check if tenant account is expired
@@ -550,7 +455,7 @@ export class InventoryPushService {
         }
 
         // Crear un sync_log por cada tienda
-        for (const [storeId, storeMovements] of movementsByStore) {
+        for (const [storeId, storeMovements] of Array.from(movementsByStore.entries())) {
           const storeSuccessful = storeMovements.filter(m => m.success).length;
           const storeFailed = storeMovements.filter(m => !m.success).length;
 
@@ -568,6 +473,7 @@ export class InventoryPushService {
               syncedCount: storeSuccessful,
               errorCount: storeFailed,
               durationMs,
+              errorMessage: storeFailed > 0 ? `${storeFailed} movimientos fallidos` : null,
               details: {
                 totalMovements: storeMovements.length,
                 successful: storeSuccessful,
