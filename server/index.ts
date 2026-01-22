@@ -8,6 +8,7 @@ import { scheduler } from "./scheduler";
 import { inventoryPushWorker } from "./workers/inventoryPushWorker";
 import { runMigrations } from "./migrate";
 import { initializeExpirationScheduler } from "./services/expirationNotifications";
+import { apiLimiter } from "./middleware/rateLimiter";
 
 // Validate critical environment variables before starting the app
 function validateEnv() {
@@ -59,6 +60,9 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Apply rate limiting to all API routes (except health checks which are skipped in the limiter)
+app.use('/api', apiLimiter);
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -115,10 +119,14 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
+
+  // reusePort is not supported on Windows, only use it on Linux/Mac
+  const isWindows = process.platform === 'win32';
+
   server.listen({
     port,
     host: "0.0.0.0",
-    reusePort: true,
+    ...(isWindows ? {} : { reusePort: true }), // Only enable reusePort on Linux/Mac
   }, async () => {
     log(`✓ Server is ready and listening on port ${port}`);
     log(`✓ Health check available at http://0.0.0.0:${port}/health`);
@@ -138,7 +146,7 @@ app.use((req, res, next) => {
     // Background workers are only compatible with Reserved VM deployments
     // For Autoscale deployments, set ENABLE_BACKGROUND_WORKERS=false or remove the env var
     // For Reserved VM deployments, set ENABLE_BACKGROUND_WORKERS=true
-    const enableBackgroundWorkers = process.env.NODE_ENV === 'development' 
+    const enableBackgroundWorkers = process.env.NODE_ENV === 'development'
       || process.env.ENABLE_BACKGROUND_WORKERS === 'true';
 
     if (enableBackgroundWorkers) {

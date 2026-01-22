@@ -7,6 +7,7 @@ import {
 } from "../services/inventoryPushService";
 
 const router = Router();
+import { webhookLimiter } from "../middleware/rateLimiter";
 
 /**
  * Verifica la firma HMAC de Shopify
@@ -111,7 +112,7 @@ function extractWooCommerceLineItems(payload: any): {
  * - orders/cancelled: Orden cancelada (ingreso)
  * - refunds/create: Reembolso creado (ingreso)
  */
-router.post("/shopify/:storeId", async (req: Request, res: Response) => {
+router.post("/shopify/:storeId", webhookLimiter, async (req: Request, res: Response) => {
   try {
     const { storeId } = req.params;
     const topic = req.headers["x-shopify-topic"] as string;
@@ -155,7 +156,6 @@ router.post("/shopify/:storeId", async (req: Request, res: Response) => {
     const apiSecret = (store.apiCredentials as any)?.api_secret;
     if (!apiSecret) {
       console.error(`[Webhook][Shopify] ⚠️ API Secret no configurado para tienda ${storeId}`);
-      console.error(`[Webhook][Shopify] ⚠️ Credenciales actuales:`, Object.keys(store.apiCredentials || {}));
       console.error(`[Webhook][Shopify] ⚠️ Se requiere api_secret para validar webhooks de Shopify`);
       return res.status(400).json({
         error: "API Secret not configured",
@@ -247,7 +247,7 @@ router.post("/shopify/:storeId", async (req: Request, res: Response) => {
  * - order.cancelled: Orden cancelada (ingreso)
  * - order.refunded: Orden reembolsada (ingreso)
  */
-router.post("/woocommerce/:storeId", async (req: Request, res: Response) => {
+router.post("/woocommerce/:storeId", webhookLimiter, async (req: Request, res: Response) => {
   try {
     const { storeId } = req.params;
     const event = req.headers["x-wc-webhook-event"] as string;
@@ -425,21 +425,21 @@ router.post("/shopify/:storeId/test", async (req: Request, res: Response) => {
     const payload = req.body.line_items
       ? req.body
       : {
-          id: Date.now(),
-          order_number: 9999,
-          name: "#TEST-9999",
-          email: "test@example.com",
-          line_items: [
-            {
-              id: 111111,
-              variant_id: 222222,
-              sku: "TEST-SKU",
-              name: "Producto de Prueba",
-              title: "Producto de Prueba",
-              quantity: 1,
-            },
-          ],
-        };
+        id: Date.now(),
+        order_number: 9999,
+        name: "#TEST-9999",
+        email: "test@example.com",
+        line_items: [
+          {
+            id: 111111,
+            variant_id: 222222,
+            sku: "TEST-SKU",
+            name: "Producto de Prueba",
+            title: "Producto de Prueba",
+            quantity: 1,
+          },
+        ],
+      };
 
     const orderId = payload.id?.toString();
 

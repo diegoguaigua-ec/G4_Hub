@@ -6,10 +6,11 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { User as SelectUser } from "@shared/schema";
+import { authLimiter } from "./middleware/rateLimiter";
 
 declare global {
   namespace Express {
-    interface User extends SelectUser {}
+    interface User extends SelectUser { }
   }
 }
 
@@ -30,7 +31,7 @@ export async function comparePasswords(supplied: string, stored: string) {
 
 export function setupAuth(app: Express) {
   const sessionSettings: session.SessionOptions = {
-    secret: process.env.SESSION_SECRET, // Validated at startup in server/index.ts
+    secret: process.env.SESSION_SECRET!, // Validated at startup in server/index.ts
     resave: false,
     saveUninitialized: false,
     store: storage.sessionStore,
@@ -54,7 +55,7 @@ export function setupAuth(app: Express) {
         if (!tenant) {
           return done(null, false);
         }
-        
+
         if (tenant.accountStatus !== "approved") {
           return done(null, false, {
             message: `Tu cuenta está ${tenant.accountStatus === "pending" ? "pendiente de aprobación" : "no disponible"}. Por favor contacta al administrador.`
@@ -73,7 +74,7 @@ export function setupAuth(app: Express) {
     done(null, user);
   });
 
-  app.post("/api/register", async (req, res, next) => {
+  app.post("/api/register", authLimiter, async (req, res, next) => {
     try {
       const { tenantName, subdomain, name, email, password, planType } = req.body;
 
@@ -150,7 +151,7 @@ export function setupAuth(app: Express) {
     }
   });
 
-  app.post("/api/login", (req, res, next) => {
+  app.post("/api/login", authLimiter, (req, res, next) => {
     passport.authenticate("local", (err: any, user: any, info: any) => {
       if (err) {
         return next(err);
