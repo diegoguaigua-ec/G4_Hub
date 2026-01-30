@@ -22,6 +22,7 @@ import { getPlan, PlanType } from "@shared/plans";
 import { requireApprovedTenant } from "./middleware/requireApprovedTenant";
 import { checkExpiration } from "./middleware/checkExpiration";
 import { formatEcuadorDateTime } from "./utils/dateFormatters";
+import { checkDatabaseConnection } from "./db";
 
 /**
  * Helper function to get the public URL for webhook callbacks
@@ -58,11 +59,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // API health check endpoint (alternative path for monitoring)
-  app.get("/api/health", (req, res) => {
-    res.status(200).json({ 
-      status: "ok", 
+  // Includes database connection verification
+  app.get("/api/health", async (req, res) => {
+    const dbHealthy = await checkDatabaseConnection();
+    const status = dbHealthy ? "ok" : "degraded";
+    const httpStatus = dbHealthy ? 200 : 503;
+
+    res.status(httpStatus).json({
+      status,
       service: "G4 Hub API",
-      timestamp: new Date().toISOString() 
+      database: dbHealthy ? "connected" : "disconnected",
+      timestamp: new Date().toISOString()
     });
   });
 
