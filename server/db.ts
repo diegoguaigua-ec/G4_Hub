@@ -12,13 +12,16 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Pool configuration optimized for Neon serverless
-// Neon auto-suspends connections after ~5 minutes of inactivity
+// Neon aggressively closes idle connections, so we use short timeouts
+// and minimal persistent connections
 const poolConfig = {
   connectionString: process.env.DATABASE_URL,
+  // Minimum connections - set to 0 for serverless (on-demand connections)
+  min: 0,
   // Maximum number of clients in the pool
-  max: 10,
-  // Close idle connections after 30 seconds (before Neon's 5-minute timeout)
-  idleTimeoutMillis: 30000,
+  max: 5,
+  // Close idle connections after 10 seconds to prevent Neon from closing them
+  idleTimeoutMillis: 10000,
   // Timeout for acquiring a connection from the pool
   connectionTimeoutMillis: 10000,
   // Allow the process to exit even if pool has clients
