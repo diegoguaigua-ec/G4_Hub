@@ -9,6 +9,7 @@ import { inventoryPushWorker } from "./workers/inventoryPushWorker";
 import { runMigrations } from "./migrate";
 import { initializeExpirationScheduler } from "./services/expirationNotifications";
 import { apiLimiter } from "./middleware/rateLimiter";
+import { closeDatabasePool, checkDatabaseConnection } from "./db";
 
 // Validate critical environment variables before starting the app
 function validateEnv() {
@@ -164,5 +165,60 @@ app.use((req, res, next) => {
     } else {
       log('✓ Background workers disabled (Autoscale mode). Set ENABLE_BACKGROUND_WORKERS=true for Reserved VM deployments.');
     }
+
+    // Verify database connection after migrations
+    const dbConnected = await checkDatabaseConnection();
+    if (dbConnected) {
+      log('✓ Database connection verified');
+    } else {
+      console.error('⚠️ Database connection check failed - some features may not work');
+    }
+  });
+
+  // Graceful shutdown handling
+  const shutdown = async (signal: string) => {
+    log(`\n${signal} received. Starting graceful shutdown...`);
+
+    // Stop accepting new connections
+    server.close(async () => {
+      log('✓ HTTP server closed');
+
+      // Stop background workers
+      const enableBackgroundWorkers = process.env.NODE_ENV === 'development'
+        || process.env.ENABLE_BACKGROUND_WORKERS === 'true';
+
+      if (enableBackgroundWorkers) {
+        scheduler.stop();
+        inventoryPushWorker.stop();
+        log('✓ Background workers stopped');
+      }
+
+      // Close database pool
+      await closeDatabasePool();
+
+      log('✓ Graceful shutdown completed');
+      process.exit(0);
+    });
+
+    // Force shutdown after 30 seconds if graceful shutdown fails
+    setTimeout(() => {
+      console.error('⚠️ Graceful shutdown timeout - forcing exit');
+      process.exit(1);
+    }, 30000);
+  };
+
+  // Listen for shutdown signals
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Handle uncaught exceptions and rejections
+  process.on('uncaughtException', (error) => {
+    console.error('[Server] Uncaught Exception:', error);
+    // Don't exit - let the process continue if possible
+  });
+
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('[Server] Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't exit - let the process continue if possible
   });
 })();
