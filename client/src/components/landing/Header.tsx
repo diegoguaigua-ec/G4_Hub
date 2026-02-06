@@ -54,11 +54,10 @@ export default function Header() {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5, ease: [0.21, 0.47, 0.32, 0.98] }}
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled
-          ? "bg-black/95 backdrop-blur-md shadow-lg border-b border-white/10"
-          : "bg-transparent"
-      }`}
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
+        ? "bg-black/95 backdrop-blur-md shadow-lg border-b border-white/10"
+        : "bg-transparent"
+        }`}
     >
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 lg:h-20">
@@ -79,7 +78,7 @@ export default function Header() {
               <button
                 key={item.href}
                 onClick={() => scrollToSection(item.href)}
-                className="text-sm font-medium text-gray-300 hover:text-white transition-colors relative group"
+                className="text-[15px] font-medium text-gray-300 hover:text-white transition-colors relative group"
               >
                 {item.label}
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-primary transition-all group-hover:w-full" />
@@ -95,8 +94,8 @@ export default function Header() {
               </button>
             </Link>
             <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer">
-              <button className="px-6 py-2.5 bg-[#D2FF3D]/90 backdrop-blur-sm border border-[#D2FF3D]/50 rounded-lg text-black font-semibold hover:bg-[#D2FF3D] hover:text-black hover:shadow-xl hover:shadow-[#D2FF3D]/50 active:scale-95 transition-all duration-300 shadow-lg shadow-[#D2FF3D]/30">
-                Agendar Demo
+              <button className="btn-hero-primary">
+                Solicitar Acceso Beta
               </button>
             </a>
           </div>
@@ -143,8 +142,8 @@ export default function Header() {
                   </SheetClose>
                   <SheetClose asChild>
                     <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer" className="w-full">
-                      <button className="w-full px-6 py-3 bg-[#D2FF3D]/90 backdrop-blur-sm border border-[#D2FF3D]/50 rounded-lg text-black font-semibold hover:bg-[#D2FF3D] hover:text-black hover:shadow-xl hover:shadow-[#D2FF3D]/50 active:scale-95 transition-all duration-300 shadow-lg shadow-[#D2FF3D]/30">
-                        Agendar Demo
+                      <button className="btn-hero-primary w-full">
+                        Solicitar Acceso Beta
                       </button>
                     </a>
                   </SheetClose>

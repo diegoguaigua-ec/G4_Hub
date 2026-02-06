@@ -71,12 +71,25 @@ export default function HeroSection() {
               {/* Subtle glow behind title */}
               <div className="glow-primary absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96" />
 
-              <h1 className="text-4xl lg:text-5xl font-bold leading-tight text-white relative z-10">
+              {/* Beta Badge */}
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 border border-primary/30 rounded-full mb-4"
+              >
+                <span className="text-2xl">🚀</span>
+                <span className="text-sm font-semibold text-primary">
+                  Ahora en Beta - 30% OFF Primer Mes
+                </span>
+              </motion.div>
+
+              <h1 className="hero-title text-white relative z-10">
                 Automatiza tu E-commerce en{" "}
-                <span className="text-primary">Latinoamérica</span>
+                <span className="gradient-text">Latinoamérica</span>
               </h1>
 
-              <p className="text-gray-300 leading-relaxed max-w-2xl mx-auto lg:mx-0">
+              <p className="hero-subtitle text-gray-300 max-w-2xl mx-auto lg:mx-0">
                 La plataforma que conecta tus tiendas Shopify y WooCommerce con
                 Contífico y otros ERPs. Sincronización en tiempo real,
                 facturación automática y gestión completa de inventario.
@@ -91,15 +104,15 @@ export default function HeroSection() {
               className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
             >
               <a href="https://cal.com/diego-guaigua-torres/30min" target="_blank" rel="noopener noreferrer">
-                <Button variant="glass-primary" size="lg" className="text-base px-8 glass-shimmer w-full sm:w-auto text-white">
-                  <Zap className="mr-2 h-5 w-5" />
-                  Agendar Demo
-                </Button>
+                <button className="btn-hero-primary pulse-glow w-full sm:w-auto flex items-center justify-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  Solicitar Acceso Beta
+                </button>
               </a>
               <Button
                 variant="glass"
                 size="lg"
-                className="text-base px-8 w-full sm:w-auto"
+                className="text-base px-8 w-full sm:w-auto h-14"
                 onClick={() => scrollToSection("#how-it-works")}
               >
                 <Play className="mr-2 h-5 w-5" />

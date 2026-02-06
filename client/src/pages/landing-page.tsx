@@ -4,10 +4,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 import Header from "@/components/landing/Header";
 import HeroSection from "@/components/landing/HeroSection";
-import TrustBar from "@/components/landing/TrustBar";
-import BenefitsSection from "@/components/landing/BenefitsSection";
-import FeaturesSection from "@/components/landing/FeaturesSection";
+import ProductDemoSection from "@/components/landing/ProductDemoSection";
+import KeyFeaturesSection from "@/components/landing/KeyFeaturesSection";
 import HowItWorksSection from "@/components/landing/HowItWorksSection";
+import TrustBar from "@/components/landing/TrustBar";
 import PricingSection from "@/components/landing/PricingSection";
 import FinalCTASection from "@/components/landing/FinalCTASection";
 import Footer from "@/components/landing/Footer";
@@ -45,10 +45,10 @@ export default function LandingPage() {
       <Header />
       <main>
         <HeroSection />
-        <TrustBar />
-        <BenefitsSection />
-        <FeaturesSection />
+        <ProductDemoSection />
+        <KeyFeaturesSection />
         <HowItWorksSection />
+        <TrustBar />
         <PricingSection />
         <FinalCTASection />
       </main>
